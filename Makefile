@@ -10,7 +10,7 @@ export POSTGRES_TEST_URI ?= $(POSTGRES_URI)
 
 COVERAGE_MIN ?= 85
 
-.PHONY: test unit vet cover build image env-up env-down example-env-up example-env-down run loadtest
+.PHONY: test unit vet cover build image env-up env-down example-env-up example-env-down run loadtest standalone-example-test
 
 # All tests; the ones that need Mongo/Postgres use MONGO_TEST_URI/
 # POSTGRES_TEST_URI (make env-up).
@@ -68,3 +68,9 @@ run: build
 #   make loadtest BASE_URL=http://localhost:8081 RESOURCE=tags LOOKUP=go
 loadtest:
 	examples/blog-apis/loadtest/run.sh $(BASE_URL) $(RESOURCE) $(LOOKUP)
+
+# examples/standalone-tags-api is its own Go module (own go.mod/go.sum,
+# Fase 2's proof of external importability) — go test ./... from the repo
+# root doesn't descend into it, hence this separate target.
+standalone-example-test:
+	cd examples/standalone-tags-api && go test -race ./...

@@ -49,8 +49,12 @@ monorepo).
   ADR-0002.
 - **Fase 2 — Validate the standalone mode.** Build a real external
   example: a separate Go module, its own `go.mod`, importing published
-  Hyrule — not another package inside `examples/blog-apis`. Depends on
-  Fase 1.
+  Hyrule — not another package inside `examples/blog-apis`. **Done.**
+  [`examples/standalone-tags-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/standalone-tags-api)
+  is its own module (`replace` to this checkout until a version is
+  tagged — see its README), with a YAML-declared resource, one Go hook
+  (`behaviors/audit`), a `testkit`-based test, and a real `go run .` +
+  `curl` cycle, all verified.
 - **Fase 3 — Platform / CLI.** Implement the smallest useful CLI per
   ADR-0004 (`hyrule new`, `hyrule service create`), reusing
   `ci/affected` and the Makefile rather than reimplementing them.

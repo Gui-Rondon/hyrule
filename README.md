@@ -60,6 +60,11 @@ register resources the same way and coexist in the same process. The
 [Learn guide](https://gui-rondon.github.io/hyrule/docs/learn/intro)
 walks through building both kinds, step by step.
 
+[`examples/standalone-tags-api/`](examples/standalone-tags-api/) is the
+same quickstart as above, but as its own Go module (own `go.mod`) that
+depends on this one — the proof that an external repository can really
+`go get` this framework, not just import it from inside this monorepo.
+
 ## Documentation
 
 The full docs are at **https://gui-rondon.github.io/hyrule/**:
@@ -78,18 +83,19 @@ The full docs are at **https://gui-rondon.github.io/hyrule/**:
 
 ## Layout
 
-    app/                 shared bootstrap (app.Main / app.Build)
-    behaviors/           reusable hooks: searchsync (ES), audit, events (outbox on write)
-    rest/                the HTTP contract: Service (rules, no HTTP) + API (HTTP) + Store (storage interface)
-    outbox/              transactional outbox, the Pub/Sub relay and the conditional primitive
-    declarative/         loads a Resource/Schema from YAML (cmd/hyrule-serve)
-    platform/            config, mongodb, auth, search, health, server, pubsub, redis
-    testkit/             per-test isolated Mongo, ES recorder, tokens
-    internal/domain/     the one package that stays internal (slug generation)
-    cmd/hyrule-serve/    generic binary: registers the resources of a YAML, no domain Go
-    ci/                  ci/affected (picks the services a diff affects)
-    examples/blog-apis/  a real use of the framework (see that directory's README)
-    website/             source of https://gui-rondon.github.io/hyrule/ (Docusaurus)
+    app/                           shared bootstrap (app.Main / app.Build)
+    behaviors/                     reusable hooks: searchsync (ES), audit, events (outbox on write)
+    rest/                          the HTTP contract: Service (rules, no HTTP) + API (HTTP) + Store (storage interface)
+    outbox/                        transactional outbox, the Pub/Sub relay and the conditional primitive
+    declarative/                   loads a Resource/Schema from YAML (cmd/hyrule-serve)
+    platform/                      config, mongodb, auth, search, health, server, pubsub, redis
+    testkit/                       per-test isolated Mongo, ES recorder, tokens
+    internal/domain/               the one package that stays internal (slug generation)
+    cmd/hyrule-serve/              generic binary: registers the resources of a YAML, no domain Go
+    ci/                            ci/affected (picks the services a diff affects)
+    examples/blog-apis/            a real use of the framework (see that directory's README)
+    examples/standalone-tags-api/  an external Go module (own go.mod) depending on this one
+    website/                       source of https://gui-rondon.github.io/hyrule/ (Docusaurus)
 
 ## Development
 

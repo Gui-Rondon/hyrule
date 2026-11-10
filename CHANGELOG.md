@@ -25,6 +25,11 @@ the minor version instead.
 
 ### Added
 
+- `examples/standalone-tags-api`: Fase 2's proof that an external
+  repository can depend on Hyrule as its own Go module (own `go.mod`,
+  `replace` directive until a version is tagged), not just as a package
+  inside this monorepo. A YAML-declared resource, one Go hook
+  (`behaviors/audit`), and a `testkit`-based test.
 - Phase 0 architectural audit of the Framework/Platform evolution: five ADRs
   ([`architecture-decisions.md`](website/docs/reference/architecture-decisions.md))
   and a phased [roadmap](website/docs/reference/roadmap.md).

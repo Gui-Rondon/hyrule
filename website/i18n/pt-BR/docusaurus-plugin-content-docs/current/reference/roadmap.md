@@ -53,7 +53,12 @@ caminho Platform não existe além de alguns blocos reutilizáveis
 - **Fase 2 — Validar o modo standalone.** Construir um exemplo externo
   de verdade: um módulo Go separado, com seu próprio `go.mod`,
   importando o Hyrule publicado — não mais um pacote dentro de
-  `examples/blog-apis`. Depende da Fase 1.
+  `examples/blog-apis`. **Concluída.**
+  [`examples/standalone-tags-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/standalone-tags-api)
+  é um módulo próprio (`replace` pra este checkout até uma versão ser
+  taggeada — ver o README dele), com um resource declarado em YAML, um
+  hook em Go (`behaviors/audit`), um teste usando `testkit`, e um ciclo
+  real de `go run .` + `curl`, tudo verificado.
 - **Fase 3 — Platform / CLI.** Implementar o menor CLI útil conforme o
   ADR-0004 (`hyrule new`, `hyrule service create`), reaproveitando
   `ci/affected` e o Makefile em vez de reimplementá-los. Risco: médio.
