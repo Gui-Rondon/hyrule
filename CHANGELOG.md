@@ -25,6 +25,13 @@ the minor version instead.
 
 ### Added
 
+- `cmd/hyrule`: the Platform CLI (ADR-0004). `hyrule new <project>`
+  scaffolds a multi-service project (`go.mod`, `Makefile`,
+  `docker-compose.yml`); `hyrule service create <name>` scaffolds a
+  service in it (`app.Main` + one resource + a `testkit` test).
+  Scaffolding only — `dev`, `build --affected`, and `deploy` are not
+  implemented, and `ci/affected`/the Makefile pattern aren't wrapped as
+  subcommands yet; that's deferred on purpose, not missing by oversight.
 - `examples/standalone-tags-api`: Fase 2's proof that an external
   repository can depend on Hyrule as its own Go module (own `go.mod`,
   `replace` directive until a version is tagged), not just as a package

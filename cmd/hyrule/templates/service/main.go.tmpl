@@ -1,0 +1,15 @@
+// Command {{.Name}} is a Hyrule service, scaffolded by "hyrule service create".
+package main
+
+import "github.com/Gui-Rondon/hyrule/app"
+
+// version is set at build time with -ldflags "-X main.version=...".
+var version = "dev"
+
+func main() {
+	app.Main(spec())
+}
+
+func spec() app.Spec {
+	return app.Spec{Name: "{{.Name}}", DefaultDB: "{{.Name}}", Version: version, Setup: setup}
+}

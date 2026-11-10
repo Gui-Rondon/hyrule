@@ -17,10 +17,9 @@ adopt it, on the same core: a **Framework** path (`go get`, no
 monorepo or CLI required) and a **Platform** path (a monorepo, CLI,
 and scaffolding, for teams that want a standardized multi-service
 setup). As of Fase 1, the Framework path is externally consumable (see
-ADR-0001) — the gap row below is kept for history, not because it's
-still open. The Platform path doesn't exist beyond a few reusable
-building blocks (`ci/affected`, Makefile targets, one example
-monorepo).
+ADR-0001), and as of Fase 3, the Platform path has its first two
+commands (see ADR-0004) — both gap rows below are kept for history, not
+because they're still open.
 
 ## Gap analysis
 
@@ -29,8 +28,8 @@ monorepo).
 | Framework (`go get`) | Consumable by any external Go app | `app`, `rest`, `outbox`, `testkit`, `declarative`, `behaviors/*`, `platform/*` are public; only `internal/domain` stays internal | **Closed** — Fase 1 (verified: a scratch external module imports `rest`, `app`, `declarative`, `platform/mongodb`) |
 | `rest.Store` across backends | Portable between Mongo and Postgres | Mongo types leak into the contract | **High** — needs a design decision before any code moves (ADR-0002) |
 | Outbox across backends | Implied by the dual-mode story | Hard-coded to Mongo | **High**, correctly blocked until the Store question is resolved (ADR-0003) |
-| CLI / Platform | `hyrule new` / `service create` / `dev` / `build` / `deploy` | No subcommand exists | **Critical**, but reusable pieces already exist (`ci/affected`, Makefile, example monorepo) |
-| Affected-build / independent deploy | Orchestrated by the platform | `ci/affected` works standalone, not wired into CI; one illustrative Kubernetes manifest | **Medium** — the hard part exists, the orchestration doesn't |
+| CLI / Platform | `hyrule new` / `service create` / `dev` / `build` / `deploy` | `cmd/hyrule` has `new` and `service create` (ADR-0004); `dev`/`build --affected`/`deploy` not started | **Partially closed** — Fase 3 scaffolding done; `ci/affected`/Makefile wrapping deferred on purpose |
+| Affected-build / independent deploy | Orchestrated by the platform | `ci/affected` works standalone, not wired into CI or the CLI; one illustrative Kubernetes manifest | **Medium** — the hard part exists, the orchestration doesn't |
 | Dual-journey documentation | Learn (Framework) + Learn (Platform) + shared Reference | Only the Framework journey exists, and it's already honest about what's missing | **Medium** — don't write the Platform journey until the CLI is real |
 | ADRs / versioning | A formal decision and compatibility process | Didn't exist before this page | **High gap, low cost** — pure documentation |
 
@@ -56,9 +55,16 @@ monorepo).
   (`behaviors/audit`), a `testkit`-based test, and a real `go run .` +
   `curl` cycle, all verified.
 - **Fase 3 — Platform / CLI.** Implement the smallest useful CLI per
-  ADR-0004 (`hyrule new`, `hyrule service create`), reusing
-  `ci/affected` and the Makefile rather than reimplementing them.
-  Risk: medium. Effort: high.
+  ADR-0004. **Done, scaffolding only.** `cmd/hyrule` (`go install
+  github.com/Gui-Rondon/hyrule/cmd/hyrule`) has `hyrule new <project>`
+  and `hyrule service create <name>`, embedding templates for a
+  project's `go.mod`/`Makefile`/`docker-compose.yml` and a service's
+  `app.Main` + one resource + a `testkit` test. Verified end to end:
+  `hyrule new` → `hyrule service create` → `go mod tidy` → `make build`
+  → `make test` → `make run` + `curl` all work, with no hand-copying of
+  `examples/blog-apis`. `ci/affected` and the Makefile pattern are
+  *not* wrapped as subcommands yet — ADR-0004 deferred that on purpose
+  until there's a second command that actually needs them.
 - **Fase 4 — Operational experience.** Wire `ci/affected` into an
   actual CI workflow; make deploy configurable rather than generic.
   Depends on Fase 3.
@@ -68,7 +74,9 @@ monorepo).
 
 ## What this round does not do
 
-No `rest.Store` interface change, no outbox portability, no CLI. Those
-are exactly the decisions the project's own rules say to stop and
-present before executing — ADR-0002, ADR-0003, and ADR-0004 are that
-presentation for each of them.
+No `rest.Store` interface change, no outbox portability, no
+`dev`/`build --affected`/`deploy` CLI subcommands, and `ci/affected`
+stays an unwrapped standalone tool. Those are exactly the decisions
+the project's own rules say to stop and present before executing —
+ADR-0002, ADR-0003, and ADR-0004 are that presentation for each of
+them.

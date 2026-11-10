@@ -1,0 +1,15 @@
+# Local Mongo for {{.Module}}: replica set rs0, so transactions (and
+# Hyrule's outbox, if you use it) work. See Makefile's MONGO_URI.
+services:
+  mongo:
+    image: mongo:8.0
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "127.0.0.1:27017:27017"
+    healthcheck:
+      # initiates the replica set on the first run
+      test: >
+        mongosh --quiet --eval 'try { rs.status().ok } catch (e) {
+          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]}).ok }'
+      interval: 2s
+      retries: 30

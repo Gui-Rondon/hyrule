@@ -65,6 +65,28 @@ same quickstart as above, but as its own Go module (own `go.mod`) that
 depends on this one — the proof that an external repository can really
 `go get` this framework, not just import it from inside this monorepo.
 
+## Platform: scaffolding a multi-service project
+
+```bash
+go install github.com/Gui-Rondon/hyrule/cmd/hyrule@main
+
+hyrule new my-platform
+cd my-platform
+go get github.com/Gui-Rondon/hyrule@main
+hyrule service create articles
+
+make env-up
+make build SERVICE=articles
+make run SERVICE=articles
+```
+
+`hyrule new`/`hyrule service create` are the only two commands today
+(ADR-0004) — scaffolding, not a build/deploy orchestrator. The generated
+project has its own `go.mod`, `Makefile`, and `docker-compose.yml`, in
+the same shape as this repo's own; `dev`/`build --affected`/`deploy`
+subcommands are future work (see the
+[roadmap](https://gui-rondon.github.io/hyrule/docs/reference/roadmap)).
+
 ## Documentation
 
 The full docs are at **https://gui-rondon.github.io/hyrule/**:
@@ -92,6 +114,7 @@ The full docs are at **https://gui-rondon.github.io/hyrule/**:
     testkit/                       per-test isolated Mongo, ES recorder, tokens
     internal/domain/               the one package that stays internal (slug generation)
     cmd/hyrule-serve/              generic binary: registers the resources of a YAML, no domain Go
+    cmd/hyrule/                    the Platform CLI: hyrule new, hyrule service create
     ci/                            ci/affected (picks the services a diff affects)
     examples/blog-apis/            a real use of the framework (see that directory's README)
     examples/standalone-tags-api/  an external Go module (own go.mod) depending on this one

@@ -1,0 +1,29 @@
+package main
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/Gui-Rondon/hyrule/app"
+	"github.com/Gui-Rondon/hyrule/behaviors/audit"
+	"github.com/Gui-Rondon/hyrule/rest"
+)
+
+// setup registers the {{.Name}} resource. Extend Schema with your real
+// fields, and see the Learn guide (https://gui-rondon.github.io/hyrule/)
+// for hooks, relations and the transactional outbox.
+func setup(_ context.Context, env *app.Env) error {
+	res := &rest.Resource{
+		Name:      "{{.Name}}",
+		ItemTitle: "{{.Name}}",
+		Store:     env.Store("{{.Name}}"),
+		Schema: rest.Schema{
+			"name": {Type: rest.TypeString, Required: true},
+		},
+		ResourceMethods: []string{http.MethodGet, http.MethodPost},
+		ItemMethods:     []string{http.MethodGet, http.MethodPatch},
+	}
+	res.Hooks.Use(audit.Hooks())
+	env.API.Register(res)
+	return nil
+}
