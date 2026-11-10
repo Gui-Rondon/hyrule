@@ -12,6 +12,7 @@ import (
 
 	"github.com/Gui-Rondon/hyrule/internal/outbox"
 	"github.com/Gui-Rondon/hyrule/internal/platform/config"
+	"github.com/Gui-Rondon/hyrule/internal/platform/redis"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
@@ -145,4 +146,153 @@ func TestScheduleRequiresPublishAt(t *testing.T) {
 	if res.Status != http.StatusUnprocessableEntity {
 		t.Errorf("schedule without publish_at = %d %s", res.Status, res.Raw)
 	}
+}
+
+func TestUnpublish(t *testing.T) {
+	e := newService(t)
+	id, _ := e.create(t, map[string]any{"title": "Hello", "slug": "hello"})
+	if res := e.c.Do("POST", "/posts/"+id+"/publish", nil); res.Status != http.StatusOK {
+		t.Fatalf("publish = %d %s", res.Status, res.Raw)
+	}
+	res := e.c.Do("DELETE", "/posts/"+id+"/publish", nil)
+	if res.Status != http.StatusOK {
+		t.Fatalf("unpublish = %d %s", res.Status, res.Raw)
+	}
+	if doc := e.raw(t, id); doc["status"] != "draft" || doc["_unpublished"] == nil {
+		t.Errorf("unpublished doc = %v", doc)
+	}
+	var saw bool
+	for _, ev := range e.events(t) {
+		if ev["type"] == "post.unpublished" && ev["topic"] == defaultToUnpub {
+			saw = true
+		}
+	}
+	if !saw {
+		t.Errorf("events missing post.unpublished")
+	}
+}
+
+func TestUnschedule(t *testing.T) {
+	e := newService(t)
+	id, etag := e.create(t, map[string]any{"title": "Hello", "slug": "hello"})
+	res := e.c.Do("POST", "/posts/"+id+"/schedule", map[string]any{"publish_at": "Mon, 02 Jan 2030 15:04:05 GMT"}, "If-Match", etag)
+	if res.Status != http.StatusOK {
+		t.Fatalf("schedule = %d %s", res.Status, res.Raw)
+	}
+	res = e.c.Do("DELETE", "/posts/"+id+"/schedule", nil, "If-Match", res.String("_etag"))
+	if res.Status != http.StatusOK {
+		t.Fatalf("unschedule = %d %s", res.Status, res.Raw)
+	}
+	if res.Header.Get("ETag") == "" {
+		t.Error("unschedule response missing ETag header")
+	}
+	if doc := e.raw(t, id); doc["status"] != "draft" {
+		t.Errorf("unscheduled doc = %v", doc)
+	}
+	var saw bool
+	for _, ev := range e.events(t) {
+		if ev["type"] == "post.unscheduled" && ev["topic"] == topicSchedule {
+			saw = true
+		}
+	}
+	if !saw {
+		t.Errorf("events missing post.unscheduled")
+	}
+}
+
+func TestScheduleEtagMismatch(t *testing.T) {
+	e := newService(t)
+	id, _ := e.create(t, map[string]any{"title": "Hello", "slug": "hello"})
+	res := e.c.Do("POST", "/posts/"+id+"/schedule", map[string]any{"publish_at": "Mon, 02 Jan 2030 15:04:05 GMT"}, "If-Match", `"not-the-etag"`)
+	if res.Status != http.StatusPreconditionFailed {
+		t.Errorf("schedule with wrong etag = %d %s", res.Status, res.Raw)
+	}
+}
+
+func TestUnscheduleEtagMismatch(t *testing.T) {
+	e := newService(t)
+	id, _ := e.create(t, map[string]any{"title": "Hello", "slug": "hello"})
+	res := e.c.Do("DELETE", "/posts/"+id+"/schedule", nil, "If-Match", `"not-the-etag"`)
+	if res.Status != http.StatusPreconditionFailed {
+		t.Errorf("unschedule with wrong etag = %d %s", res.Status, res.Raw)
+	}
+}
+
+func TestScheduleInvalidDate(t *testing.T) {
+	e := newService(t)
+	id, etag := e.create(t, map[string]any{"title": "Hello", "slug": "hello"})
+	res := e.c.Do("POST", "/posts/"+id+"/schedule", map[string]any{"publish_at": "not-a-date"}, "If-Match", etag)
+	if res.Status != http.StatusUnprocessableEntity {
+		t.Errorf("schedule with invalid date = %d %s", res.Status, res.Raw)
+	}
+}
+
+func TestScheduleBadJSON(t *testing.T) {
+	e := newService(t)
+	id, etag := e.create(t, map[string]any{"title": "Hello", "slug": "hello"})
+	res := e.c.Do("POST", "/posts/"+id+"/schedule", "not json", "If-Match", etag)
+	if res.Status != http.StatusBadRequest {
+		t.Errorf("schedule with malformed body = %d %s", res.Status, res.Raw)
+	}
+}
+
+func TestTargetNotFound(t *testing.T) {
+	e := newService(t)
+	if res := e.c.Do("POST", "/posts/not-an-object-id/publish", nil); res.Status != http.StatusNotFound {
+		t.Errorf("publish with malformed id = %d %s", res.Status, res.Raw)
+	}
+	if res := e.c.Do("POST", "/posts/"+bson.NewObjectID().Hex()+"/publish", nil); res.Status != http.StatusNotFound {
+		t.Errorf("publish with unknown id = %d %s", res.Status, res.Raw)
+	}
+}
+
+// dispatcher() routes posts-schedule events to the Redis hash instead of
+// Pub/Sub; the relay that would normally call it isn't started in tests
+// (Env.Go is a no-op outside app.Run), so it's exercised directly here.
+func TestDispatcher(t *testing.T) {
+	addr := os.Getenv("REDIS_TEST_ADDR")
+	if addr == "" {
+		t.Skip("REDIS_TEST_ADDR not set")
+	}
+	host, port, _ := net.SplitHostPort(addr)
+	rdb, _, err := redis.Connect(config.Config{"redis": map[string]any{"host": host, "port": port, "socket_timeout": "1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rdb.Close()
+	ctx := context.Background()
+	const hash = "test:posts-dispatcher"
+	defer rdb.Del(ctx, hash)
+	d := dispatcher(rdb, hash, nil)
+
+	t.Run("sets the entry when scheduled", func(t *testing.T) {
+		err := d.Publish(ctx, outbox.Message{Topic: topicSchedule, Data: []byte(`{"_id":"p1","publish_at":"2030-01-02T15:04:05"}`)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := rdb.HGet(ctx, hash, "p1").Result()
+		if err != nil || v != "2030-01-02T15:04:05" {
+			t.Errorf("HGet = %q, %v", v, err)
+		}
+	})
+
+	t.Run("removes the entry when unscheduled", func(t *testing.T) {
+		rdb.HSet(ctx, hash, "p2", "2030-01-02T15:04:05")
+		err := d.Publish(ctx, outbox.Message{Topic: topicSchedule, Data: []byte(`{"_id":"p2","publish_at":null}`)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exists, _ := rdb.HExists(ctx, hash, "p2").Result(); exists {
+			t.Error("entry still present after unschedule")
+		}
+	})
+
+	t.Run("rejects malformed events", func(t *testing.T) {
+		if err := d.Publish(ctx, outbox.Message{Topic: topicSchedule, Data: []byte(`not json`)}); err == nil {
+			t.Error("expected an error for malformed JSON")
+		}
+		if err := d.Publish(ctx, outbox.Message{Topic: topicSchedule, Data: []byte(`{"publish_at":"2030-01-02T15:04:05"}`)}); err == nil {
+			t.Error("expected an error for a missing _id")
+		}
+	})
 }
