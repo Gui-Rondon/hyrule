@@ -31,7 +31,8 @@ resources:
 
 ```bash
 make env-up    # Mongo (27018), Pub/Sub (8085), Redis (6380)
-RESOURCES_FILE=resources.yaml CONFIG_FILE=/dev/null \
+echo '{"auth": {"enable": "false"}}' > config.json
+RESOURCES_FILE=resources.yaml CONFIG_FILE=config.json \
   MONGO_CONNECTION_STRING='mongodb://localhost:27018/demo?directConnection=true' \
   PORT=8080 go run ./cmd/hyrule-serve
 ```

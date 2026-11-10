@@ -53,11 +53,11 @@ const cards = [
     cta: 'Browse the reference →',
   },
   {
-    title: 'blog-apis example',
+    title: 'Blog',
     description:
-      'Every snippet in the Learn guide, in context, with its own tests — 4 small services covering plain CRUD, hierarchy, relations and the outbox.',
-    to: 'https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis',
-    cta: 'View on GitHub →',
+      "Guilherme Rondon's writing on Go, infrastructure and the ideas behind hyrule and his other projects.",
+    to: 'https://guirondon.dev/posts/',
+    cta: 'Read the blog →',
   },
 ];
 

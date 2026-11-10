@@ -62,14 +62,15 @@ duplicate before it ever reaches the database.
 ## 3. Run it
 
 ```bash
-RESOURCES_FILE=resources.yaml CONFIG_FILE=/dev/null \
+echo '{"auth": {"enable": "false"}}' > config.json
+RESOURCES_FILE=resources.yaml CONFIG_FILE=config.json \
   MONGO_CONNECTION_STRING='mongodb://localhost:27018/demo?directConnection=true' \
   PORT=8080 go run ./cmd/hyrule-serve
 ```
 
-`CONFIG_FILE=/dev/null` disables authentication for this quick test —
-see [Reference → `resources.yaml`](/docs/reference/resources-yaml) for
-what else goes in that file.
+`config.json` disables authentication for this quick test — see
+[Reference → `resources.yaml`](/docs/reference/resources-yaml) for what
+else goes in that file.
 
 ## 4. Talk to it
 

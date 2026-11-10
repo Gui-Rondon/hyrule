@@ -106,6 +106,20 @@ const config = {
               {label: 'blog-apis example', href: 'https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis'},
             ],
           },
+          {
+            title: 'About',
+            items: [
+              {label: 'About Me', href: 'https://guirondon.dev/about/'},
+              {label: 'LinkedIn', href: 'https://www.linkedin.com/in/guilherme-rondon/'},
+            ],
+          },
+          {
+            title: 'Get in Touch',
+            items: [
+              {label: 'Contact', href: 'https://guirondon.dev/contact/'},
+              {label: 'Help me Building', href: 'https://invite.guirondon.dev/'},
+            ],
+          },
         ],
         copyright: `Copyright © ${new Date().getFullYear()} Guilherme Rondon. MIT licensed.`,
       },
