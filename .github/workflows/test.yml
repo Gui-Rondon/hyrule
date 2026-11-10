@@ -3,6 +3,7 @@ name: Test
 on:
   push:
     branches: [main]
+  workflow_dispatch: {}
 
 jobs:
   test:
@@ -16,6 +17,9 @@ jobs:
       # local dev (docker-compose.yml) — no mocks, so coverage reflects
       # the actual transaction/outbox/unique-index behavior.
       - run: make env-up
+      - name: Mongo logs (debug on failure)
+        if: failure()
+        run: docker compose logs mongo
       - name: Test with coverage (fails below 85%, see Makefile COVERAGE_MIN)
         run: make cover
       - name: Upload coverage to Codecov
