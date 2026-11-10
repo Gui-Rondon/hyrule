@@ -4,11 +4,21 @@ sidebar_position: 1
 
 # Introduction
 
-hyrule is a Go framework for building REST APIs backed by MongoDB. You
-describe a **resource** — its fields, its validation rules, which HTTP
-methods it answers to — and hyrule gives you a working API: CRUD,
-request validation, ETags for optimistic concurrency, pagination, and a
-transactional outbox for emitting events exactly once per write.
+hyrule is a Go framework for scaffolding microservices fast, and
+testing their flows just as fast. You describe a **resource** — its
+fields, its validation rules, which HTTP methods it answers to — and
+hyrule gives you a working API: CRUD, request validation, ETags for
+optimistic concurrency, pagination, and a transactional outbox for
+emitting events exactly once per write. Backed by MongoDB today
+(Postgres support in progress — see the
+[Postgres RFC](/docs/reference/postgres-rfc)).
+
+Speed doesn't stop at scaffolding: `testkit` gives every test an
+isolated database and an HTTP client with no service to stand up, and
+dry run lets a whole service run against real traffic with every write
+rolled back — so a resource's actual flows, including the ones that
+span several writes and an outbox event, get tested as themselves, not
+as a mock of themselves.
 
 You can describe that resource two ways. In Go:
 

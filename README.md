@@ -6,12 +6,17 @@
 [![codecov](https://codecov.io/gh/Gui-Rondon/hyrule/branch/main/graph/badge.svg)](https://codecov.io/gh/Gui-Rondon/hyrule)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A Go framework for building REST APIs on top of Mongo (Postgres support
-in progress): describe a resource (schema, methods, lookups) and get
-full CRUD with validation, ETags, pagination and a transactional outbox
-— in Go, or with no Go at all, via YAML. Under the hood it keeps the
-HTTP contract of Eve (Python) (`internal/rest`), which is where the
-project migrated from.
+A Go framework for scaffolding microservices fast, and testing their
+flows just as fast: describe a resource (schema, methods, lookups) in a
+YAML file — no Go at all — and get a running REST API with full CRUD,
+validation, ETags, pagination and a transactional outbox, on Mongo
+(Postgres support in progress). A resource with its own logic stays a
+small Go binary. Either way, `testkit` gives each test an isolated
+database and an HTTP client, and dry run lets a whole service run
+against real traffic with every write rolled back — so you can exercise
+a service's actual flows without standing up the real stack or faking
+your way through it. Under the hood it keeps the HTTP contract of Eve
+(Python) (`internal/rest`), which is where the project migrated from.
 
 📖 **Full documentation: https://gui-rondon.github.io/hyrule/** — a
 guided [Learn](https://gui-rondon.github.io/hyrule/docs/learn/intro)

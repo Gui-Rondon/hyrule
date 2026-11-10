@@ -4,7 +4,7 @@ import {themes as prismThemes} from 'prism-react-renderer';
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'hyrule',
-  tagline: 'A Go framework for building REST APIs on MongoDB',
+  tagline: 'Spin up microservices fast. Test their flows just as fast.',
   favicon: 'img/logo.png',
 
   future: {
