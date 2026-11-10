@@ -5,7 +5,7 @@
 // https://gui-rondon.github.io/hyrule/docs/reference/observability
 //
 // The route is the pattern of the mux (e.g. "GET /posts/{lookup}"), set by
-// evecompat with SetRoute; a request no route matched is "unmatched", so a
+// rest with SetRoute; a request no route matched is "unmatched", so a
 // path never becomes a label. Each Build has its own registry, so the tests
 // that build several services do not collide.
 package metrics

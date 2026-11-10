@@ -9,8 +9,8 @@ import (
 )
 
 // Store wraps a *mongo.Collection and structurally satisfies
-// evecompat.Store, without this package importing evecompat (platform
-// sits below evecompat; see evecompat.Store's doc comment for why that
+// rest.Store, without this package importing rest (platform
+// sits below rest; see rest.Store's doc comment for why that
 // direction matters).
 type Store struct {
 	Collection *mongo.Collection

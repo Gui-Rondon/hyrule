@@ -25,7 +25,7 @@ func TestRealGraph(t *testing.T) {
 		files []string
 		want  []string
 	}{
-		{"evecompat", []string{"internal/evecompat/http.go"}, all},
+		{"rest", []string{"internal/rest/http.go"}, all},
 		{"outbox", []string{"internal/outbox/relay.go"}, []string{"posts-api"}},
 		{"redis", []string{"internal/platform/redis/redis.go"}, []string{"posts-api"}},
 		{"searchsync", []string{"internal/behaviors/searchsync/searchsync.go"}, []string{"authors-api", "posts-api", "tags-api"}},
@@ -35,7 +35,7 @@ func TestRealGraph(t *testing.T) {
 		{"deleted service file", []string{dir + "/posts-api/removed.go"}, []string{"posts-api"}},
 		{"deleted test file", []string{dir + "/posts-api/removed_test.go"}, nil},
 		{"manifest", []string{deployDir + "/posts-api/manifest.yml"}, []string{"posts-api"}},
-		{"test file", []string{"internal/evecompat/http_test.go", dir + "/tags-api/tags_test.go"}, nil},
+		{"test file", []string{"internal/rest/http_test.go", dir + "/tags-api/tags_test.go"}, nil},
 		{"testkit", []string{"internal/testkit/testkit.go"}, nil},
 		{"docs", []string{"examples/blog-apis/README.md", "README.md"}, nil},
 		{"Dockerfile", []string{"Dockerfile"}, all},

@@ -68,7 +68,7 @@ verified, in `TestPlainPatchAlsoPublishes`.
 ## Testing a hook without HTTP
 
 Not every test needs a running service. `internal/behaviors/events`'s
-own test for `events.ConditionalHooks` builds a bare `evecompat.Service`
+own test for `events.ConditionalHooks` builds a bare `rest.Service`
 around a `Resource` and drives it directly:
 
 ```go
@@ -78,15 +78,15 @@ if !replicaSet {
 	t.Skip("Mongo is not a replica set")
 }
 
-res := &evecompat.Resource{
+res := &rest.Resource{
 	Name:   "items",
 	Store:  testkit.Store(t, "items"),
-	Schema: evecompat.Schema{"status": {Type: evecompat.TypeString}},
+	Schema: rest.Schema{"status": {Type: rest.TypeString}},
 }
 res.Hooks.Use(events.ConditionalHooks(box, cond))
-svc := evecompat.NewService(res, tx)
+svc := rest.NewService(res, tx)
 
-svc.Insert(ctx, []evecompat.Doc{{"status": "draft"}}, evecompat.WriteOptions{})
+svc.Insert(ctx, []rest.Doc{{"status": "draft"}}, rest.WriteOptions{})
 // ... svc.Patch, svc.Replace, svc.Delete — same Service API a custom
 // endpoint uses, no HTTP envelope around it.
 ```
@@ -105,7 +105,7 @@ Tests that need Mongo skip themselves when `MONGO_TEST_URI` isn't set, so
   gives you an in-process HTTP client — no real port, no slow tests.
 - Read the collection directly (`e.db.Collection(...)`) to assert on what
   was actually stored, not just the HTTP response.
-- `testkit.Store` + `evecompat.NewService` test a `Resource`'s hooks
+- `testkit.Store` + `rest.NewService` test a `Resource`'s hooks
   with no HTTP at all.
 - Next: [Going Further](./going-further.md) — when to reach for Go
   instead of YAML, and where to go from here.

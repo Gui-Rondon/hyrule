@@ -1,4 +1,4 @@
-package evecompat
+package rest
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 )
 
 // Store is the persistence seam a Resource reads and writes through. It
-// decouples the concrete storage client from evecompat — not the query
+// decouples the concrete storage client from rest — not the query
 // language: filters, sorts and updates stay bson.M/bson.D, and the error
 // values a Store returns (not found, duplicate key, timeout) are still
 // Mongo-shaped (mongo.ErrNoDocuments, mongo.IsDuplicateKeyError...), because
@@ -17,10 +17,10 @@ import (
 // errors for the checks above, or this interface needs a second pass to
 // carry its own error values instead.
 //
-// Methods take plain bson/stdlib types, not evecompat-owned option structs:
+// Methods take plain bson/stdlib types, not rest-owned option structs:
 // that keeps platform/mongodb (or any other Store implementation) from
-// having to import evecompat for its method signatures to match, which
-// would invert the services → behaviors → evecompat → platform layering.
+// having to import rest for its method signatures to match, which
+// would invert the services → behaviors → rest → platform layering.
 //
 // https://gui-rondon.github.io/hyrule/docs/reference/architecture
 type Store interface {

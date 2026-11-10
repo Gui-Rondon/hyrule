@@ -1,13 +1,13 @@
-// Package declarative builds evecompat.Resource/Schema values from YAML,
+// Package declarative builds rest.Resource/Schema values from YAML,
 // for the common case — a resource with no custom hooks or business logic
-// (see internal/evecompat/service.go: settings-api, tags-api, authors-api
+// (see internal/rest/service.go: settings-api, tags-api, authors-api
 // in examples/blog-apis are entirely this shape already, hand-written).
 //
-// Two escapes of evecompat stay Go-only, because they carry arbitrary code
+// Two escapes of rest stay Go-only, because they carry arbitrary code
 // rather than data: Field.Check and Resource.Validate. A resource that
 // needs either keeps being described in Go, exactly as today — a
 // declarative Resource and a hand-written one register through the same
-// evecompat.API.Register, so a service can mix both.
+// rest.API.Register, so a service can mix both.
 //
 // What this package does not cover: Resource.Datasource (bson.M filters
 // and projections), Hooks of any kind, and the two escapes above. Those
@@ -22,7 +22,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 // File is a resources.yaml: one or more resources, registered independently
@@ -31,9 +31,9 @@ type File struct {
 	Resources []Resource `yaml:"resources"`
 }
 
-// Resource mirrors the plain-data fields of evecompat.Resource.
+// Resource mirrors the plain-data fields of rest.Resource.
 type Resource struct {
-	// Name is the DOMAIN key and, by default, the URL (evecompat.Resource.Name/URL).
+	// Name is the DOMAIN key and, by default, the URL (rest.Resource.Name/URL).
 	Name string `yaml:"name"`
 	// Collection is the Mongo collection backing the resource (env.Store(Collection)).
 	Collection string `yaml:"collection"`
@@ -56,14 +56,14 @@ type Resource struct {
 	CacheExpires int    `yaml:"cache_expires"`
 }
 
-// AdditionalLookup mirrors evecompat.AdditionalLookup (the Field/Pattern
+// AdditionalLookup mirrors rest.AdditionalLookup (the Field/Pattern
 // pair; Filter and PathLinks are Go-only, they carry a closure).
 type AdditionalLookup struct {
 	Field   string `yaml:"field"`
 	Pattern string `yaml:"pattern"`
 }
 
-// Pagination mirrors evecompat.Pagination.
+// Pagination mirrors rest.Pagination.
 type Pagination struct {
 	Default          int  `yaml:"default"`
 	Limit            int  `yaml:"limit"`
@@ -71,7 +71,7 @@ type Pagination struct {
 	Disabled         bool `yaml:"disabled"`
 }
 
-// Field mirrors the plain-data fields of evecompat.Field. Check is Go-only
+// Field mirrors the plain-data fields of rest.Field. Check is Go-only
 // (a closure), so it has no YAML counterpart.
 type Field struct {
 	Type       string   `yaml:"type"`
@@ -102,14 +102,14 @@ func Parse(r io.Reader) (*File, error) {
 	return &f, nil
 }
 
-// Build compiles r into an evecompat.Resource backed by store (typically
+// Build compiles r into an rest.Resource backed by store (typically
 // env.Store(r.Collection)); the caller still does env.API.Register(res).
-func (r Resource) Build(store evecompat.Store) (*evecompat.Resource, error) {
+func (r Resource) Build(store rest.Store) (*rest.Resource, error) {
 	schema, err := buildSchema(r.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("resource %q: %w", r.Name, err)
 	}
-	res := &evecompat.Resource{
+	res := &rest.Resource{
 		Name:              r.Name,
 		ItemTitle:         r.ItemTitle,
 		Store:             store,
@@ -124,7 +124,7 @@ func (r Resource) Build(store evecompat.Store) (*evecompat.Resource, error) {
 		CacheExpires:      r.CacheExpires,
 	}
 	if r.Pagination != nil {
-		res.Pagination = evecompat.Pagination{
+		res.Pagination = rest.Pagination{
 			Default: r.Pagination.Default, Limit: r.Pagination.Limit,
 			OptimizeForSpeed: r.Pagination.OptimizeForSpeed, Disabled: r.Pagination.Disabled,
 		}
@@ -134,7 +134,7 @@ func (r Resource) Build(store evecompat.Store) (*evecompat.Resource, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resource %q: additional_lookup.pattern: %w", r.Name, err)
 		}
-		res.AdditionalLookup = &evecompat.AdditionalLookup{Field: r.AdditionalLookup.Field, Pattern: pattern}
+		res.AdditionalLookup = &rest.AdditionalLookup{Field: r.AdditionalLookup.Field, Pattern: pattern}
 	}
 	return res, nil
 }
@@ -165,11 +165,11 @@ func methods(names []string) []string {
 	return out
 }
 
-func buildSchema(fields map[string]Field) (evecompat.Schema, error) {
+func buildSchema(fields map[string]Field) (rest.Schema, error) {
 	if fields == nil {
 		return nil, nil
 	}
-	schema := make(evecompat.Schema, len(fields))
+	schema := make(rest.Schema, len(fields))
 	for name, f := range fields {
 		built, err := f.build()
 		if err != nil {
@@ -180,20 +180,20 @@ func buildSchema(fields map[string]Field) (evecompat.Schema, error) {
 	return schema, nil
 }
 
-// validTypes are the FieldType values evecompat understands; an empty type
-// accepts any value, so it's valid too (evecompat/schema.go).
+// validTypes are the FieldType values rest understands; an empty type
+// accepts any value, so it's valid too (rest/schema.go).
 var validTypes = map[string]bool{
-	"": true, string(evecompat.TypeString): true, string(evecompat.TypeBoolean): true,
-	string(evecompat.TypeInteger): true, string(evecompat.TypeNumber): true, string(evecompat.TypeDict): true,
-	string(evecompat.TypeList): true, string(evecompat.TypeObjectID): true, string(evecompat.TypeDatetime): true,
+	"": true, string(rest.TypeString): true, string(rest.TypeBoolean): true,
+	string(rest.TypeInteger): true, string(rest.TypeNumber): true, string(rest.TypeDict): true,
+	string(rest.TypeList): true, string(rest.TypeObjectID): true, string(rest.TypeDatetime): true,
 }
 
-func (f Field) build() (evecompat.Field, error) {
+func (f Field) build() (rest.Field, error) {
 	if !validTypes[f.Type] {
-		return evecompat.Field{}, fmt.Errorf("type: unknown %q", f.Type)
+		return rest.Field{}, fmt.Errorf("type: unknown %q", f.Type)
 	}
-	built := evecompat.Field{
-		Type:         evecompat.FieldType(f.Type),
+	built := rest.Field{
+		Type:         rest.FieldType(f.Type),
 		Required:     f.Required,
 		Nullable:     f.Nullable,
 		Unique:       f.Unique,
@@ -210,21 +210,21 @@ func (f Field) build() (evecompat.Field, error) {
 	if f.Regex != "" {
 		re, err := regexp.Compile(f.Regex)
 		if err != nil {
-			return evecompat.Field{}, fmt.Errorf("regex: %w", err)
+			return rest.Field{}, fmt.Errorf("regex: %w", err)
 		}
 		built.Regex = re
 	}
 	if f.Schema != nil {
 		schema, err := buildSchema(f.Schema)
 		if err != nil {
-			return evecompat.Field{}, err
+			return rest.Field{}, err
 		}
 		built.Schema = schema
 	}
 	if f.Items != nil {
 		items, err := f.Items.build()
 		if err != nil {
-			return evecompat.Field{}, fmt.Errorf("items: %w", err)
+			return rest.Field{}, fmt.Errorf("items: %w", err)
 		}
 		built.Items = &items
 	}

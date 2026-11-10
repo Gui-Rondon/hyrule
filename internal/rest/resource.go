@@ -1,4 +1,4 @@
-// Package evecompat serves Mongo collections with the HTTP contract of Python
+// Package rest serves Mongo collections with the HTTP contract of Python
 // Eve, so the gateways that call the Eve APIs keep working unchanged:
 // where/sort/projection/page/max_results, the _items/_links/_meta envelope,
 // If-Match/ETag, Eve's error envelope and Cerberus validation messages.
@@ -12,7 +12,7 @@
 // Eve's event hooks are the Hooks of a Resource. Pre-write hooks run in the
 // same Mongo transaction as the write, which is where an outbox event must be
 // recorded.
-package evecompat
+package rest
 
 import (
 	"context"

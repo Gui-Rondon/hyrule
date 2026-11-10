@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Resource via YAML
@@ -68,7 +68,7 @@ Nomes de método aceitam qualquer caixa (`get` ou `GET`).
 
 ## O que não tem equivalente em YAML
 
-Dois campos de `evecompat.Field`/`Resource` carregam código Go arbitrário,
+Dois campos de `rest.Field`/`Resource` carregam código Go arbitrário,
 não dado — e por isso não dá pra expressá-los aqui:
 
 - **`Field.Check`**: validação personalizada de um campo (ex.: checar
@@ -80,6 +80,6 @@ Fora do schema, `Resource.Datasource` (filtros/projeção `bson.M`) e todos
 os `Hooks` (`OnInsert`, `OnUpdate`, outbox, busca, auditoria...) também
 ficam de fora do loader — um recurso que precisa de qualquer um desses
 continua em Go. Um recurso construído a partir do YAML é um
-`*evecompat.Resource` normal, então nada impede anexar hooks nele em Go
+`*rest.Resource` normal, então nada impede anexar hooks nele em Go
 antes de registrar (`internal/declarative/declarative_test.go`'s
 `TestBuiltResourceComposesWithConditionalOutbox` faz exatamente isso).

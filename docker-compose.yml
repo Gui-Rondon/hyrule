@@ -2,9 +2,11 @@
 #   mongo     replica set rs0 (as production), so transactions work (host port 27018)
 #   pubsub    Google Pub/Sub emulator (host port 8085, project local-dev)
 #   redis     Redis (host port 6380)
+#   postgres  for the internal/platform/postgres scaffold (host port 5433)
 #
-# From the host use mongodb://localhost:27018/?directConnection=true and
-# PUBSUB_EMULATOR_HOST=localhost:8085.
+# From the host use mongodb://localhost:27018/?directConnection=true,
+# PUBSUB_EMULATOR_HOST=localhost:8085 and
+# postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable.
 #
 # examples/blog-apis/docker-compose.yml includes this file and adds
 # Elasticsearch, for that example's optional search indexing.
@@ -42,3 +44,14 @@ services:
     image: redis:7-alpine
     ports:
       - "127.0.0.1:6380:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      retries: 30

@@ -90,7 +90,7 @@ curl -X POST localhost:8080/tags -H 'Content-Type: application/json' \
 Three requests, zero lines of Go, a real MongoDB document, a real
 validation rule enforced. That's `cmd/hyrule-serve` +
 `internal/declarative` reading your YAML and building an
-`evecompat.Resource` from it — the exact same type a hand-written Go
+`rest.Resource` from it — the exact same type a hand-written Go
 service builds, which is what the next page digs into.
 
 :::tip[Recap]

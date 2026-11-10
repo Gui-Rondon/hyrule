@@ -7,7 +7,7 @@
 // Events are added from the pre-write hooks of a resource, which run inside
 // the write transaction:
 //
-//	res.Hooks.OnUpdate = append(res.Hooks.OnUpdate, func(ctx context.Context, updates, original evecompat.Doc) error {
+//	res.Hooks.OnUpdate = append(res.Hooks.OnUpdate, func(ctx context.Context, updates, original rest.Doc) error {
 //		return box.Add(ctx, outbox.Event{Topic: "videos-to-publish", Key: id, Body: msg})
 //	})
 package outbox

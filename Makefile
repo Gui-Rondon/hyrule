@@ -1,22 +1,25 @@
 SERVICE ?= tags-api
 MONGO_URI ?= mongodb://localhost:27018/?directConnection=true
+POSTGRES_URI ?= postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable
 GO_PORT ?= 8081
 
 export MONGO_TEST_URI ?= $(MONGO_URI)
 export PUBSUB_EMULATOR_HOST ?= localhost:8085
 export REDIS_TEST_ADDR ?= localhost:6380
+export POSTGRES_TEST_URI ?= $(POSTGRES_URI)
 
 COVERAGE_MIN ?= 85
 
 .PHONY: test unit vet cover build image env-up env-down example-env-up example-env-down run loadtest
 
-# All tests; the ones that need Mongo use MONGO_TEST_URI (make env-up).
+# All tests; the ones that need Mongo/Postgres use MONGO_TEST_URI/
+# POSTGRES_TEST_URI (make env-up).
 test:
 	go test -race ./...
 
 # Tests that need no external service.
 unit:
-	MONGO_TEST_URI= go test -race ./...
+	MONGO_TEST_URI= POSTGRES_TEST_URI= go test -race ./...
 
 vet:
 	go vet ./...

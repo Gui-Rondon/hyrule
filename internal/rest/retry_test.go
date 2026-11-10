@@ -1,4 +1,4 @@
-package evecompat_test
+package rest_test
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
@@ -41,9 +41,9 @@ func TestHooksSurviveTransactionRetry(t *testing.T) {
 		t.Skip("needs a replica set")
 	}
 	res := items()
-	res.Schema["username"] = evecompat.Field{Type: evecompat.TypeString}
+	res.Schema["username"] = rest.Field{Type: rest.TypeString}
 	res.Store = mongodb.NewStore(db.Collection("items"))
-	stamp := func(doc evecompat.Doc) {
+	stamp := func(doc rest.Doc) {
 		who := "fallback"
 		if v, ok := doc["username"].(string); ok {
 			delete(doc, "username")
@@ -52,26 +52,26 @@ func TestHooksSurviveTransactionRetry(t *testing.T) {
 		doc["who"] = who
 	}
 	prepared := 0
-	res.Hooks.Use(evecompat.Hooks{
-		OnPrepare: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(context.Context, evecompat.Doc, evecompat.Doc) error { prepared++; return nil },
+	res.Hooks.Use(rest.Hooks{
+		OnPrepare: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(context.Context, rest.Doc, rest.Doc) error { prepared++; return nil },
 		},
-		OnInsert: []func(context.Context, []evecompat.Doc) error{
-			func(_ context.Context, docs []evecompat.Doc) error {
+		OnInsert: []func(context.Context, []rest.Doc) error{
+			func(_ context.Context, docs []rest.Doc) error {
 				for _, d := range docs {
 					stamp(d)
 				}
 				return nil
 			},
 		},
-		OnUpdate: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(_ context.Context, changes, _ evecompat.Doc) error { stamp(changes); return nil },
+		OnUpdate: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(_ context.Context, changes, _ rest.Doc) error { stamp(changes); return nil },
 		},
-		OnReplace: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(_ context.Context, doc, _ evecompat.Doc) error { stamp(doc); return nil },
+		OnReplace: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(_ context.Context, doc, _ rest.Doc) error { stamp(doc); return nil },
 		},
 	})
-	api := evecompat.New(evecompat.Options{Transactor: retryOnce{db.Client()}})
+	api := rest.New(rest.Options{Transactor: retryOnce{db.Client()}})
 	api.Register(res)
 	c := testkit.NewClient(t, api)
 

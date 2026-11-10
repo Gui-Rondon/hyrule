@@ -1,10 +1,26 @@
 // @ts-check
+import {execSync} from 'node:child_process';
 import {themes as prismThemes} from 'prism-react-renderer';
+
+// The nearest release tag (e.g. "v0.100.0"), or null off a shallow clone
+// with no tags (the local working copy still builds, just without the
+// footer link) — see deploy-docs.yml's checkout step for why CI has them.
+function latestVersion() {
+  try {
+    return execSync('git describe --tags --abbrev=0', {stdio: ['ignore', 'pipe', 'ignore']})
+      .toString()
+      .trim();
+  } catch {
+    return null;
+  }
+}
+
+const version = latestVersion();
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'hyrule',
-  tagline: 'A Go framework for building REST APIs on MongoDB',
+  tagline: 'Spin up microservices fast. Test their flows just as fast.',
   favicon: 'img/logo.png',
 
   future: {
@@ -104,6 +120,9 @@ const config = {
             items: [
               {label: 'GitHub', href: 'https://github.com/Gui-Rondon/hyrule'},
               {label: 'blog-apis example', href: 'https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis'},
+              ...(version
+                ? [{label: version, href: `https://github.com/Gui-Rondon/hyrule/releases/tag/${version}`}]
+                : []),
             ],
           },
           {

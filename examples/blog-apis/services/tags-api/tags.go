@@ -8,26 +8,26 @@ import (
 
 	"github.com/Gui-Rondon/hyrule/internal/app"
 	"github.com/Gui-Rondon/hyrule/internal/behaviors/searchsync"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/search"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 func setup(_ context.Context, env *app.Env) error {
-	res := &evecompat.Resource{
+	res := &rest.Resource{
 		Name:      "tags",
 		ItemTitle: "tag",
 		Store:     env.Store("tags"),
-		Schema: evecompat.Schema{
-			"name":    {Type: evecompat.TypeString, Required: true},
-			"slug":    {Type: evecompat.TypeString, Required: true, Unique: true},
-			"enabled": {Type: evecompat.TypeBoolean, Default: true},
+		Schema: rest.Schema{
+			"name":    {Type: rest.TypeString, Required: true},
+			"slug":    {Type: rest.TypeString, Required: true, Unique: true},
+			"enabled": {Type: rest.TypeBoolean, Default: true},
 		},
-		AdditionalLookup:  &evecompat.AdditionalLookup{Field: "slug", Pattern: regexp.MustCompile(`^[\w-]+$`)},
+		AdditionalLookup:  &rest.AdditionalLookup{Field: "slug", Pattern: regexp.MustCompile(`^[\w-]+$`)},
 		ResourceMethods:   []string{http.MethodGet, http.MethodPost},
 		ItemMethods:       []string{http.MethodGet, http.MethodPatch, http.MethodPut},
-		PublicMethods:     evecompat.PublicGET,
-		PublicItemMethods: evecompat.PublicGET,
-		QueryDenylist:     evecompat.DefaultQueryDenylist,
+		PublicMethods:     rest.PublicGET,
+		PublicItemMethods: rest.PublicGET,
+		QueryDenylist:     rest.DefaultQueryDenylist,
 	}
 
 	if _, ok := env.Config.Get("elasticsearch.hosts"); ok {

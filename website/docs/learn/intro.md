@@ -4,21 +4,31 @@ sidebar_position: 1
 
 # Introduction
 
-hyrule is a Go framework for building REST APIs backed by MongoDB. You
-describe a **resource** — its fields, its validation rules, which HTTP
-methods it answers to — and hyrule gives you a working API: CRUD,
-request validation, ETags for optimistic concurrency, pagination, and a
-transactional outbox for emitting events exactly once per write.
+hyrule is a Go framework for scaffolding microservices fast, and
+testing their flows just as fast. You describe a **resource** — its
+fields, its validation rules, which HTTP methods it answers to — and
+hyrule gives you a working API: CRUD, request validation, ETags for
+optimistic concurrency, pagination, and a transactional outbox for
+emitting events exactly once per write. Backed by MongoDB today
+(Postgres support in progress — see the
+[Postgres backend](/docs/reference/postgres-rfc) page).
+
+Speed doesn't stop at scaffolding: `testkit` gives every test an
+isolated database and an HTTP client with no service to stand up, and
+dry run lets a whole service run against real traffic with every write
+rolled back — so a resource's actual flows, including the ones that
+span several writes and an outbox event, get tested as themselves, not
+as a mock of themselves.
 
 You can describe that resource two ways. In Go:
 
 ```go
-res := &evecompat.Resource{
+res := &rest.Resource{
 	Name:  "tags",
 	Store: env.Store("tags"),
-	Schema: evecompat.Schema{
-		"name": {Type: evecompat.TypeString, Required: true},
-		"slug": {Type: evecompat.TypeString, Required: true, Unique: true},
+	Schema: rest.Schema{
+		"name": {Type: rest.TypeString, Required: true},
+		"slug": {Type: rest.TypeString, Required: true, Unique: true},
 	},
 }
 env.API.Register(res)

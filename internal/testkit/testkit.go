@@ -32,11 +32,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/Gui-Rondon/hyrule/internal/app"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/auth"
 	"github.com/Gui-Rondon/hyrule/internal/platform/config"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb/mongotest"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 var (
@@ -66,8 +66,8 @@ func MongoClient(t testing.TB) *mongo.Client {
 
 var unsafeChars = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
-// Store wraps the named collection of Mongo(t) for evecompat.Resource.Store.
-func Store(t testing.TB, collection string) evecompat.Store {
+// Store wraps the named collection of Mongo(t) for rest.Resource.Store.
+func Store(t testing.TB, collection string) rest.Store {
 	t.Helper()
 	return mongodb.NewStore(Mongo(t).Collection(collection))
 }

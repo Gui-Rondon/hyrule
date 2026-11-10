@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"github.com/Gui-Rondon/hyrule/internal/app"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/config"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
 	"github.com/Gui-Rondon/hyrule/internal/platform/server"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
@@ -30,12 +30,12 @@ func itemsSpec() app.Spec {
 		DefaultDB: "items",
 		Version:   "1.2.3",
 		Setup: func(_ context.Context, env *app.Env) error {
-			env.API.Register(&evecompat.Resource{
+			env.API.Register(&rest.Resource{
 				Name:            "items",
 				Store:           env.Store("items"),
-				Schema:          evecompat.Schema{"name": {Type: evecompat.TypeString}},
+				Schema:          rest.Schema{"name": {Type: rest.TypeString}},
 				ResourceMethods: []string{http.MethodGet, http.MethodPost},
-				PublicMethods:   evecompat.PublicGET,
+				PublicMethods:   rest.PublicGET,
 			})
 			return nil
 		},
@@ -363,5 +363,40 @@ func TestHealthWithTrailingSlash(t *testing.T) {
 				t.Errorf("GET %s%s = %d", prefix, path, res.Status)
 			}
 		}
+	}
+}
+
+// stripURLPrefix's own branches, under a non-empty URLPrefix: a request
+// for exactly the prefix (no trailing path), one entirely outside the
+// prefix, and one that merely starts with the same characters without
+// being a path under it (/authzzz is not under /auth).
+func TestStripURLPrefixEdgeCases(t *testing.T) {
+	db := testkit.Mongo(t)
+	spec := itemsSpec()
+	spec.URLPrefix = "/auth"
+	handler, err := app.Build(context.Background(), spec, app.Deps{
+		Config: config.Config{}, Mongo: db.Client(), DB: db, Auth: testkit.DisabledAuth(t),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := testkit.NewClient(t, handler)
+
+	// Exactly the prefix, no trailing path: tail becomes "/", not "" —
+	// the inner router's own root (the Eve-style resource index) answers,
+	// instead of this 404ing as if the path were outside the prefix.
+	if res := c.Do("GET", "/auth", nil); res.Status != http.StatusOK {
+		t.Errorf("GET /auth = %d, want 200 from the inner router's root", res.Status)
+	}
+
+	// Outside the prefix entirely.
+	if res := c.Do("GET", "/other", nil); res.Status != http.StatusNotFound {
+		t.Errorf("GET /other = %d, want 404 (outside the URL prefix)", res.Status)
+	}
+
+	// Starts with the same characters as the prefix, but isn't a path
+	// under it — must not be treated as a prefix match.
+	if res := c.Do("GET", "/authzzz", nil); res.Status != http.StatusNotFound {
+		t.Errorf("GET /authzzz = %d, want 404 (not actually under /auth)", res.Status)
 	}
 }

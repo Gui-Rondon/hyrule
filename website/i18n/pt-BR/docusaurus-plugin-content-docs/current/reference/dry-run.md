@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # Dry run: roda tudo, não escreve nada
@@ -24,7 +24,7 @@ DRY_RUN=1 DRY_RUN_TIMEOUT=10s ./minha-api
 - Os hooks pós-escrita (`OnInserted`, `OnUpdated`, `OnReplaced`,
   `OnDeleted`) não rodam — eles alcançam sistemas fora da transação (ES,
   Pub/Sub...), que não têm rollback. Ver `runPost` em
-  `internal/evecompat/service.go`.
+  `internal/rest/service.go`.
 - Tarefas de fundo registradas com `env.Go` (relay do outbox, por exemplo)
   não iniciam.
 - `DRY_RUN_TIMEOUT` limita cada requisição (default 3s,
@@ -37,7 +37,7 @@ DRY_RUN=1 DRY_RUN_TIMEOUT=10s ./minha-api
 
 ## O vigia de escritas fora de transação
 
-Nem todo write passa pelo caminho normal de `evecompat.Service` — um
+Nem todo write passa pelo caminho normal de `rest.Service` — um
 endpoint custom pode escrever direto no `Store`. Se esse write não estiver
 dentro de uma transação, o rollback automático não o alcança: ele seria
 gravado de verdade, mesmo em dry run.

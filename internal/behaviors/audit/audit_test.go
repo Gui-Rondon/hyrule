@@ -5,25 +5,25 @@ import (
 	"testing"
 
 	"github.com/Gui-Rondon/hyrule/internal/behaviors/audit"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/auth"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
 func newAPI(t *testing.T, authn *auth.Authenticator) *testkit.Client {
 	t.Helper()
-	res := &evecompat.Resource{
+	res := &rest.Resource{
 		Name:  "items",
 		Store: testkit.Store(t, "items"),
 		// the APIs declare the audit fields: without allow_unknown, fields
 		// outside the schema are not returned
-		Schema: evecompat.Schema{"name": {Type: evecompat.TypeString},
-			"_created_user": {Type: evecompat.TypeString}, "_updated_user": {Type: evecompat.TypeString}},
+		Schema: rest.Schema{"name": {Type: rest.TypeString},
+			"_created_user": {Type: rest.TypeString}, "_updated_user": {Type: rest.TypeString}},
 		ResourceMethods: []string{http.MethodGet, http.MethodPost},
 		ItemMethods:     []string{http.MethodGet, http.MethodPatch, http.MethodPut},
 	}
 	res.Hooks.Use(audit.Hooks())
-	api := evecompat.New(evecompat.Options{Auth: authn})
+	api := rest.New(rest.Options{Auth: authn})
 	api.Register(res)
 	return testkit.NewClient(t, api)
 }

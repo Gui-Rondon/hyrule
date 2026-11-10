@@ -10,7 +10,7 @@ builds the same kind of resource in Go — `examples/blog-apis`'s
 `Resource` actually does.
 
 :::info[You will learn]
-- What `evecompat.Resource` and `evecompat.Schema` are
+- What `rest.Resource` and `rest.Schema` are
 - The field options you'll reach for most: `Required`, `Unique`, `Regex`, `Default`
 - How `ResourceMethods`/`ItemMethods` and `PublicMethods` control what's exposed
 - Where a resource plugs into a running service
@@ -19,15 +19,15 @@ builds the same kind of resource in Go — `examples/blog-apis`'s
 ## A resource is a Go value
 
 Everything about an `authors` resource — its name, its storage, its
-schema, which HTTP methods it answers — is one `evecompat.Resource`
+schema, which HTTP methods it answers — is one `rest.Resource`
 value:
 
 ```go
-res := &evecompat.Resource{
+res := &rest.Resource{
 	Name:      "authors",
 	ItemTitle: "author",
 	Store:     env.Store("authors"),
-	Schema:    evecompat.Schema{ /* next section */ },
+	Schema:    rest.Schema{ /* next section */ },
 }
 ```
 
@@ -40,13 +40,13 @@ the `authors` collection.
 
 ## The schema, field by field
 
-`evecompat.Schema` is a `map[string]evecompat.Field`. Start with the
+`rest.Schema` is a `map[string]rest.Field`. Start with the
 obvious fields:
 
 ```go
-Schema: evecompat.Schema{
-	"name": {Type: evecompat.TypeString, Required: true},
-	"bio":  {Type: evecompat.TypeString},
+Schema: rest.Schema{
+	"name": {Type: rest.TypeString, Required: true},
+	"bio":  {Type: rest.TypeString},
 },
 ```
 
@@ -57,7 +57,7 @@ optional.
 Now add validation that depends on the value, not just its presence:
 
 ```go
-"email": {Type: evecompat.TypeString, Unique: true, Regex: regexp.MustCompile(`^.+\@.+\..+$`)},
+"email": {Type: rest.TypeString, Unique: true, Regex: regexp.MustCompile(`^.+\@.+\..+$`)},
 ```
 
 `Unique: true` runs a check against the collection before inserting or
@@ -71,8 +71,8 @@ loose rather than a full RFC 5322 validator.
 var handle = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 
 // ...
-"twitter":   {Type: evecompat.TypeString, Regex: handle},
-"instagram": {Type: evecompat.TypeString, Regex: handle},
+"twitter":   {Type: rest.TypeString, Regex: handle},
+"instagram": {Type: rest.TypeString, Regex: handle},
 ```
 
 Nothing special here — `Field.Regex` is just a `*regexp.Regexp`, so
@@ -87,7 +87,7 @@ fields — a nested `Schema` or `Items` field for validating structure.
 `tags-api`'s `enabled` field uses the simplest of these:
 
 ```go
-"enabled": {Type: evecompat.TypeBoolean, Default: true},
+"enabled": {Type: rest.TypeBoolean, Default: true},
 ```
 
 Every one of these has a direct equivalent in the YAML form from Quick
@@ -103,8 +103,8 @@ they carry code, not data.
 ```go
 ResourceMethods:   []string{http.MethodGet, http.MethodPost},
 ItemMethods:       []string{http.MethodGet, http.MethodPatch, http.MethodPut},
-PublicMethods:     evecompat.PublicGET,
-PublicItemMethods: evecompat.PublicGET,
+PublicMethods:     rest.PublicGET,
+PublicItemMethods: rest.PublicGET,
 ```
 
 `ResourceMethods` applies to the collection URL (`/authors`); `ItemMethods`
@@ -118,7 +118,7 @@ A resource does nothing by itself; a service registers it:
 
 ```go
 func setup(_ context.Context, env *app.Env) error {
-	res := &evecompat.Resource{ /* ... */ }
+	res := &rest.Resource{ /* ... */ }
 	env.API.Register(res)
 	return nil
 }

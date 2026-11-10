@@ -10,9 +10,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/Gui-Rondon/hyrule/internal/app"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/config"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
@@ -92,13 +92,13 @@ func TestBuildInDryRun(t *testing.T) {
 		Indexes: []byte("items name:1 unique\n"),
 		Setup: func(_ context.Context, env *app.Env) error {
 			sawDryRun = env.DryRun
-			env.API.Register(&evecompat.Resource{
+			env.API.Register(&rest.Resource{
 				Name:            "items",
 				Store:           env.Store("items"),
-				Schema:          evecompat.Schema{"name": {Type: evecompat.TypeString}},
+				Schema:          rest.Schema{"name": {Type: rest.TypeString}},
 				ResourceMethods: []string{http.MethodGet, http.MethodPost},
-				Hooks: evecompat.Hooks{OnInserted: []func(context.Context, []evecompat.Doc) error{
-					func(context.Context, []evecompat.Doc) error { post++; return nil },
+				Hooks: rest.Hooks{OnInserted: []func(context.Context, []rest.Doc) error{
+					func(context.Context, []rest.Doc) error { post++; return nil },
 				}},
 			})
 			env.API.Handle("POST /login", env.RefuseInDryRun("LDAP bind", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

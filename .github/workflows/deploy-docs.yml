@@ -20,6 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # the footer links to the latest release tag (docusaurus.config.js's
+          # `git describe --tags`); actions/checkout doesn't fetch tags by
+          # default even with fetch-depth: 0 left at its default of 1.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
