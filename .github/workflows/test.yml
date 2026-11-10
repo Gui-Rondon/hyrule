@@ -1,0 +1,27 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Real Mongo (replica set), Pub/Sub emulator and Redis, same as
+      # local dev (docker-compose.yml) — no mocks, so coverage reflects
+      # the actual transaction/outbox/unique-index behavior.
+      - run: make env-up
+      - name: Test with coverage (fails below 85%, see Makefile COVERAGE_MIN)
+        run: make cover
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: .local/coverage.out
+          fail_ci_if_error: true
