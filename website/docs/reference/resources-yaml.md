@@ -1,4 +1,6 @@
-[Português](pt-br/resources-yaml.md)
+---
+sidebar_position: 3
+---
 
 # Resource via YAML
 

@@ -1,4 +1,6 @@
-[Português](pt-br/outbox.md)
+---
+sidebar_position: 2
+---
 
 # Transactional outbox
 

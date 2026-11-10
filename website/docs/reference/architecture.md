@@ -1,4 +1,6 @@
-[Português](pt-br/arquitetura.md)
+---
+sidebar_position: 7
+---
 
 # Architecture: the layers and why they exist
 

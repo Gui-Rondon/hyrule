@@ -65,7 +65,7 @@ type Spec struct {
 	// as Eve's resource_link does.
 	URLPrefix string
 	// NoDryRun is why the service refuses to start in dry run, when it
-	// cannot run without effects (docs/dry-run.md).
+	// cannot run without effects.
 	NoDryRun string
 }
 
@@ -84,8 +84,8 @@ type Env struct {
 	API    *evecompat.API
 	Info   health.Info
 	// DryRun: the writes are rolled back, the post-write hooks and the
-	// background tasks do not run (docs/dry-run.md). A service whose routes
-	// have other effects refuses them with RefuseInDryRun.
+	// background tasks do not run. A service whose routes have other
+	// effects refuses them with RefuseInDryRun.
 	DryRun bool
 
 	checkers []health.Checker
@@ -131,8 +131,7 @@ type Deps struct {
 	Auth *auth.Authenticator
 	// Start runs the tasks registered with Env.Go; nil skips them.
 	Start func(name string, task func(ctx context.Context) error)
-	// DryRun runs the service in dry run (docs/dry-run.md); Run sets it
-	// from DRY_RUN.
+	// DryRun runs the service in dry run; Run sets it from DRY_RUN.
 	DryRun bool
 	// DryRunTimeout limits each request in dry run; Run sets it from
 	// DRY_RUN_TIMEOUT, and 0 means defaultDryRunTimeout.
@@ -306,7 +305,7 @@ func Build(ctx context.Context, spec Spec, deps Deps) (http.Handler, error) {
 		handler = stripURLPrefix("/"+strings.Trim(spec.URLPrefix, "/"), handler)
 	}
 	// outermost: /metrics stays at the root whatever the URL prefix, and
-	// every request is measured (docs/observability.md)
+	// every request is measured
 	return metrics.New(spec.Name, dryRun).Handler(handler), nil
 }
 

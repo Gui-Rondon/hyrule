@@ -1,4 +1,6 @@
-[English](../architecture.md)
+---
+sidebar_position: 7
+---
 
 # Arquitetura: as camadas e por que elas existem
 

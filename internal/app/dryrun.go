@@ -15,9 +15,11 @@ import (
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
 )
 
-// DryRun tells whether the service runs in dry run (docs/dry-run.md), from
-// the DRY_RUN variable of the Deployment. An unknown value is an error, so a
-// typo never turns the writes on.
+// DryRun tells whether the service runs in dry run, from the DRY_RUN
+// variable of the Deployment. An unknown value is an error, so a typo
+// never turns the writes on.
+//
+// https://gui-rondon.github.io/hyrule/docs/reference/dry-run
 func DryRun() (bool, error) {
 	v := os.Getenv("DRY_RUN")
 	if v == "" {

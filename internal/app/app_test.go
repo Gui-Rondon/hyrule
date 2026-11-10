@@ -241,8 +241,7 @@ func TestBuildRejectsBadMongoConfig(t *testing.T) {
 	}
 }
 
-// /metrics is served at the root, with the mux routes of the API as labels
-// (docs/observability.md).
+// /metrics is served at the root, with the mux routes of the API as labels.
 func TestBuildServesMetrics(t *testing.T) {
 	db := testkit.Mongo(t)
 	handler, err := app.Build(context.Background(), itemsSpec(), app.Deps{
@@ -261,8 +260,7 @@ func TestBuildServesMetrics(t *testing.T) {
 }
 
 // The route of a request served again internally through the API is the
-// route of entry, with and without dry run, and a panic keeps its route
-// (docs/observability.md).
+// route of entry, with and without dry run, and a panic keeps its route.
 func TestMetricsRouteOfEntry(t *testing.T) {
 	db := testkit.Mongo(t)
 	if _, rs, err := mongodb.TransactorFor(context.Background(), db.Client()); err != nil || !rs {

@@ -1,4 +1,6 @@
-[English](../store.md)
+---
+sidebar_position: 1
+---
 
 # A interface `Store`
 

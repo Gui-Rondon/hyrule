@@ -20,8 +20,9 @@ import (
 // Methods take plain bson/stdlib types, not evecompat-owned option structs:
 // that keeps platform/mongodb (or any other Store implementation) from
 // having to import evecompat for its method signatures to match, which
-// would invert the services → behaviors → evecompat → platform layering
-// (docs/architecture.md).
+// would invert the services → behaviors → evecompat → platform layering.
+//
+// https://gui-rondon.github.io/hyrule/docs/reference/architecture
 type Store interface {
 	// Find lists documents; limit <= 0 means no skip/limit is applied, and
 	// a nil sort or projection leaves Mongo's defaults.

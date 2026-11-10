@@ -1,4 +1,6 @@
-[English](../dry-run.md)
+---
+sidebar_position: 4
+---
 
 # Dry run: roda tudo, não escreve nada
 

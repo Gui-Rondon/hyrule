@@ -34,4 +34,4 @@ the local config.
 
 This example isn't the framework — it's just a *use* of it. hyrule's own
 documentation (the `Store` interface, the conditional outbox, resources
-via YAML) lives in [`docs/`](../../docs/README.md) at the repo root.
+via YAML) lives at **https://gui-rondon.github.io/hyrule/**.

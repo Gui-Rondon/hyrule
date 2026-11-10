@@ -1,4 +1,6 @@
-[Português](pt-br/testkit.md)
+---
+sidebar_position: 5
+---
 
 # Testing a resource
 

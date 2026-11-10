@@ -1,4 +1,6 @@
-[Português](pt-br/observabilidade.md)
+---
+sidebar_position: 6
+---
 
 # Observability
 

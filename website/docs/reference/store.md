@@ -1,4 +1,6 @@
-[Português](pt-br/store.md)
+---
+sidebar_position: 1
+---
 
 # The `Store` interface
 

@@ -33,4 +33,4 @@ desative `auth.enable` na config local.
 
 Este exemplo não é o framework — é só um *uso* dele. A documentação do
 próprio hyrule (interface `Store`, outbox condicional, resources via YAML)
-fica em [`docs/pt-br/`](../../docs/pt-br/README.md) na raiz do repo.
+fica em **https://gui-rondon.github.io/hyrule/**.
