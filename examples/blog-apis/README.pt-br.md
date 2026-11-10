@@ -31,6 +31,18 @@ os endpoints que exigem token (`/publish`, `/schedule`) vão pedir
 autenticação — veja `testkit` para gerar um token de teste, ou
 desative `auth.enable` na config local.
 
+## CI: buildando só o que mudou
+
+[`.github/workflows/blog-apis-affected.yml`](../../.github/workflows/blog-apis-affected.yml)
+roda o [`ci/affected`](../../ci) em todo push/PR, builda só os serviços
+que ele reporta como afetados, e chama o
+[`deploy/<service>/deploy.sh`](deploy) de cada um — um stub hoje, a
+costura onde o comando de deploy real de um provedor entra (ver o
+ADR-0006 na página de
+[Decisões arquiteturais](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture-decisions)).
+Esse workflow é parte do próprio exemplo — copie e adapte, do jeito que
+um projeto criado por `hyrule new` faria.
+
 ## Como isso se encaixa no framework
 
 Este exemplo não é o framework — é só um *uso* dele. A documentação do

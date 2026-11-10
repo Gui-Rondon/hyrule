@@ -214,3 +214,72 @@ nesta rodada.
 **Critério de validação.** `CHANGELOG.md` existe, segue a estrutura do
 Keep a Changelog, e tem uma seção `Unreleased` pronta pras entradas da
 Fase 1.
+
+## ADR-0006 — Escopo operacional da Fase 4: CI de build afetado, não um sistema de deploy
+
+**Contexto.** `ci/affected` funciona (o próprio teste dele exercita o
+grafo de dependência real do `examples/blog-apis` — ver
+[`store.md`](store.md) e o doc do pacote de `ci/affected/main.go`) mas
+nenhum workflow de CI chama ele. O único artefato de deploy é um
+manifesto Kubernetes ilustrativo
+(`examples/blog-apis/deploy/posts-api/manifest.yml`), não ligado a
+nada, e específico do formato de um provedor.
+
+**Problema.** Os objetivos da Fase 4 do prompt — "evoluir
+build-affected," "integrar build independente," "oferecer templates de
+CI/CD," "permitir deploy independente com adapters configuráveis" —
+são fáceis de super-construir num sistema de deploy multi-cloud
+genérico, exatamente o que a regra 6 do prompt ("não implemente um
+sistema universal de deploy") e a regra de CI/CD ("não acople o
+Hyrule a um único provedor") proíbem explicitamente. Também não existe
+um consumidor real multi-provedor ainda pra validar essa abstração —
+o mesmo problema de "sem consumidor real" que o ADR-0003 nomeou pra
+portabilidade do outbox.
+
+**Alternativas consideradas.**
+- Construir uma camada de abstração de provedor (interfaces pra GitHub
+  Actions/GitLab CI, pra Kubernetes/Cloud Run/Fly/etc.) — rejeitada
+  pelo mesmo motivo: nenhum segundo provedor real pra desenhar contra
+  ainda.
+- Documentar o padrão só em texto, sem um workflow de verdade rodando
+  — rejeitada: "ligar a um workflow de CI real" (a própria frase do
+  roadmap pra Fase 4) implica algo que de fato roda, não só uma
+  descrição de como poderia.
+- Adicionar um workflow real do GitHub Actions, com escopo em
+  `examples/blog-apis`, que chama o `ci/affected` pra selecionar os
+  serviços alterados, builda só esses, e — a costura configurável —
+  chama um `deploy/<service>/deploy.sh` opcional se o serviço tiver
+  um, deixado como um stub que imprime o que faria em vez de tocar num
+  ambiente real. O `deploy.sh` é o "adapter" completo: o comando de
+  deploy real de qualquer provedor vai lá, o Hyrule nunca vê isso.
+
+**Decisão.** A terceira opção. Build independente é real (um `go
+build` por serviço afetado no CI, não um rebuild do repo inteiro);
+deploy independente é um ponto de extensão documentado
+(`deploy/<service>/deploy.sh`), não uma capacidade entregue — não tem
+o que configurar ainda porque não existe um ambiente de destino real
+pra esse exemplo público fazer deploy. Versionamento por serviço (o
+objetivo 4 da Fase 4 do prompt) fica sem começar: esses serviços de
+exemplo não são publicados de forma independente hoje, e inventar um
+esquema sem consumidor real repete o erro pelo qual as alternativas
+acima foram rejeitadas.
+
+**Consequências.** Esse workflow é uma responsabilidade do próprio
+`examples/blog-apis` — ilustrativo, como o manifesto Kubernetes dele —
+não uma capacidade que o framework ou o CLI do Hyrule prometem como
+parte do seu contrato público. Um time usando `hyrule new` copia e
+adapta o padrão; o Hyrule não entrega um subcomando "deploy" que chama
+isso.
+
+**Riscos.** Alguém pode confundir o workflow com uma integração de CI
+suportada pelo Hyrule, em vez de um template pra copiar — mitigado por
+comentários no arquivo do workflow e por este ADR, o mesmo
+enquadramento honesto que o [`postgres-rfc.md`](postgres-rfc.md) já
+usa.
+
+**Critério de validação.** Um push ou PR que só toca os arquivos de um
+serviço faz o workflow reportar e buildar só esse serviço, em menos
+tempo que um rebuild completo; um push tocando um caminho compartilhado
+(go.mod, `platform/*`, `Dockerfile`) faz ele reportar e buildar todos.
+O stub `deploy.sh` de cada serviço roda sem erro e não faz nenhuma
+mudança externa real.

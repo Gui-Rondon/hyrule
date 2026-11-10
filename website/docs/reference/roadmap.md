@@ -29,7 +29,7 @@ because they're still open.
 | `rest.Store` across backends | Portable between Mongo and Postgres | Mongo types leak into the contract | **High** — needs a design decision before any code moves (ADR-0002) |
 | Outbox across backends | Implied by the dual-mode story | Hard-coded to Mongo | **High**, correctly blocked until the Store question is resolved (ADR-0003) |
 | CLI / Platform | `hyrule new` / `service create` / `dev` / `build` / `deploy` | `cmd/hyrule` has `new` and `service create` (ADR-0004); `dev`/`build --affected`/`deploy` not started | **Partially closed** — Fase 3 scaffolding done; `ci/affected`/Makefile wrapping deferred on purpose |
-| Affected-build / independent deploy | Orchestrated by the platform | `ci/affected` works standalone, not wired into CI or the CLI; one illustrative Kubernetes manifest | **Medium** — the hard part exists, the orchestration doesn't |
+| Affected-build / independent deploy | Orchestrated by the platform | `ci/affected` runs for real in `.github/workflows/blog-apis-affected.yml`; deploy is a documented `deploy/<service>/deploy.sh` seam, not a shipped capability (ADR-0006) | **Closed for the example, by design** — Fase 4; a real deploy adapter and per-service versioning stay unstarted until there's a real consumer |
 | Dual-journey documentation | Learn (Framework) + Learn (Platform) + shared Reference | Only the Framework journey exists, and it's already honest about what's missing | **Medium** — don't write the Platform journey until the CLI is real |
 | ADRs / versioning | A formal decision and compatibility process | Didn't exist before this page | **High gap, low cost** — pure documentation |
 
@@ -65,9 +65,16 @@ because they're still open.
   `examples/blog-apis`. `ci/affected` and the Makefile pattern are
   *not* wrapped as subcommands yet — ADR-0004 deferred that on purpose
   until there's a second command that actually needs them.
-- **Fase 4 — Operational experience.** Wire `ci/affected` into an
-  actual CI workflow; make deploy configurable rather than generic.
-  Depends on Fase 3.
+- **Fase 4 — Operational experience.** Per ADR-0006. **Done, scoped
+  to the example.** `.github/workflows/blog-apis-affected.yml` runs
+  `ci/affected` for real on push/PR, builds only the services it
+  reports, and calls each one's `deploy/<service>/deploy.sh` — a stub
+  today, the seam any provider's real deploy command goes in. No
+  provider abstraction, no generic deploy system, and no per-service
+  versioning scheme: none of those have a real consumer yet to design
+  against (see ADR-0006). This lives in `examples/blog-apis`, not as a
+  Hyrule-shipped capability — a team using `hyrule new` copies and
+  adapts it.
 - **Fase 5 — Documentation.** Write the Platform journey only once the
   CLI is real, so the published site never describes a command that
   doesn't exist yet.
@@ -75,8 +82,9 @@ because they're still open.
 ## What this round does not do
 
 No `rest.Store` interface change, no outbox portability, no
-`dev`/`build --affected`/`deploy` CLI subcommands, and `ci/affected`
-stays an unwrapped standalone tool. Those are exactly the decisions
-the project's own rules say to stop and present before executing —
-ADR-0002, ADR-0003, and ADR-0004 are that presentation for each of
-them.
+`dev`/`build --affected`/`deploy` CLI subcommands (`ci/affected` runs in
+CI now, but isn't wrapped by `cmd/hyrule`), no deploy-provider
+abstraction, and no per-service versioning scheme. Those are exactly
+the decisions the project's own rules say to stop and present before
+executing — ADR-0002, ADR-0003, ADR-0004, and ADR-0006 are that
+presentation for each of them.

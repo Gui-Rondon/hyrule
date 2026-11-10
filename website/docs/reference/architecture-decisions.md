@@ -205,3 +205,66 @@ changelog entry; no CI check enforces this in this round.
 **Validation criteria.** `CHANGELOG.md` exists, follows the Keep a
 Changelog structure, and has an `Unreleased` section ready for Fase 1's
 entries.
+
+## ADR-0006 — Fase 4 operational scope: affected-build CI, not a deploy system
+
+**Context.** `ci/affected` works (its own test exercises the real
+`examples/blog-apis` dependency graph — see [`store.md`](store.md) and
+the package doc of `ci/affected/main.go`) but no CI workflow calls it.
+The only deploy artifact is one illustrative Kubernetes manifest
+(`examples/blog-apis/deploy/posts-api/manifest.yml`), not wired to
+anything, and specific to one provider's shape.
+
+**Problem.** The brief's Fase 4 goals — "evoluir build-affected,"
+"integrar build independente," "oferecer templates de CI/CD," "permitir
+deploy independente com adapters configuráveis" — are easy to over-build
+into a generic multi-cloud deploy system, which the brief's own rule 6
+("não implemente um sistema universal de deploy") and the CI/CD rule
+("não acople o Hyrule a um único provedor") explicitly warn against.
+There's also no real multi-provider consumer yet to validate such an
+abstraction against — the same "no real consumer" problem ADR-0003
+named for outbox portability.
+
+**Alternatives considered.**
+- Build a provider-abstraction layer (interfaces for GitHub
+  Actions/GitLab CI, for Kubernetes/Cloud Run/Fly/etc.) — rejected for
+  the reason above: no real second provider to design against yet.
+- Document the pattern in prose only, without a running workflow —
+  rejected: "wire into an actual CI workflow" (the roadmap's own Fase 4
+  wording) implies something that actually runs, not just a
+  description of how it could.
+- Add one real, running GitHub Actions workflow scoped to
+  `examples/blog-apis` that calls `ci/affected` to select changed
+  services, builds only those, and — the configurable seam — invokes an
+  opt-in `deploy/<service>/deploy.sh` if the service has one, left as a
+  stub that prints what it would do rather than touching a real
+  environment. `deploy.sh` is the whole "adapter": any provider's real
+  deploy command goes there, Hyrule never sees it.
+
+**Decision.** The third option. Independent build is real (one `go
+build` per affected service in CI, not a repo-wide rebuild); independent
+deploy is a documented extension point (`deploy/<service>/deploy.sh`),
+not a shipped capability — there's nothing to configure yet because
+there's no real target environment for this public example to deploy
+to. Per-service versioning (the brief's Fase 4 objective 4) is left
+unstarted: these example services aren't independently published today,
+and inventing a scheme with no real consumer repeats the mistake the
+alternatives above were rejected for.
+
+**Consequences.** This workflow is `examples/blog-apis`'s own concern —
+illustrative, like its Kubernetes manifest — not a capability the
+Hyrule framework or CLI promises as part of its public contract.
+A team using `hyrule new` copies and adapts the pattern; Hyrule doesn't
+ship a "deploy" subcommand that calls it.
+
+**Risks.** Someone could mistake the workflow for a supported Hyrule
+CI integration rather than a copyable template — mitigated by comments
+in the workflow file and this ADR, the same honesty framing
+[`postgres-rfc.md`](postgres-rfc.md) already uses.
+
+**Validation criteria.** A push or PR that only touches one service's
+files causes the workflow to report and build only that service, in
+less time than a full rebuild; a push touching a shared path (go.mod,
+`platform/*`, `Dockerfile`) causes it to report and build all of them.
+Each service's `deploy.sh` stub runs without error and makes no real
+external change.

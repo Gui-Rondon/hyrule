@@ -25,6 +25,12 @@ the minor version instead.
 
 ### Added
 
+- `.github/workflows/blog-apis-affected.yml` (ADR-0006): runs `ci/affected`
+  for real on push/PR, builds only the services it reports, and calls each
+  one's new `deploy/<service>/deploy.sh` (a stub — the configurable seam
+  for a real provider's deploy command). Lives in `examples/blog-apis`, not
+  a Hyrule-shipped capability; no provider abstraction and no per-service
+  versioning scheme, since neither has a real consumer yet.
 - `cmd/hyrule`: the Platform CLI (ADR-0004). `hyrule new <project>`
   scaffolds a multi-service project (`go.mod`, `Makefile`,
   `docker-compose.yml`); `hyrule service create <name>` scaffolds a
