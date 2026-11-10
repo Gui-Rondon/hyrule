@@ -1,0 +1,28 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "deps: subir dependências",
+      "detail": "Mongo (rs0), Redis, emulador do Pub/Sub e Elasticsearch 7.17",
+      "type": "shell",
+      "command": "docker compose -f examples/blog-apis/docker-compose.yml --profile debug up -d --wait",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "deps: parar",
+      "type": "shell",
+      "command": "docker compose -f examples/blog-apis/docker-compose.yml --profile debug down",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

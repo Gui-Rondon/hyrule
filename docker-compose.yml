@@ -1,0 +1,38 @@
+# Local environment for development and tests of the framework itself:
+#   mongo     replica set rs0 (as production), so transactions work (host port 27018)
+#   pubsub    Google Pub/Sub emulator (host port 8085, project local-dev)
+#   redis     Redis (host port 6380)
+#
+# From the host use mongodb://localhost:27018/?directConnection=true and
+# PUBSUB_EMULATOR_HOST=localhost:8085.
+#
+# examples/blog-apis/docker-compose.yml includes this file and adds
+# Elasticsearch, for that example's optional search indexing.
+services:
+  mongo:
+    image: mongo:8.0
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    # each test creates a database; WiredTiger keeps a file per collection
+    # and index, and the default 1024 descriptors abort mongod mid-suite
+    ulimits:
+      nofile: {soft: 64000, hard: 64000}
+    ports:
+      - "127.0.0.1:27018:27017"
+    healthcheck:
+      # initiates the replica set on the first run
+      test: >
+        mongosh --quiet --eval 'try { rs.status().ok } catch (e) {
+          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]}).ok }'
+      interval: 2s
+      retries: 30
+
+  pubsub:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    command: ["gcloud", "beta", "emulators", "pubsub", "start", "--host-port=0.0.0.0:8085", "--project=local-dev"]
+    ports:
+      - "127.0.0.1:8085:8085"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6380:6379"

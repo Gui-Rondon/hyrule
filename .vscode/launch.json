@@ -1,0 +1,96 @@
+// Rodar e depurar os serviços do exemplo examples/blog-apis localmente.
+// Precisa de `docker compose -f examples/blog-apis/docker-compose.yml
+// --profile debug up -d --wait` (Mongo, Pub/Sub, Redis, Elasticsearch).
+//
+// Portas: 8101 posts · 8102 authors · 8103 tags · 8104 categories.
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "posts-api · local :8101",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/examples/blog-apis/services/posts-api",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PORT": "8101",
+        "CONFIG_FILE": "${workspaceFolder}/examples/blog-apis/dev/local.json",
+        "MONGO_CONNECTION_STRING": "mongodb://localhost:27018/posts?directConnection=true",
+        "PUBSUB_EMULATOR_HOST": "localhost:8085"
+      },
+      "preLaunchTask": "deps: subir dependências",
+      "presentation": {"group": "1 · blog-apis", "order": 1}
+    },
+    {
+      "name": "authors-api · local :8102",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/examples/blog-apis/services/authors-api",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PORT": "8102",
+        "CONFIG_FILE": "${workspaceFolder}/examples/blog-apis/dev/local.json",
+        "MONGO_CONNECTION_STRING": "mongodb://localhost:27018/authors?directConnection=true"
+      },
+      "preLaunchTask": "deps: subir dependências",
+      "presentation": {"group": "1 · blog-apis", "order": 2}
+    },
+    {
+      "name": "tags-api · local :8103",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/examples/blog-apis/services/tags-api",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PORT": "8103",
+        "CONFIG_FILE": "${workspaceFolder}/examples/blog-apis/dev/local.json",
+        "MONGO_CONNECTION_STRING": "mongodb://localhost:27018/tags?directConnection=true"
+      },
+      "preLaunchTask": "deps: subir dependências",
+      "presentation": {"group": "1 · blog-apis", "order": 3}
+    },
+    {
+      "name": "categories-api · local :8104",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/examples/blog-apis/services/categories-api",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PORT": "8104",
+        "CONFIG_FILE": "${workspaceFolder}/examples/blog-apis/dev/local.json",
+        "MONGO_CONNECTION_STRING": "mongodb://localhost:27018/categories?directConnection=true"
+      },
+      "preLaunchTask": "deps: subir dependências",
+      "presentation": {"group": "1 · blog-apis", "order": 4}
+    },
+    {
+      "name": "Testar o pacote atual",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${fileDirname}",
+      "env": {
+        "MONGO_TEST_URI": "mongodb://localhost:27018/?directConnection=true",
+        "PUBSUB_EMULATOR_HOST": "localhost:8085",
+        "REDIS_TEST_ADDR": "localhost:6380"
+      },
+      "presentation": {"group": "2 · ferramentas", "order": 1}
+    }
+  ],
+  "compounds": [
+    {
+      "name": "local · todas as APIs do blog-apis",
+      "configurations": [
+        "posts-api · local :8101",
+        "authors-api · local :8102",
+        "tags-api · local :8103",
+        "categories-api · local :8104"
+      ],
+      "stopAll": true
+    }
+  ]
+}

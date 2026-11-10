@@ -1,0 +1,25 @@
+# RESOURCES_FILE=cmd/hyrule-serve/example.yaml PORT=8080 CONFIG_FILE=/dev/null go run ./cmd/hyrule-serve
+#
+# See internal/declarative for the full field reference; Field.Check and
+# Resource.Validate (arbitrary Go code, not data) have no YAML equivalent.
+resources:
+  - name: tags
+    collection: tags
+    additional_lookup:
+      field: slug
+      pattern: '^[\w-]+$'
+    resource_methods: [get, post]
+    item_methods: [get, patch, put]
+    public_methods: [get]
+    public_item_methods: [get]
+    schema:
+      name:
+        type: string
+        required: true
+      slug:
+        type: string
+        required: true
+        unique: true
+      enabled:
+        type: boolean
+        default: true

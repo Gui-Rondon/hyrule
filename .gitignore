@@ -1,0 +1,9 @@
+.local/
+.go/
+coverage.out
+git_branch.txt
+
+# binários do go build na raiz
+/*-api
+/shadow-proxy
+__pycache__/

@@ -1,0 +1,7 @@
+.git
+.local
+.go
+docs
+deploy
+contract
+*.md
