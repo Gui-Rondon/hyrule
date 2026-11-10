@@ -1,7 +1,7 @@
 # echo '{"auth": {"enable": "false"}}' > config.json
 # RESOURCES_FILE=cmd/hyrule-serve/example.yaml PORT=8080 CONFIG_FILE=config.json go run ./cmd/hyrule-serve
 #
-# See internal/declarative for the full field reference; Field.Check and
+# See declarative for the full field reference; Field.Check and
 # Resource.Validate (arbitrary Go code, not data) have no YAML equivalent.
 resources:
   - name: tags

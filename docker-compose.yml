@@ -2,7 +2,7 @@
 #   mongo     replica set rs0 (as production), so transactions work (host port 27018)
 #   pubsub    Google Pub/Sub emulator (host port 8085, project local-dev)
 #   redis     Redis (host port 6380)
-#   postgres  for the internal/platform/postgres scaffold (host port 5433)
+#   postgres  for the platform/postgres scaffold (host port 5433)
 #
 # From the host use mongodb://localhost:27018/?directConnection=true,
 # PUBSUB_EMULATOR_HOST=localhost:8085 and

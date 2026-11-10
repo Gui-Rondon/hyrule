@@ -6,7 +6,7 @@ sidebar_position: 7
 
 ## Métricas
 
-`internal/platform/metrics` expõe em `/metrics` a duração e o tamanho da
+`platform/metrics` expõe em `/metrics` a duração e o tamanho da
 resposta de toda requisição, por método, rota e status, além das métricas
 padrão do runtime Go (`app.Build` envolve o handler com
 `metrics.New(spec.Name, dryRun).Handler(...)` — por fora do prefixo de
@@ -23,7 +23,7 @@ Todo serviço expõe os dois, registrados automaticamente por `app.Build`
 para a coleção (e, se houver mais de um recurso, também sob
 `/<recurso>/status` e `/<recurso>/healthcheck` do primeiro recurso em
 diante): `/status` é só liveness (sempre 200 enquanto o processo roda, lê
-`internal/platform/health.Status`); `/healthcheck` roda os `health.Checker`
+`platform/health.Status`); `/healthcheck` roda os `health.Checker`
 registrados com `env.AddCheck` — a verificação do Mongo vem de fábrica, e
 cada integração externa (Elasticsearch, Pub/Sub, Redis...) soma a sua
 checagem própria.

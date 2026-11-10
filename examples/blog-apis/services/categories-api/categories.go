@@ -9,8 +9,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"github.com/Gui-Rondon/hyrule/internal/app"
-	"github.com/Gui-Rondon/hyrule/internal/rest"
+	"github.com/Gui-Rondon/hyrule/app"
+	"github.com/Gui-Rondon/hyrule/rest"
 )
 
 var slugRe = regexp.MustCompile(`^[\w-]+$`)

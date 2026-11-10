@@ -4,7 +4,7 @@ sidebar_position: 4
 
 # Resource via YAML
 
-`internal/declarative` carrega um ou mais recursos de um arquivo YAML;
+`declarative` carrega um ou mais recursos de um arquivo YAML;
 `cmd/hyrule-serve` os registra sem nenhuma linha de Go específica do
 domínio. Cobre o caso comum — um recurso só de schema, sem hooks nem
 endpoints custom (`examples/blog-apis/services/authors-api` e `tags-api`
@@ -81,5 +81,5 @@ os `Hooks` (`OnInsert`, `OnUpdate`, outbox, busca, auditoria...) também
 ficam de fora do loader — um recurso que precisa de qualquer um desses
 continua em Go. Um recurso construído a partir do YAML é um
 `*rest.Resource` normal, então nada impede anexar hooks nele em Go
-antes de registrar (`internal/declarative/declarative_test.go`'s
+antes de registrar (`declarative/declarative_test.go`'s
 `TestBuiltResourceComposesWithConditionalOutbox` faz exatamente isso).

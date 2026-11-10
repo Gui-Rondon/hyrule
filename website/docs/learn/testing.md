@@ -5,7 +5,7 @@ sidebar_position: 6
 # Testing
 
 Everything so far has been exercised with `curl`. This page writes the
-same kind of check as a Go test, using `internal/testkit` — the package
+same kind of check as a Go test, using `testkit` — the package
 every resource in hyrule, including the framework's own test suite,
 tests with.
 
@@ -67,7 +67,7 @@ verified, in `TestPlainPatchAlsoPublishes`.
 
 ## Testing a hook without HTTP
 
-Not every test needs a running service. `internal/behaviors/events`'s
+Not every test needs a running service. `behaviors/events`'s
 own test for `events.ConditionalHooks` builds a bare `rest.Service`
 around a `Resource` and drives it directly:
 

@@ -75,7 +75,7 @@ batch, and sets `status` only when the client didn't send one.
 ## Reusable hooks
 
 Writing the same `OnInsert` closure in every resource that needs it
-would defeat the point. `internal/behaviors/audit` packages exactly one
+would defeat the point. `behaviors/audit` packages exactly one
 reusable hook bundle:
 
 ```go
@@ -100,7 +100,7 @@ write ends up in the transactional outbox. That's the next page.
   doesn't check the reference exists — add a `Field.Check` if you need that.
 - Hooks run in a fixed order around a write; pre-commit hooks can abort
   it, post-commit hooks can't.
-- `internal/behaviors/*` packages reusable hook bundles; `Hooks.Use`
+- `behaviors/*` packages reusable hook bundles; `Hooks.Use`
   composes them with a resource's own.
 - Next: [The Transactional Outbox](./the-outbox.md).
 :::

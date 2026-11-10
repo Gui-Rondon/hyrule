@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # Outbox transacional
 
-`internal/outbox` implementa o padrão outbox: um write guarda seus eventos
+`outbox` implementa o padrão outbox: um write guarda seus eventos
 na coleção `outbox`, na mesma transação Mongo do write — os dois são
 gravados juntos ou nenhum dos dois é. Depois do commit, um `Relay`
 publica os eventos pendentes (pelo menos uma vez; cada mensagem carrega o

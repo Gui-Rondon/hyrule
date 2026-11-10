@@ -16,7 +16,7 @@ platform    (mongodb, postgres (scaffold), config, auth, search, pubsub, redis, 
 
 Each layer only knows the one below it. `platform` never imports
 `rest` or `behaviors`, even when that would save a line — that's how
-`internal/platform/mongodb.Store` can satisfy `rest.Store` without
+`platform/mongodb.Store` can satisfy `rest.Store` without
 the `mongodb` package knowing `rest` exists (the interface's methods
 only use `bson`/stdlib types, not `rest`-owned structs; see
 [`store.md`](store.md)). Inverting that direction — `platform` importing
@@ -30,7 +30,7 @@ exactly what it's there for, to be the glue between the two.
 
 ## Decisions that shape the framework
 
-- **Storage is a decision separate from events.** `internal/outbox`
+- **Storage is a decision separate from events.** `outbox`
   writes in the same Mongo transaction as the write — a choice of its
   own, not an inevitable consequence of using Mongo. If a resource's
   storage ever changes, the outbox can follow the database (simpler) or
@@ -39,11 +39,11 @@ exactly what it's there for, to be the glue between the two.
 - **Storage portability is the interface, not the query language.**
   `rest.Store` decouples the concrete client; filters stay `bson.M`
   and the errors `rest` checks directly stay in the shape the
-  Mongo driver returns. A real second backend (`internal/platform/postgres`
+  Mongo driver returns. A real second backend (`platform/postgres`
   today has only a scaffold, no resource wired to it yet) needs more than
   a new `Store` implementation — see [`store.md`](store.md) and the
   [Postgres backend](postgres-rfc.md) page for what's still open.
-- **YAML covers data, not code.** `internal/declarative` expresses
+- **YAML covers data, not code.** `declarative` expresses
   everything that's already plain data in `rest.Schema`/
   `Field`/`Resource`; `Field.Check`, `Resource.Validate`,
   `Resource.Datasource` and every kind of `Hooks` carry arbitrary

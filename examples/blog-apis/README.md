@@ -29,7 +29,7 @@ MONGO_CONNECTION_STRING='mongodb://localhost:27018/posts?directConnection=true' 
 Without a `CONFIG_FILE` pointing at a file with
 `{"auth": {"enable": false}}`, the endpoints that require a token
 (`/publish`, `/schedule`) will ask for authentication — see
-`internal/testkit` to generate a test token, or turn off `auth.enable` in
+`testkit` to generate a test token, or turn off `auth.enable` in
 the local config.
 
 ## How this fits into the framework

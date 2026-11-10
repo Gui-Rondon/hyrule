@@ -4,10 +4,10 @@ sidebar_position: 1
 
 # A interface `Store`
 
-`rest.Resource.Store` (`internal/rest/store.go`) é a única porta
+`rest.Resource.Store` (`rest/store.go`) é a única porta
 de entrada para dados que `rest.Service` usa — `Find`, `CountDocuments`,
 `FindOne`, `InsertMany`, `UpdateOne`, `ReplaceOne`, `DeleteOne`. Nenhum
-`*mongo.Collection` aparece em `internal/rest/service.go`.
+`*mongo.Collection` aparece em `rest/service.go`.
 
 ```go
 type Store interface {
@@ -21,7 +21,7 @@ type Store interface {
 }
 ```
 
-A única implementação hoje é `internal/platform/mongodb.Store`, um
+A única implementação hoje é `platform/mongodb.Store`, um
 embrulho fino sobre `*mongo.Collection`:
 
 ```go
@@ -32,7 +32,7 @@ res := &rest.Resource{Store: store, ...}
 Em um serviço (`app.Env`), use `env.Store("nome-da-colecao")` em vez de
 montar o wrapper na mão.
 
-`internal/platform/postgres.Store` segue a mesma forma — `NewStore`
+`platform/postgres.Store` segue a mesma forma — `NewStore`
 embrulha um client, `Find`/`FindOne`/... — pra um banco relacional; só
 não é uma implementação da interface acima (ver
 [backend Postgres](postgres-rfc.md) pro porquê), então nada aqui ainda
@@ -57,9 +57,9 @@ Na prática isso quer dizer:
 - Trocar a *implementação* de `Store` (outro client Mongo, uma camada de
   instrumentação, um cache) é direto: satisfaça a interface.
 - Trocar de Mongo para outro banco exige mais que implementar `Store`: as
-  queries (`bson.M`) e os erros checados em `internal/rest/service.go`
+  queries (`bson.M`) e os erros checados em `rest/service.go`
   (`queryError`, `duplicateKey`) ainda assumem Mongo.
-  `internal/platform/postgres` já tem um primeiro esqueleto (seu próprio
+  `platform/postgres` já tem um primeiro esqueleto (seu próprio
   tipo no formato de `Store`, não uma implementação desta interface — ver
   [backend Postgres](postgres-rfc.md) pro porquê e pro que ainda está
   aberto), mas nenhum recurso está ligado a ele ainda.
@@ -71,7 +71,7 @@ não tem custo exposto nem `explain()` — a única alavanca é o índice
 declarado pra coleção que ele atinge. Índices são declarados por serviço
 num arquivo `indices.conf`, ou adicionados/sobrescritos via a chave de
 config `mongo.indexes`, e construídos no boot por
-`internal/platform/mongodb.EnsureIndexes` (`mongo.indexes_mode`: `create`
+`platform/mongodb.EnsureIndexes` (`mongo.indexes_mode`: `create`
 constrói, `check` só loga o que falta, `off` ignora tudo isso):
 
 ```
@@ -100,7 +100,7 @@ verdade onde o `where=` do Mongo não dá nenhum. Ver
 
 ## Pontos que ainda usam Mongo direto, de propósito
 
-`internal/outbox` grava na coleção `outbox` com `*mongo.Collection` direto
+`outbox` grava na coleção `outbox` com `*mongo.Collection` direto
 — é uma decisão própria (ver [`docs/outbox.md`](outbox.md)), separada da
 decisão de storage de um `Resource`. Um recurso que precisa de uma query
 que `Store` não expõe (ex.: `categories-api`'s `GET /categories/tree`, em

@@ -10,10 +10,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	"github.com/Gui-Rondon/hyrule/internal/outbox"
-	"github.com/Gui-Rondon/hyrule/internal/platform/config"
-	"github.com/Gui-Rondon/hyrule/internal/platform/redis"
-	"github.com/Gui-Rondon/hyrule/internal/testkit"
+	"github.com/Gui-Rondon/hyrule/outbox"
+	"github.com/Gui-Rondon/hyrule/platform/config"
+	"github.com/Gui-Rondon/hyrule/platform/redis"
+	"github.com/Gui-Rondon/hyrule/testkit"
 )
 
 type env struct {

@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Gui-Rondon/hyrule/internal/app"
-	"github.com/Gui-Rondon/hyrule/internal/platform/config"
-	"github.com/Gui-Rondon/hyrule/internal/testkit"
+	"github.com/Gui-Rondon/hyrule/app"
+	"github.com/Gui-Rondon/hyrule/platform/config"
+	"github.com/Gui-Rondon/hyrule/testkit"
 )
 
 const resourcesYAML = `

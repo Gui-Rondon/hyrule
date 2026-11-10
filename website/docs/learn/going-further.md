@@ -40,7 +40,7 @@ type `authors-api`'s hand-written `setup` builds. Nothing stops a single
 service from registering some resources from a YAML file and others by
 hand, or from taking a YAML-built resource and attaching hooks to it in
 Go before registering it.
-`internal/declarative/declarative_test.go`'s
+`declarative/declarative_test.go`'s
 `TestBuiltResourceComposesWithConditionalOutbox` does exactly that: parses
 a resource from YAML, then attaches the same conditional outbox hook from
 [The Transactional Outbox](./the-outbox.md) to it, in Go — proving the two

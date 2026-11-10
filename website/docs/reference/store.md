@@ -4,11 +4,11 @@ sidebar_position: 1
 
 # The `Store` interface
 
-`rest.Resource.Store` (`internal/rest/store.go`) is the only
+`rest.Resource.Store` (`rest/store.go`) is the only
 entry point to data that `rest.Service` uses — `Find`,
 `CountDocuments`, `FindOne`, `InsertMany`, `UpdateOne`, `ReplaceOne`,
 `DeleteOne`. No `*mongo.Collection` appears in
-`internal/rest/service.go`.
+`rest/service.go`.
 
 ```go
 type Store interface {
@@ -22,7 +22,7 @@ type Store interface {
 }
 ```
 
-The only implementation today is `internal/platform/mongodb.Store`, a thin
+The only implementation today is `platform/mongodb.Store`, a thin
 wrapper around `*mongo.Collection`:
 
 ```go
@@ -33,7 +33,7 @@ res := &rest.Resource{Store: store, ...}
 In a service (`app.Env`), use `env.Store("collection-name")` instead of
 building the wrapper by hand.
 
-`internal/platform/postgres.Store` follows the same `NewStore`-wraps-a-
+`platform/postgres.Store` follows the same `NewStore`-wraps-a-
 client, `Find`/`FindOne`/... shape, for a relational database — it just
 isn't an implementation of the interface above (see
 [Postgres backend](postgres-rfc.md) for why), so nothing here wires it
@@ -60,8 +60,8 @@ In practice that means:
   interface.
 - Moving from Mongo to another database takes more than implementing
   `Store`: the queries (`bson.M`) and the errors checked in
-  `internal/rest/service.go` (`queryError`, `duplicateKey`) still
-  assume Mongo. `internal/platform/postgres` has a first scaffold (its
+  `rest/service.go` (`queryError`, `duplicateKey`) still
+  assume Mongo. `platform/postgres` has a first scaffold (its
   own `Store`-shaped type, not an implementation of this interface —
   see [Postgres backend](postgres-rfc.md) for why and for what's still
   open), but no resource is wired to it yet.
@@ -72,7 +72,7 @@ In practice that means:
 has no cost model or `explain()` exposed — the only lever is the index
 declared for the collection it hits. Indexes are declared per service in
 an `indices.conf` file, or added/overridden via the `mongo.indexes` config
-key, and built at startup by `internal/platform/mongodb.EnsureIndexes`
+key, and built at startup by `platform/mongodb.EnsureIndexes`
 (`mongo.indexes_mode`: `create` builds them, `check` only logs what's
 missing, `off` skips this entirely):
 
@@ -102,7 +102,7 @@ that's headed.
 
 ## Places that still go straight to Mongo, on purpose
 
-`internal/outbox` writes to the `outbox` collection with a
+`outbox` writes to the `outbox` collection with a
 `*mongo.Collection` directly — that's its own decision, separate from a
 `Resource`'s storage decision (see [`outbox.md`](outbox.md)). A resource
 that needs a query `Store` doesn't expose uses `Store` anyway —

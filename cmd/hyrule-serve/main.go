@@ -1,12 +1,12 @@
 // Command hyrule-serve registers the resources declared in a YAML file
-// (internal/declarative) and serves them — no domain-specific Go code at
+// (declarative) and serves them — no domain-specific Go code at
 // all for the common case the loader covers.
 //
 //	RESOURCES_FILE=resources.yaml PORT=8080 go run ./cmd/hyrule-serve
 //
 // A resource that needs a custom hook, endpoint or validation still needs
 // its own Go service (app.Main with a Setup func) — hyrule-serve only
-// covers what internal/declarative can build from data.
+// covers what declarative can build from data.
 package main
 
 import (
@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Gui-Rondon/hyrule/internal/app"
-	"github.com/Gui-Rondon/hyrule/internal/declarative"
+	"github.com/Gui-Rondon/hyrule/app"
+	"github.com/Gui-Rondon/hyrule/declarative"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

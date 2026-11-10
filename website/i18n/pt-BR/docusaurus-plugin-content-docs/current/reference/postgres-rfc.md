@@ -7,9 +7,9 @@ sidebar_position: 9
 Esta página é um documento de design, não uma referência de feature: ela
 registra as decisões abertas para um segundo backend, além do Mongo, e
 uma recomendação pra cada uma — não algo já construído. Hoje existe um
-esqueleto (`internal/platform/postgres`: um tipo no formato de `Store`,
+esqueleto (`platform/postgres`: um tipo no formato de `Store`,
 com seu próprio tipo de filtro, provado que compila e segue o mesmo
-padrão de `internal/platform/mongodb`) e nada ligado a `rest` ainda.
+padrão de `platform/mongodb`) e nada ligado a `rest` ainda.
 Trate cada "recomendado" abaixo como ponto de partida pra discussão, não
 como decisão já tomada; os dois pontos marcados como abertos estão
 explicitamente não decididos.
@@ -21,7 +21,7 @@ explicitamente, que a portabilidade de storage de hoje é a *interface*
 `Store`, não a linguagem de query nem a semântica de erro: os métodos de
 `rest.Store` são tipados em `bson.M`/`bson.D`, e a tradução de erro de
 `rest.Service` (`queryError`, `duplicateKey` em
-`internal/rest/service.go`) checa tipos do driver Mongo direto
+`rest/service.go`) checa tipos do driver Mongo direto
 (`mongo.IsDuplicateKeyError`, códigos de `mongo.ServerError`,
 `mongo.IsTimeout`). Isso foi uma escolha deliberada pra primeira rodada,
 não um descuido — esta página é a "próxima rodada" que essas páginas
@@ -29,7 +29,7 @@ apontam.
 
 ## 1. A forma de um `Store` do Postgres
 
-**Decidido.** `internal/platform/postgres.Store` não tenta satisfazer
+**Decidido.** `platform/postgres.Store` não tenta satisfazer
 `rest.Store` — essa interface é Mongo-shaped de propósito. Em vez disso
 tem seu próprio método-set, inspirado nele (`Find`, `CountDocuments`,
 `FindOne`, `InsertMany`, `UpdateOne`, `ReplaceOne`, `DeleteOne`), com
@@ -54,7 +54,7 @@ caminhos, nenhum escolhido ainda:
 - **Contornar `rest` inteiramente (custo menor, ponto de partida
   recomendado).** Um recurso em Postgres fala com
   `platform/postgres.Store` direto do seu próprio handler HTTP, do
-  jeito que `internal/outbox` já fala com `*mongo.Collection` direto, de
+  jeito que `outbox` já fala com `*mongo.Collection` direto, de
   propósito, contornando `rest.Store` (`architecture.md`: "Storage é
   uma decisão separada da de eventos"). Não ganha nada da máquina do
   `rest` de graça — sem `where=`, sem paginação/links/etags estilo Eve
@@ -63,7 +63,7 @@ caminhos, nenhum escolhido ainda:
   tentado ainda).** Generics do Go (`Store[F, U any]`) poderiam deixar
   `rest` continuar dirigindo paginação/links/etags pros dois backends,
   cada backend fornecendo seu próprio tipo de filtro `F` e de update
-  `U`. Isso toca a maior parte de `internal/rest/service.go` e força
+  `U`. Isso toca a maior parte de `rest/service.go` e força
   uma decisão sobre o que mais precisa virar plugável por backend —
   começando pelo ponto 3 abaixo, já que `queryError`/`duplicateKey` não
   podem continuar hardcoded em tipos de erro do Mongo quando um segundo
@@ -71,7 +71,7 @@ caminhos, nenhum escolhido ainda:
 
 ## 3. Erros
 
-`queryError`/`duplicateKey` de `internal/rest/service.go` checam tipos
+`queryError`/`duplicateKey` de `rest/service.go` checam tipos
 do driver Mongo direto hoje. Um equivalente em Postgres checaria
 `*pgconn.PgError`:
 
@@ -87,7 +87,7 @@ primeiro — não há um lugar único pra pendurar isso até então.
 
 ## 4. Índices
 
-O formato `IndexSpec`/`indices.conf` de `internal/platform/mongodb`
+O formato `IndexSpec`/`indices.conf` de `platform/mongodb`
 (direções `1`, `-1`, `text`, `hashed`, `2dsphere`; opções `unique`,
 `sparse`, `name=`, `ttl=`) é Mongo-shaped do início ao fim — ver
 [Performance de query hoje](store.md#performance-de-query-hoje). Um
@@ -108,7 +108,7 @@ genuinamente diferentes até lá, registrados aqui sem recomendação:
   precisaria gerar DDL de tabela real (e migrations). Ganha tipos
   nativos e indexação — o motivo real de usar Postgres — mas abre mão
   da suposição de `Doc` sem schema que hoje está embutida em
-  `rest`/`internal/declarative`.
+  `rest`/`declarative`.
 - **Uma única coluna `jsonb`.** Tradução quase zero — `Doc =
   map[string]any` mapeia pra `jsonb` quase direto — mas enfraquece o
   motivo de usar Postgres: você estaria comprando principalmente
@@ -195,7 +195,7 @@ futura não precisar redescobrir. O `pgx/v5` já cobre tudo isso; nada
 disso exige um driver diferente.
 
 - **Um outbox transacional que não precisa de um mecanismo de
-  transação separado.** `internal/outbox` grava na coleção `outbox` do
+  transação separado.** `outbox` grava na coleção `outbox` do
   Mongo na mesma transação multi-documento do write do recurso — uma
   feature real, mas que no Mongo exige replica set e um
   `WithTransaction` explícito. No Postgres, gravar a linha do recurso e
@@ -211,7 +211,7 @@ disso exige um driver diferente.
   dedicada, aberta durante toda a vida do relay, não o padrão normal de
   pegar-e-devolver do `pgxpool.Pool` — a conexão que escuta não pode ser
   uma que o pool entregue pra outro lugar no meio da espera. Ter isso de
-  verdade significa dar a `internal/outbox` uma contraparte em Postgres
+  verdade significa dar a `outbox` uma contraparte em Postgres
   (hoje ele é hardcoded pra `*mongo.Collection`) — uma refatoração que
   depende do ponto 2 se resolver primeiro, não algo pra começar antes de
   existir um recurso real em Postgres emitindo eventos.
@@ -244,7 +244,7 @@ assumir.
 
 ## O que existe hoje
 
-- `internal/platform/postgres.Store`: o método-set acima, sobre
+- `platform/postgres.Store`: o método-set acima, sobre
   `pgxpool.Pool`, com um filtro só de igualdade (`map[string]any` lido
   como `coluna: valor`, sem operadores) — real, mas intencionalmente
   mínimo; não é o lugar de descanso do design de filtro do ponto 1, só o
@@ -253,18 +253,18 @@ assumir.
   e `InsertMany` rejeita qualquer doc cujas chaves não batam exatamente
   com as de `docs[0]`, em vez de escrever `NULL` silenciosamente ou
   descartar uma coluna.
-- `internal/platform/postgres.IsDuplicateKeyError`/`IsTimeout`: as duas
+- `platform/postgres.IsDuplicateKeyError`/`IsTimeout`: as duas
   checagens da tabela do ponto 3, espelhando os helpers de mesmo nome do
   `mongo-driver`.
 - Um serviço `postgres` no `docker-compose.yml`, junto de `mongo`,
   `redis` e `pubsub`, pros testes do esqueleto rodarem contra um banco
   real, não um mock.
-- Nenhuma mudança em `internal/rest` nem em nenhum recurso existente —
+- Nenhuma mudança em `rest` nem em nenhum recurso existente —
   é um pacote novo e isolado; nada acima carrega risco de regressão pro
   que já está em produção hoje.
 
 Usado isolado, do jeito que o caminho recomendado do ponto 2 propõe
-(sem `rest` em volta, igual a `internal/outbox` falando com
+(sem `rest` em volta, igual a `outbox` falando com
 `*mongo.Collection` direto):
 
 ```go

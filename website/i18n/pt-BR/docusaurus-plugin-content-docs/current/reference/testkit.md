@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # Testar um recurso
 
-`internal/testkit` monta o que um teste de recurso precisa: um Mongo
+`testkit` monta o que um teste de recurso precisa: um Mongo
 isolado, um cliente HTTP em processo e tokens de teste. Testes que
 precisam de Mongo pulam sozinhos sem `MONGO_TEST_URI` (ex.:
 `mongodb://localhost:27018/?directConnection=true`, o `make env-up`).
@@ -48,8 +48,8 @@ res := &rest.Resource{
 svc := rest.NewService(res, tx) // tx: ver mongodb.TransactorFor
 ```
 
-`internal/behaviors/events/conditional_test.go` e
-`internal/outbox/outbox_test.go` seguem esse padrão para testar hooks e o
+`behaviors/events/conditional_test.go` e
+`outbox/outbox_test.go` seguem esse padrão para testar hooks e o
 outbox sem precisar de HTTP nem de um serviço inteiro.
 
 ## Dry run
@@ -70,4 +70,4 @@ persistido e que nenhuma tarefa de fundo (`env.Go`) foi iniciada (ver
 que foi indexado, sem precisar de um Elasticsearch real) — use
 `es.Hosts()` na config do recurso. `testkit.NewKeys(t)` assina tokens RSA
 de teste; `keys.Token(t, "username")` e `keys.TokenWith(t, claims)` cobrem
-os dois formatos de claim que `internal/platform/auth` aceita.
+os dois formatos de claim que `platform/auth` aceita.

@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/Gui-Rondon/hyrule/internal/app"
-	"github.com/Gui-Rondon/hyrule/internal/behaviors/audit"
-	"github.com/Gui-Rondon/hyrule/internal/behaviors/searchsync"
-	"github.com/Gui-Rondon/hyrule/internal/platform/search"
-	"github.com/Gui-Rondon/hyrule/internal/rest"
+	"github.com/Gui-Rondon/hyrule/app"
+	"github.com/Gui-Rondon/hyrule/behaviors/audit"
+	"github.com/Gui-Rondon/hyrule/behaviors/searchsync"
+	"github.com/Gui-Rondon/hyrule/platform/search"
+	"github.com/Gui-Rondon/hyrule/rest"
 )
 
 var handle = regexp.MustCompile(`^[A-Za-z0-9_]+$`)

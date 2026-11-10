@@ -4,11 +4,11 @@ sidebar_position: 11
 
 # Roadmap: framework and platform
 
-This page is a plan, not a feature list — every phase below is
-proposed work, not something already built. It exists so the
+This page is a plan, not a feature list — most phases below are
+proposed work, not something already built; each one says explicitly
+when that changes. It exists so the
 [Architecture decisions](architecture-decisions.md) have a sequence to
 sit in, and so nobody mistakes a future phase for current behavior.
-Phase 0 is the only phase this round actually completes.
 
 ## Why two paths
 
@@ -16,16 +16,17 @@ The project's direction is to offer Hyrule two complementary ways to
 adopt it, on the same core: a **Framework** path (`go get`, no
 monorepo or CLI required) and a **Platform** path (a monorepo, CLI,
 and scaffolding, for teams that want a standardized multi-service
-setup). Today only an informal version of the Framework path exists,
-and it isn't externally consumable yet (see ADR-0001). The Platform
-path doesn't exist beyond a few reusable building blocks
-(`ci/affected`, Makefile targets, one example monorepo).
+setup). As of Fase 1, the Framework path is externally consumable (see
+ADR-0001) — the gap row below is kept for history, not because it's
+still open. The Platform path doesn't exist beyond a few reusable
+building blocks (`ci/affected`, Makefile targets, one example
+monorepo).
 
 ## Gap analysis
 
 | Area | Vision | Actual state today | Gap |
 |---|---|---|---|
-| Framework (`go get`) | Consumable by any external Go app | Everything lives under `internal/` | **Critical** — nothing is importable today |
+| Framework (`go get`) | Consumable by any external Go app | `app`, `rest`, `outbox`, `testkit`, `declarative`, `behaviors/*`, `platform/*` are public; only `internal/domain` stays internal | **Closed** — Fase 1 (verified: a scratch external module imports `rest`, `app`, `declarative`, `platform/mongodb`) |
 | `rest.Store` across backends | Portable between Mongo and Postgres | Mongo types leak into the contract | **High** — needs a design decision before any code moves (ADR-0002) |
 | Outbox across backends | Implied by the dual-mode story | Hard-coded to Mongo | **High**, correctly blocked until the Store question is resolved (ADR-0003) |
 | CLI / Platform | `hyrule new` / `service create` / `dev` / `build` / `deploy` | No subcommand exists | **Critical**, but reusable pieces already exist (`ci/affected`, Makefile, example monorepo) |
@@ -39,10 +40,13 @@ path doesn't exist beyond a few reusable building blocks
   Risk: none (documentation only). Effort: low. **Done.**
 - **Fase 1 — Consolidate the framework.** Execute ADR-0001 (promote the
   packages a consumer needs out of `internal/`) and hold the line on
-  ADR-0002 (no `rest.Store` generics yet). Risk: high — this is a
-  breaking, identity-affecting change and needs explicit approval
-  before it starts, per the project's own rule about pausing before
-  decisions like this.
+  ADR-0002 (no `rest.Store` generics yet). **Done.** `app`, `behaviors/*`,
+  `declarative`, `outbox`, `platform/*`, `rest`, and `testkit` moved to
+  the module root (`internal/domain` is the only package left internal);
+  `go build ./...`, `go vet ./...`, and `make cover` (90.9%, gate 85%)
+  all pass, and a scratch external module building against the new
+  paths compiles and runs. `rest.Store` itself is unchanged, per
+  ADR-0002.
 - **Fase 2 — Validate the standalone mode.** Build a real external
   example: a separate Go module, its own `go.mod`, importing published
   Hyrule — not another package inside `examples/blog-apis`. Depends on
@@ -60,6 +64,7 @@ path doesn't exist beyond a few reusable building blocks
 
 ## What this round does not do
 
-No code under `internal/` moves. No interface changes. No CLI gets
-written. Those are exactly the decisions the project's own rules say to
-stop and present before executing — this roadmap is that presentation.
+No `rest.Store` interface change, no outbox portability, no CLI. Those
+are exactly the decisions the project's own rules say to stop and
+present before executing — ADR-0002, ADR-0003, and ADR-0004 are that
+presentation for each of them.
