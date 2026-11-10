@@ -2,6 +2,9 @@
 
 # hyrule
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/Gui-Rondon/hyrule.svg)](https://pkg.go.dev/github.com/Gui-Rondon/hyrule)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Um framework Go para construir APIs REST sobre Mongo: descreva um recurso
 (schema, métodos, lookups) e ganhe CRUD completo com validação, ETags,
 paginação e um outbox transacional — em Go, ou sem Go nenhum, via YAML.
