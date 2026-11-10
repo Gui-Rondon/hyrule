@@ -365,3 +365,38 @@ func TestHealthWithTrailingSlash(t *testing.T) {
 		}
 	}
 }
+
+// stripURLPrefix's own branches, under a non-empty URLPrefix: a request
+// for exactly the prefix (no trailing path), one entirely outside the
+// prefix, and one that merely starts with the same characters without
+// being a path under it (/authzzz is not under /auth).
+func TestStripURLPrefixEdgeCases(t *testing.T) {
+	db := testkit.Mongo(t)
+	spec := itemsSpec()
+	spec.URLPrefix = "/auth"
+	handler, err := app.Build(context.Background(), spec, app.Deps{
+		Config: config.Config{}, Mongo: db.Client(), DB: db, Auth: testkit.DisabledAuth(t),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := testkit.NewClient(t, handler)
+
+	// Exactly the prefix, no trailing path: tail becomes "/", not "" —
+	// the inner router's own root (the Eve-style resource index) answers,
+	// instead of this 404ing as if the path were outside the prefix.
+	if res := c.Do("GET", "/auth", nil); res.Status != http.StatusOK {
+		t.Errorf("GET /auth = %d, want 200 from the inner router's root", res.Status)
+	}
+
+	// Outside the prefix entirely.
+	if res := c.Do("GET", "/other", nil); res.Status != http.StatusNotFound {
+		t.Errorf("GET /other = %d, want 404 (outside the URL prefix)", res.Status)
+	}
+
+	// Starts with the same characters as the prefix, but isn't a path
+	// under it — must not be treated as a prefix match.
+	if res := c.Do("GET", "/authzzz", nil); res.Status != http.StatusNotFound {
+		t.Errorf("GET /authzzz = %d, want 404 (not actually under /auth)", res.Status)
+	}
+}

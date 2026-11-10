@@ -40,7 +40,11 @@ func (s Store) table() string { return pgx.Identifier{s.Table}.Sanitize() }
 
 // whereClause renders filter as a parameterized WHERE clause (no WHERE
 // keyword), sorted by column for a deterministic query across calls.
-// An empty filter renders "TRUE" (matches every row).
+// An empty filter renders "TRUE" (matches every row). A nil value renders
+// "col IS NULL" instead of "col = $N": in SQL, "= NULL" never evaluates
+// true (it's UNKNOWN), so treating it as an equality would silently
+// match nothing instead of what a Mongo-shaped caller means by
+// Filter{"col": nil}.
 func whereClause(filter Filter, startAt int) (string, []any) {
 	if len(filter) == 0 {
 		return "TRUE", nil
@@ -53,8 +57,13 @@ func whereClause(filter Filter, startAt int) (string, []any) {
 	parts := make([]string, 0, len(cols))
 	args := make([]any, 0, len(cols))
 	for _, col := range cols {
+		ident := pgx.Identifier{col}.Sanitize()
+		if filter[col] == nil {
+			parts = append(parts, ident+" IS NULL")
+			continue
+		}
 		args = append(args, filter[col])
-		parts = append(parts, fmt.Sprintf("%s = $%d", pgx.Identifier{col}.Sanitize(), startAt+len(args)))
+		parts = append(parts, fmt.Sprintf("%s = $%d", ident, startAt+len(args)))
 	}
 	return strings.Join(parts, " AND "), args
 }
@@ -123,8 +132,10 @@ func (s Store) FindOne(ctx context.Context, filter Filter, columns []string) (ma
 	return pgx.CollectOneRow(rows, pgx.RowToMap)
 }
 
-// InsertMany inserts docs, which must all share the same set of keys (one
-// INSERT with the columns of docs[0]).
+// InsertMany inserts docs, which must all share the exact same set of
+// keys (one INSERT with the columns of docs[0]); a doc with a missing or
+// an extra key, relative to docs[0], is rejected rather than silently
+// turning a missing key into a NULL column or dropping an extra one.
 func (s Store) InsertMany(ctx context.Context, docs []map[string]any) error {
 	if len(docs) == 0 {
 		return nil
@@ -134,6 +145,16 @@ func (s Store) InsertMany(ctx context.Context, docs []map[string]any) error {
 		cols = append(cols, col)
 	}
 	sort.Strings(cols)
+	for i, doc := range docs {
+		if len(doc) != len(cols) {
+			return fmt.Errorf("postgres: InsertMany: docs[%d] has %d keys, docs[0] has %d", i, len(doc), len(cols))
+		}
+		for _, col := range cols {
+			if _, ok := doc[col]; !ok {
+				return fmt.Errorf("postgres: InsertMany: docs[%d] is missing key %q present in docs[0]", i, col)
+			}
+		}
+	}
 	placeholders := make([]string, len(cols))
 	for i := range cols {
 		placeholders[i] = fmt.Sprintf("$%d", i+1)
