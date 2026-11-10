@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"github.com/Gui-Rondon/hyrule/internal/app"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/config"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
 	"github.com/Gui-Rondon/hyrule/internal/platform/server"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
@@ -30,12 +30,12 @@ func itemsSpec() app.Spec {
 		DefaultDB: "items",
 		Version:   "1.2.3",
 		Setup: func(_ context.Context, env *app.Env) error {
-			env.API.Register(&evecompat.Resource{
+			env.API.Register(&rest.Resource{
 				Name:            "items",
 				Store:           env.Store("items"),
-				Schema:          evecompat.Schema{"name": {Type: evecompat.TypeString}},
+				Schema:          rest.Schema{"name": {Type: rest.TypeString}},
 				ResourceMethods: []string{http.MethodGet, http.MethodPost},
-				PublicMethods:   evecompat.PublicGET,
+				PublicMethods:   rest.PublicGET,
 			})
 			return nil
 		},

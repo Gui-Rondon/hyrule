@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 6
 ---
 
 # Testing a resource
@@ -41,12 +41,12 @@ For real authentication, swap `testkit.DisabledAuth(t)` for
 To test a hook or a `Resource` without HTTP:
 
 ```go
-res := &evecompat.Resource{
+res := &rest.Resource{
 	Name:  "items",
 	Store: testkit.Store(t, "items"), // mongodb.NewStore(testkit.Mongo(t).Collection("items"))
-	Schema: evecompat.Schema{"name": {Type: evecompat.TypeString}},
+	Schema: rest.Schema{"name": {Type: rest.TypeString}},
 }
-svc := evecompat.NewService(res, tx) // tx: see mongodb.TransactorFor
+svc := rest.NewService(res, tx) // tx: see mongodb.TransactorFor
 ```
 
 `internal/behaviors/events/conditional_test.go` and

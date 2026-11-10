@@ -35,7 +35,7 @@ this code"; that's what Go is for.
 
 ## Both in the same process
 
-A resource built from YAML is a plain `*evecompat.Resource` — the same
+A resource built from YAML is a plain `*rest.Resource` — the same
 type `authors-api`'s hand-written `setup` builds. Nothing stops a single
 service from registering some resources from a YAML file and others by
 hand, or from taking a YAML-built resource and attaching hooks to it in
@@ -56,7 +56,7 @@ paths aren't two different frameworks wearing the same name.
   `/metrics` and `/healthcheck` for free. See
   [Reference → observability](/docs/reference/observability).
 - **Why the layers are shaped this way**: `services → behaviors →
-  evecompat → platform`, and why `platform` never imports `evecompat`
+  rest → platform`, and why `platform` never imports `rest`
   even when it would save a line. See
   [Reference → architecture](/docs/reference/architecture).
 

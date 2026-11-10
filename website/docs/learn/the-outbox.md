@@ -85,9 +85,9 @@ func (e *endpoints) publish(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	changes := evecompat.Doc{"status": "published", "_published": time.Now().UTC().Format(evecompat.DateFormat)}
-	if _, err := e.svc.Patch(r.Context(), lookup, changes, evecompat.WriteOptions{SkipConcurrency: true}); err != nil {
-		evecompat.WriteError(w, r, err)
+	changes := rest.Doc{"status": "published", "_published": time.Now().UTC().Format(rest.DateFormat)}
+	if _, err := e.svc.Patch(r.Context(), lookup, changes, rest.WriteOptions{SkipConcurrency: true}); err != nil {
+		rest.WriteError(w, r, err)
 		return
 	}
 	e.respond(w, r, lookup)

@@ -6,11 +6,11 @@
 [![codecov](https://codecov.io/gh/Gui-Rondon/hyrule/branch/main/graph/badge.svg)](https://codecov.io/gh/Gui-Rondon/hyrule)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Um framework Go para construir APIs REST sobre Mongo: descreva um recurso
-(schema, métodos, lookups) e ganhe CRUD completo com validação, ETags,
-paginação e um outbox transacional — em Go, ou sem Go nenhum, via YAML.
-Por baixo mantém o contrato HTTP do Eve (Python) (`internal/evecompat`),
-de onde o projeto migrou.
+Um framework Go para construir APIs REST sobre Mongo (suporte a Postgres
+em andamento): descreva um recurso (schema, métodos, lookups) e ganhe
+CRUD completo com validação, ETags, paginação e um outbox transacional —
+em Go, ou sem Go nenhum, via YAML. Por baixo mantém o contrato HTTP do
+Eve (Python) (`internal/rest`), de onde o projeto migrou.
 
 📖 **Documentação completa: https://gui-rondon.github.io/hyrule/** — a
 seção Reference já está em português
@@ -64,13 +64,15 @@ A documentação completa está em **https://gui-rondon.github.io/hyrule/**:
 | [Reference → resources.yaml](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/resources-yaml) | referência completa do YAML de recurso |
 | [Reference → Dry run](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/dry-run) | rodar em dry run: escreve tudo, mas a transação sempre reverte |
 | [Reference → Testkit](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/testkit) | testar um recurso (Mongo isolado, cliente HTTP, tokens) |
-| [Reference → Architecture](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture) | a camada `services → behaviors → evecompat → platform` e por que ela existe |
+| [Reference → Architecture](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture) | a camada `services → behaviors → rest → platform` e por que ela existe |
+| [Reference → Querying](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/querying) | a linguagem de query `where=`/`sort`/`projection` e como ela é interpretada |
+| [Reference → RFC Postgres](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/postgres-rfc) | as decisões de design abertas para um segundo backend, além do Mongo |
 
 ## Estrutura
 
     internal/app/              bootstrap comum (app.Main / app.Build)
     internal/behaviors/        hooks reutilizáveis: searchsync (ES), audit, events (outbox na escrita)
-    internal/evecompat/        contrato HTTP: Service (regras, sem HTTP) + API (HTTP) + Store (interface de storage)
+    internal/rest/              contrato HTTP: Service (regras, sem HTTP) + API (HTTP) + Store (interface de storage)
     internal/outbox/           transactional outbox, relay para o Pub/Sub e o primitivo condicional
     internal/declarative/      carrega um Resource/Schema de YAML (cmd/hyrule-serve)
     internal/platform/         config, mongodb, auth, search, health, server, pubsub, redis

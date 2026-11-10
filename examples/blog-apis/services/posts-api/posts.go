@@ -16,11 +16,11 @@ import (
 	"github.com/Gui-Rondon/hyrule/internal/behaviors/audit"
 	"github.com/Gui-Rondon/hyrule/internal/behaviors/events"
 	"github.com/Gui-Rondon/hyrule/internal/behaviors/searchsync"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/outbox"
 	"github.com/Gui-Rondon/hyrule/internal/platform/pubsub"
 	"github.com/Gui-Rondon/hyrule/internal/platform/redis"
 	"github.com/Gui-Rondon/hyrule/internal/platform/search"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 const (
@@ -99,45 +99,45 @@ func setup(ctx context.Context, env *app.Env) error {
 
 var slugRe = regexp.MustCompile(`^[\w-]+$`)
 
-func resource(store evecompat.Store) *evecompat.Resource {
-	objectID := evecompat.Field{Type: evecompat.TypeObjectID}
-	objectIDs := func(max int) evecompat.Field {
-		return evecompat.Field{Type: evecompat.TypeList, MaxLength: max, Default: []any{}, Items: &objectID}
+func resource(store rest.Store) *rest.Resource {
+	objectID := rest.Field{Type: rest.TypeObjectID}
+	objectIDs := func(max int) rest.Field {
+		return rest.Field{Type: rest.TypeList, MaxLength: max, Default: []any{}, Items: &objectID}
 	}
-	nullableDate := evecompat.Field{Type: evecompat.TypeDatetime, Nullable: true}
-	return &evecompat.Resource{
+	nullableDate := rest.Field{Type: rest.TypeDatetime, Nullable: true}
+	return &rest.Resource{
 		Name:      "posts",
 		ItemTitle: "post",
 		Store:     store,
-		Schema: evecompat.Schema{
-			"title":          {Type: evecompat.TypeString, Required: true},
-			"slug":           {Type: evecompat.TypeString, Required: true, Unique: true, Regex: slugRe},
-			"excerpt":        {Type: evecompat.TypeString},
-			"body":           {Type: evecompat.TypeString},
+		Schema: rest.Schema{
+			"title":          {Type: rest.TypeString, Required: true},
+			"slug":           {Type: rest.TypeString, Required: true, Unique: true, Regex: slugRe},
+			"excerpt":        {Type: rest.TypeString},
+			"body":           {Type: rest.TypeString},
 			"author_id":      objectID,
-			"category_id":    {Type: evecompat.TypeObjectID, Nullable: true},
+			"category_id":    {Type: rest.TypeObjectID, Nullable: true},
 			"tags":           objectIDs(50),
-			"status":         {Type: evecompat.TypeString, Allowed: []any{"draft", "scheduled", "published"}},
-			"allow_comments": {Type: evecompat.TypeBoolean, Default: true},
+			"status":         {Type: rest.TypeString, Allowed: []any{"draft", "scheduled", "published"}},
+			"allow_comments": {Type: rest.TypeBoolean, Default: true},
 			"_published":     nullableDate,
 			"_unpublished":   nullableDate,
 		},
-		AdditionalLookup:  &evecompat.AdditionalLookup{Field: "slug", Pattern: slugRe},
+		AdditionalLookup:  &rest.AdditionalLookup{Field: "slug", Pattern: slugRe},
 		ResourceMethods:   []string{http.MethodGet, http.MethodPost},
 		ItemMethods:       []string{http.MethodGet, http.MethodPatch, http.MethodPut},
-		PublicMethods:     evecompat.PublicGET,
-		PublicItemMethods: evecompat.PublicGET,
+		PublicMethods:     rest.PublicGET,
+		PublicItemMethods: rest.PublicGET,
 		SoftDelete:        true,
-		QueryDenylist:     evecompat.DefaultQueryDenylist,
+		QueryDenylist:     rest.DefaultQueryDenylist,
 		CacheControl:      "max-age=20",
 		CacheExpires:      20,
 	}
 }
 
 // draftHook defaults a new post's status to draft.
-func draftHook() evecompat.Hooks {
-	return evecompat.Hooks{OnInsert: []func(context.Context, []evecompat.Doc) error{
-		func(_ context.Context, docs []evecompat.Doc) error {
+func draftHook() rest.Hooks {
+	return rest.Hooks{OnInsert: []func(context.Context, []rest.Doc) error{
+		func(_ context.Context, docs []rest.Doc) error {
 			for _, doc := range docs {
 				if s, _ := doc["status"].(string); s == "" {
 					doc["status"] = "draft"
@@ -160,23 +160,23 @@ func publishCondition(topic string) outbox.Condition {
 // endpoints are the custom publish/schedule actions, outside the generic
 // CRUD a plain Resource gives for free.
 type endpoints struct {
-	svc     *evecompat.Service
+	svc     *rest.Service
 	toUnpub string
 }
 
 // target finds the post of the URL; an id that is not an ObjectID or a
 // missing post is a 404.
-func (e *endpoints) target(w http.ResponseWriter, r *http.Request) (string, bson.M, evecompat.Doc, bool) {
+func (e *endpoints) target(w http.ResponseWriter, r *http.Request) (string, bson.M, rest.Doc, bool) {
 	id := r.PathValue("id")
 	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {
-		evecompat.WriteError(w, r, evecompat.ErrNotFound)
+		rest.WriteError(w, r, rest.ErrNotFound)
 		return "", nil, nil, false
 	}
 	lookup := bson.M{"_id": oid}
 	doc, err := e.svc.Find(r.Context(), lookup)
 	if err != nil {
-		evecompat.WriteError(w, r, err)
+		rest.WriteError(w, r, err)
 		return "", nil, nil, false
 	}
 	return id, lookup, doc, true
@@ -185,7 +185,7 @@ func (e *endpoints) target(w http.ResponseWriter, r *http.Request) (string, bson
 func (e *endpoints) respond(w http.ResponseWriter, r *http.Request, lookup bson.M) {
 	doc, err := e.svc.Get(r.Context(), lookup)
 	if err != nil {
-		evecompat.WriteError(w, r, err)
+		rest.WriteError(w, r, err)
 		return
 	}
 	e.svc.WriteItem(w, r, doc)
@@ -199,9 +199,9 @@ func (e *endpoints) publish(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	changes := evecompat.Doc{"status": "published", "_published": time.Now().UTC().Format(evecompat.DateFormat)}
-	if _, err := e.svc.Patch(r.Context(), lookup, changes, evecompat.WriteOptions{SkipConcurrency: true}); err != nil {
-		evecompat.WriteError(w, r, err)
+	changes := rest.Doc{"status": "published", "_published": time.Now().UTC().Format(rest.DateFormat)}
+	if _, err := e.svc.Patch(r.Context(), lookup, changes, rest.WriteOptions{SkipConcurrency: true}); err != nil {
+		rest.WriteError(w, r, err)
 		return
 	}
 	e.respond(w, r, lookup)
@@ -217,9 +217,9 @@ func (e *endpoints) unpublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := events.With(r.Context(), outbox.Event{Topic: e.toUnpub, Type: "post.unpublished", Key: id, Body: id})
-	changes := evecompat.Doc{"status": "draft", "_unpublished": time.Now().UTC().Format(evecompat.DateFormat)}
-	if _, err := e.svc.Patch(ctx, lookup, changes, evecompat.WriteOptions{SkipConcurrency: true}); err != nil {
-		evecompat.WriteError(w, r, err)
+	changes := rest.Doc{"status": "draft", "_unpublished": time.Now().UTC().Format(rest.DateFormat)}
+	if _, err := e.svc.Patch(ctx, lookup, changes, rest.WriteOptions{SkipConcurrency: true}); err != nil {
+		rest.WriteError(w, r, err)
 		return
 	}
 	e.respond(w, r, lookup)
@@ -243,22 +243,22 @@ func (e *endpoints) schedule(w http.ResponseWriter, r *http.Request) {
 	}
 	ifMatch := r.Header.Get("If-Match")
 	if err := e.svc.CheckEtag(original, ifMatch); err != nil {
-		evecompat.WriteError(w, r, err)
+		rest.WriteError(w, r, err)
 		return
 	}
 	body, err := readJSONObject(r)
 	if err != nil || len(body) == 0 && r.ContentLength == 0 {
-		evecompat.WriteError(w, r, evecompat.Abort(http.StatusBadRequest, ""))
+		rest.WriteError(w, r, rest.Abort(http.StatusBadRequest, ""))
 		return
 	}
 	value, _ := body["publish_at"].(string)
 	if value == "" {
-		evecompat.WriteError(w, r, evecompat.Abort(http.StatusUnprocessableEntity, "publish_at is required."))
+		rest.WriteError(w, r, rest.Abort(http.StatusUnprocessableEntity, "publish_at is required."))
 		return
 	}
-	when, err := time.Parse(evecompat.DateFormat, value)
+	when, err := time.Parse(rest.DateFormat, value)
 	if err != nil {
-		evecompat.WriteError(w, r, &evecompat.ValidationError{Issues: evecompat.Issues{"publish_at": "must be of datetime type"}})
+		rest.WriteError(w, r, &rest.ValidationError{Issues: rest.Issues{"publish_at": "must be of datetime type"}})
 		return
 	}
 	iso := when.UTC().Format("2006-01-02T15:04:05")
@@ -266,9 +266,9 @@ func (e *endpoints) schedule(w http.ResponseWriter, r *http.Request) {
 		Topic: topicSchedule, Type: "post.scheduled", Key: id,
 		Body: scheduleEntry{ID: id, PublishAt: &iso},
 	})
-	changes := evecompat.Doc{"status": "scheduled"}
-	if _, err := e.svc.Patch(ctx, lookup, changes, evecompat.WriteOptions{IfMatch: ifMatch}); err != nil {
-		evecompat.WriteError(w, r, err)
+	changes := rest.Doc{"status": "scheduled"}
+	if _, err := e.svc.Patch(ctx, lookup, changes, rest.WriteOptions{IfMatch: ifMatch}); err != nil {
+		rest.WriteError(w, r, err)
 		return
 	}
 	e.respond(w, r, lookup)
@@ -282,21 +282,21 @@ func (e *endpoints) unschedule(w http.ResponseWriter, r *http.Request) {
 	}
 	ifMatch := r.Header.Get("If-Match")
 	if err := e.svc.CheckEtag(original, ifMatch); err != nil {
-		evecompat.WriteError(w, r, err)
+		rest.WriteError(w, r, err)
 		return
 	}
 	ctx := events.With(r.Context(), outbox.Event{
 		Topic: topicSchedule, Type: "post.unscheduled", Key: id,
 		Body: scheduleEntry{ID: id},
 	})
-	changes := evecompat.Doc{"status": "draft"}
-	doc, err := e.svc.Patch(ctx, lookup, changes, evecompat.WriteOptions{IfMatch: ifMatch})
+	changes := rest.Doc{"status": "draft"}
+	doc, err := e.svc.Patch(ctx, lookup, changes, rest.WriteOptions{IfMatch: ifMatch})
 	if err != nil {
-		evecompat.WriteError(w, r, err)
+		rest.WriteError(w, r, err)
 		return
 	}
 	w.Header().Set("ETag", `"`+doc["_etag"].(string)+`"`)
-	evecompat.WriteJSON(w, http.StatusOK, e.svc.WriteResult(doc))
+	rest.WriteJSON(w, http.StatusOK, e.svc.WriteResult(doc))
 }
 
 // dispatcher sends the schedule events to the Redis hash and everything

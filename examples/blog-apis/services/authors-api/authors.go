@@ -9,30 +9,30 @@ import (
 	"github.com/Gui-Rondon/hyrule/internal/app"
 	"github.com/Gui-Rondon/hyrule/internal/behaviors/audit"
 	"github.com/Gui-Rondon/hyrule/internal/behaviors/searchsync"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/search"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 var handle = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 
 func setup(_ context.Context, env *app.Env) error {
-	res := &evecompat.Resource{
+	res := &rest.Resource{
 		Name:      "authors",
 		ItemTitle: "author",
 		Store:     env.Store("authors"),
-		Schema: evecompat.Schema{
-			"name":      {Type: evecompat.TypeString, Required: true},
-			"email":     {Type: evecompat.TypeString, Unique: true, Regex: regexp.MustCompile(`^.+\@.+\..+$`)},
-			"bio":       {Type: evecompat.TypeString},
-			"photo":     {Type: evecompat.TypeString},
-			"twitter":   {Type: evecompat.TypeString, Regex: handle},
-			"instagram": {Type: evecompat.TypeString, Regex: handle},
+		Schema: rest.Schema{
+			"name":      {Type: rest.TypeString, Required: true},
+			"email":     {Type: rest.TypeString, Unique: true, Regex: regexp.MustCompile(`^.+\@.+\..+$`)},
+			"bio":       {Type: rest.TypeString},
+			"photo":     {Type: rest.TypeString},
+			"twitter":   {Type: rest.TypeString, Regex: handle},
+			"instagram": {Type: rest.TypeString, Regex: handle},
 		},
 		ResourceMethods:   []string{http.MethodGet, http.MethodPost},
 		ItemMethods:       []string{http.MethodGet, http.MethodPatch, http.MethodPut},
-		PublicMethods:     evecompat.PublicGET,
-		PublicItemMethods: evecompat.PublicGET,
-		QueryDenylist:     evecompat.DefaultQueryDenylist,
+		PublicMethods:     rest.PublicGET,
+		PublicItemMethods: rest.PublicGET,
+		QueryDenylist:     rest.DefaultQueryDenylist,
 		CacheControl:      "max-age=20",
 		CacheExpires:      20,
 	}

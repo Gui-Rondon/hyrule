@@ -13,8 +13,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/search"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 // Indexer is the part of search.Client used here.
@@ -27,7 +27,7 @@ type Indexer interface {
 type Option func(*options)
 
 type options struct {
-	transform func(evecompat.Doc) any
+	transform func(rest.Doc) any
 	render    func(any) any
 	resource  string
 	write     []search.WriteOption
@@ -39,7 +39,7 @@ type options struct {
 func EveElastic(resource string) Option {
 	return func(o *options) {
 		o.resource = resource
-		o.render = evecompat.RenderISO
+		o.render = rest.RenderISO
 		o.write = append(o.write, search.Refresh())
 	}
 }
@@ -47,20 +47,20 @@ func EveElastic(resource string) Option {
 // WithTransform changes the indexed body; the default is the document
 // without _id, with ISO 8601 dates (+00:00, or without offset with
 // EveElastic).
-func WithTransform(f func(evecompat.Doc) any) Option {
+func WithTransform(f func(rest.Doc) any) Option {
 	return func(o *options) { o.transform = f }
 }
 
 // Hooks returns the hooks that sync index.
-func Hooks(idx Indexer, index string, opts ...Option) evecompat.Hooks {
-	o := options{render: evecompat.RenderISOOffset}
+func Hooks(idx Indexer, index string, opts ...Option) rest.Hooks {
+	o := options{render: rest.RenderISOOffset}
 	for _, opt := range opts {
 		opt(&o)
 	}
 	if o.transform == nil {
-		o.transform = func(doc evecompat.Doc) any { return defaultBody(doc, o.render) }
+		o.transform = func(doc rest.Doc) any { return defaultBody(doc, o.render) }
 	}
-	put := func(ctx context.Context, doc evecompat.Doc) error {
+	put := func(ctx context.Context, doc rest.Doc) error {
 		id := ID(doc)
 		body := o.transform(doc)
 		if m, ok := body.(map[string]any); ok && o.resource != "" {
@@ -71,9 +71,9 @@ func Hooks(idx Indexer, index string, opts ...Option) evecompat.Hooks {
 		}
 		return nil
 	}
-	return evecompat.Hooks{
-		OnInserted: []func(context.Context, []evecompat.Doc) error{
-			func(ctx context.Context, docs []evecompat.Doc) error {
+	return rest.Hooks{
+		OnInserted: []func(context.Context, []rest.Doc) error{
+			func(ctx context.Context, docs []rest.Doc) error {
 				for _, doc := range docs {
 					if err := put(ctx, doc); err != nil {
 						return err
@@ -82,9 +82,9 @@ func Hooks(idx Indexer, index string, opts ...Option) evecompat.Hooks {
 				return nil
 			},
 		},
-		OnUpdated: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(ctx context.Context, updates, original evecompat.Doc) error {
-				merged := evecompat.Doc{}
+		OnUpdated: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(ctx context.Context, updates, original rest.Doc) error {
+				merged := rest.Doc{}
 				for k, v := range original {
 					merged[k] = v
 				}
@@ -96,13 +96,13 @@ func Hooks(idx Indexer, index string, opts ...Option) evecompat.Hooks {
 		},
 		// Eve merged the replacement into the original, which kept removed
 		// fields in the index; the replacement is the stored document.
-		OnReplaced: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(ctx context.Context, replacement, _ evecompat.Doc) error {
+		OnReplaced: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(ctx context.Context, replacement, _ rest.Doc) error {
 				return put(ctx, replacement)
 			},
 		},
-		OnDeleted: []func(context.Context, evecompat.Doc) error{
-			func(ctx context.Context, original evecompat.Doc) error {
+		OnDeleted: []func(context.Context, rest.Doc) error{
+			func(ctx context.Context, original rest.Doc) error {
 				return idx.Delete(ctx, index, ID(original), o.write...)
 			},
 		},
@@ -110,15 +110,15 @@ func Hooks(idx Indexer, index string, opts ...Option) evecompat.Hooks {
 }
 
 // ID is the Elasticsearch id of a document: the ObjectID hex.
-func ID(doc evecompat.Doc) string {
+func ID(doc rest.Doc) string {
 	if oid, ok := doc["_id"].(bson.ObjectID); ok {
 		return oid.Hex()
 	}
 	return fmt.Sprint(doc["_id"])
 }
 
-func defaultBody(doc evecompat.Doc, render func(any) any) any {
-	body := make(evecompat.Doc, len(doc))
+func defaultBody(doc rest.Doc, render func(any) any) any {
+	body := make(rest.Doc, len(doc))
 	for k, v := range doc {
 		if k != "_id" {
 			body[k] = v

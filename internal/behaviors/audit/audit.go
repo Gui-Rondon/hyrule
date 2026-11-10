@@ -6,15 +6,15 @@ package audit
 import (
 	"context"
 
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/auth"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 // Hooks returns the audit hooks.
-func Hooks() evecompat.Hooks {
-	return evecompat.Hooks{
-		OnInsert: []func(context.Context, []evecompat.Doc) error{
-			func(ctx context.Context, docs []evecompat.Doc) error {
+func Hooks() rest.Hooks {
+	return rest.Hooks{
+		OnInsert: []func(context.Context, []rest.Doc) error{
+			func(ctx context.Context, docs []rest.Doc) error {
 				user := username(ctx)
 				for _, doc := range docs {
 					doc["_updated_user"] = user
@@ -25,14 +25,14 @@ func Hooks() evecompat.Hooks {
 				return nil
 			},
 		},
-		OnUpdate: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(ctx context.Context, updates, original evecompat.Doc) error {
+		OnUpdate: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(ctx context.Context, updates, original rest.Doc) error {
 				stamp(ctx, updates, original)
 				return nil
 			},
 		},
-		OnReplace: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(ctx context.Context, replacement, original evecompat.Doc) error {
+		OnReplace: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(ctx context.Context, replacement, original rest.Doc) error {
 				stamp(ctx, replacement, original)
 				// a PUT replaces the document; in Eve _created_user was lost here
 				if created := original["_created_user"]; created != nil {
@@ -44,7 +44,7 @@ func Hooks() evecompat.Hooks {
 	}
 }
 
-func stamp(ctx context.Context, doc, original evecompat.Doc) {
+func stamp(ctx context.Context, doc, original rest.Doc) {
 	user := username(ctx)
 	doc["_updated_user"] = user
 	if original["_created_user"] == nil {

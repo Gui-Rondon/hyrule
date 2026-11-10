@@ -1,4 +1,4 @@
-package evecompat_test
+package rest_test
 
 import (
 	"context"
@@ -14,13 +14,13 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/auth"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
-func newAPI(t *testing.T, authn *auth.Authenticator, res *evecompat.Resource) (*testkit.Client, *evecompat.Service) {
+func newAPI(t *testing.T, authn *auth.Authenticator, res *rest.Resource) (*testkit.Client, *rest.Service) {
 	t.Helper()
 	db := testkit.Mongo(t)
 	tx, _, err := mongodb.TransactorFor(context.Background(), db.Client())
@@ -30,19 +30,19 @@ func newAPI(t *testing.T, authn *auth.Authenticator, res *evecompat.Resource) (*
 	if res.Store == nil {
 		res.Store = mongodb.NewStore(db.Collection("items"))
 	}
-	api := evecompat.New(evecompat.Options{Auth: authn, Transactor: tx})
+	api := rest.New(rest.Options{Auth: authn, Transactor: tx})
 	svc := api.Register(res)
 	return testkit.NewClient(t, api), svc
 }
 
-func items() *evecompat.Resource {
-	return &evecompat.Resource{
+func items() *rest.Resource {
+	return &rest.Resource{
 		Name: "items",
-		Schema: evecompat.Schema{
-			"name": {Type: evecompat.TypeString},
-			"seo": {Type: evecompat.TypeDict, Schema: evecompat.Schema{
-				"title":       {Type: evecompat.TypeString},
-				"description": {Type: evecompat.TypeString},
+		Schema: rest.Schema{
+			"name": {Type: rest.TypeString},
+			"seo": {Type: rest.TypeDict, Schema: rest.Schema{
+				"title":       {Type: rest.TypeString},
+				"description": {Type: rest.TypeString},
 			}},
 		},
 		ResourceMethods: []string{http.MethodGet, http.MethodPost},
@@ -134,14 +134,14 @@ func TestEveryWriteChangesTheEtag(t *testing.T) {
 
 func TestPreWriteHookErrorAbortsAndRollsBack(t *testing.T) {
 	res := items()
-	var sideEffects *evecompat.Service
-	res.Hooks.OnInsert = append(res.Hooks.OnInsert, func(ctx context.Context, docs []evecompat.Doc) error {
+	var sideEffects *rest.Service
+	res.Hooks.OnInsert = append(res.Hooks.OnInsert, func(ctx context.Context, docs []rest.Doc) error {
 		// written in the same transaction, must be rolled back
 		if _, err := sideEffects.Resource().Store.(mongodb.Store).Collection.Database().Collection("outbox").InsertOne(ctx, bson.M{"x": 1}); err != nil {
 			return err
 		}
 		if docs[0]["name"] == "proibido" {
-			return evecompat.Abort(http.StatusConflict, "nome proibido")
+			return rest.Abort(http.StatusConflict, "nome proibido")
 		}
 		return nil
 	})
@@ -173,8 +173,8 @@ func TestPreWriteHookErrorAbortsAndRollsBack(t *testing.T) {
 
 func TestHooksReceiveChangesAndOriginal(t *testing.T) {
 	res := items()
-	var gotUpdates, gotOriginal evecompat.Doc
-	res.Hooks.OnUpdated = append(res.Hooks.OnUpdated, func(_ context.Context, updates, original evecompat.Doc) error {
+	var gotUpdates, gotOriginal rest.Doc
+	res.Hooks.OnUpdated = append(res.Hooks.OnUpdated, func(_ context.Context, updates, original rest.Doc) error {
 		gotUpdates, gotOriginal = updates, original
 		return nil
 	})
@@ -259,7 +259,7 @@ func TestOptimizedPagination(t *testing.T) {
 
 func TestDatasourceDefaults(t *testing.T) {
 	res := items()
-	res.Datasource = evecompat.Datasource{
+	res.Datasource = rest.Datasource{
 		Projection:  bson.M{"name": 1},
 		DefaultSort: bson.D{{Key: "name", Value: -1}},
 		Filter:      bson.M{"hidden": bson.M{"$ne": true}},
@@ -292,7 +292,7 @@ func TestDatasourceDefaults(t *testing.T) {
 // and items alike.
 func TestClientProjection(t *testing.T) {
 	res := items()
-	res.Datasource = evecompat.Datasource{Projection: bson.M{"name": 1, "seo": 1}}
+	res.Datasource = rest.Datasource{Projection: bson.M{"name": 1, "seo": 1}}
 	res.AllowUnknown = true
 	c, _ := newAPI(t, nil, res)
 	id := c.Do("POST", "/items", map[string]any{"name": "a", "seo": map[string]any{"title": "x", "description": "d"},
@@ -460,32 +460,32 @@ func TestServiceIsUsableWithoutHTTP(t *testing.T) {
 	_, svc := newAPI(t, nil, items())
 	ctx := context.Background()
 
-	docs, err := svc.Insert(ctx, []evecompat.Doc{{"name": "a"}}, evecompat.WriteOptions{})
+	docs, err := svc.Insert(ctx, []rest.Doc{{"name": "a"}}, rest.WriteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	lookup := bson.M{"_id": docs[0]["_id"]}
 	// patch_internal skips the concurrency check by default in Eve
-	updated, err := svc.Patch(ctx, lookup, evecompat.Doc{"name": "b"}, evecompat.WriteOptions{SkipConcurrency: true})
+	updated, err := svc.Patch(ctx, lookup, rest.Doc{"name": "b"}, rest.WriteOptions{SkipConcurrency: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if updated["name"] != "b" {
 		t.Errorf("updated = %v", updated)
 	}
-	_, err = svc.Patch(ctx, lookup, evecompat.Doc{"name": 1}, evecompat.WriteOptions{SkipConcurrency: true})
-	var verr *evecompat.ValidationError
+	_, err = svc.Patch(ctx, lookup, rest.Doc{"name": 1}, rest.WriteOptions{SkipConcurrency: true})
+	var verr *rest.ValidationError
 	if !errors.As(err, &verr) || verr.Issues["name"] != "must be of string type" {
 		t.Errorf("err = %v", err)
 	}
-	if _, err := svc.Get(ctx, bson.M{"_id": bson.NewObjectID()}); !evecompat.IsNotFound(err) {
+	if _, err := svc.Get(ctx, bson.M{"_id": bson.NewObjectID()}); !rest.IsNotFound(err) {
 		t.Errorf("missing document err = %v", err)
 	}
 }
 
 func TestAdditionalLookupIsReadOnly(t *testing.T) {
 	res := items()
-	res.AdditionalLookup = &evecompat.AdditionalLookup{Field: "name", Pattern: regexp.MustCompile(`^[a-z]+$`)}
+	res.AdditionalLookup = &rest.AdditionalLookup{Field: "name", Pattern: regexp.MustCompile(`^[a-z]+$`)}
 	c, _ := newAPI(t, nil, res)
 	c.Do("POST", "/items", map[string]any{"name": "abc"})
 
@@ -499,7 +499,7 @@ func TestAdditionalLookupIsReadOnly(t *testing.T) {
 
 func TestLegacyWerkzeugMessages(t *testing.T) {
 	db := testkit.Mongo(t)
-	api := evecompat.New(evecompat.Options{Messages: evecompat.Werkzeug0})
+	api := rest.New(rest.Options{Messages: rest.Werkzeug0})
 	res := items()
 	res.Store = mongodb.NewStore(db.Collection("items"))
 	api.Register(res)
@@ -515,8 +515,8 @@ func TestLegacyWerkzeugMessages(t *testing.T) {
 // friendly_title and friendly_title_history.
 func TestAdditionalLookupFilter(t *testing.T) {
 	res := items()
-	res.Schema["aliases"] = evecompat.Field{Type: evecompat.TypeList, Items: &evecompat.Field{Type: evecompat.TypeString}}
-	res.AdditionalLookup = &evecompat.AdditionalLookup{
+	res.Schema["aliases"] = rest.Field{Type: rest.TypeList, Items: &rest.Field{Type: rest.TypeString}}
+	res.AdditionalLookup = &rest.AdditionalLookup{
 		Pattern: regexp.MustCompile(`^[a-z-]+$`),
 		Filter: func(v string) bson.M {
 			return bson.M{"$or": bson.A{bson.M{"name": v}, bson.M{"aliases": v}}}
@@ -550,7 +550,7 @@ func TestServiceHelpersForCustomEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.CheckEtag(original, ""); !errors.Is(err, evecompat.ErrPreconditionRequired) {
+	if err := svc.CheckEtag(original, ""); !errors.Is(err, rest.ErrPreconditionRequired) {
 		t.Errorf("no If-Match = %v", err)
 	}
 	if err := svc.CheckEtag(original, "x"); err == nil {
@@ -599,13 +599,13 @@ func TestEve07CustomRoutes(t *testing.T) {
 	res.QueryObjectIDAsString = true
 	res.ResourceTitle = "items-as-string"
 	res.ItemTitle = "items"
-	res.Schema["ref"] = evecompat.Field{Type: evecompat.TypeString}
-	res.Validate = func(_ context.Context, doc, original evecompat.Doc, partial bool) (evecompat.Issues, error) {
+	res.Schema["ref"] = rest.Field{Type: rest.TypeString}
+	res.Validate = func(_ context.Context, doc, original rest.Doc, partial bool) (rest.Issues, error) {
 		if name, ok := doc["name"]; ok && name == "proibido" {
-			return evecompat.Issues{"name": "proibido"}, nil
+			return rest.Issues{"name": "proibido"}, nil
 		}
 		if !partial && doc["ref"] == nil && original == nil {
-			return evecompat.Issues{"ref": "required field"}, nil
+			return rest.Issues{"ref": "required field"}, nil
 		}
 		return nil, nil
 	}

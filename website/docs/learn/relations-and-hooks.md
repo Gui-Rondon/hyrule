@@ -12,21 +12,21 @@ This page builds that resource.
 :::info[You will learn]
 - How a resource references another one (and what hyrule does *not*
   check for you)
-- The shape of `evecompat.Hooks`, and when each kind runs
+- The shape of `rest.Hooks`, and when each kind runs
 - How to compose reusable hooks with `Hooks.Use`
 :::
 
 ## A relation is just a field
 
 ```go
-objectID := evecompat.Field{Type: evecompat.TypeObjectID}
-objectIDs := func(max int) evecompat.Field {
-	return evecompat.Field{Type: evecompat.TypeList, MaxLength: max, Default: []any{}, Items: &objectID}
+objectID := rest.Field{Type: rest.TypeObjectID}
+objectIDs := func(max int) rest.Field {
+	return rest.Field{Type: rest.TypeList, MaxLength: max, Default: []any{}, Items: &objectID}
 }
 
-Schema: evecompat.Schema{
+Schema: rest.Schema{
 	"author_id":   objectID,
-	"category_id": evecompat.Field{Type: evecompat.TypeObjectID, Nullable: true},
+	"category_id": rest.Field{Type: rest.TypeObjectID, Nullable: true},
 	"tags":        objectIDs(50),
 	// ...
 },
@@ -54,9 +54,9 @@ indexing that don't have a transaction of their own.
 `posts-api` defaults a new post's status with an `OnInsert` hook:
 
 ```go
-func draftHook() evecompat.Hooks {
-	return evecompat.Hooks{OnInsert: []func(context.Context, []evecompat.Doc) error{
-		func(_ context.Context, docs []evecompat.Doc) error {
+func draftHook() rest.Hooks {
+	return rest.Hooks{OnInsert: []func(context.Context, []rest.Doc) error{
+		func(_ context.Context, docs []rest.Doc) error {
 			for _, doc := range docs {
 				if s, _ := doc["status"].(string); s == "" {
 					doc["status"] = "draft"

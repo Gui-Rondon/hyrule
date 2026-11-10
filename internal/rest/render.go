@@ -1,4 +1,4 @@
-package evecompat
+package rest
 
 import (
 	"crypto/sha1"

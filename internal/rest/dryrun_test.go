@@ -1,4 +1,4 @@
-package evecompat_test
+package rest_test
 
 import (
 	"bytes"
@@ -15,9 +15,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/Gui-Rondon/hyrule/internal/behaviors/events"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/outbox"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
@@ -26,8 +26,8 @@ import (
 type dryRunAPI struct {
 	real, dry *testkit.Client
 	db        *mongo.Database
-	api       *evecompat.API
-	svc       *evecompat.Service
+	api       *rest.API
+	svc       *rest.Service
 	// post counts the post-write hooks run by the dry run API
 	post map[string]int
 	pre  int
@@ -45,30 +45,30 @@ func newDryRunAPI(t *testing.T) *dryRunAPI {
 		t.Skip("dry run needs a replica set")
 	}
 	d := &dryRunAPI{db: db, post: map[string]int{}}
-	real := evecompat.New(evecompat.Options{Transactor: tx})
+	real := rest.New(rest.Options{Transactor: tx})
 	realRes := items()
 	realRes.Store = mongodb.NewStore(db.Collection("items"))
 	real.Register(realRes)
 
-	d.api = evecompat.New(evecompat.Options{Transactor: mongodb.Transactor{Client: db.Client(), Rollback: true}, DryRun: true})
+	d.api = rest.New(rest.Options{Transactor: mongodb.Transactor{Client: db.Client(), Rollback: true}, DryRun: true})
 	res := items()
 	res.Store = mongodb.NewStore(db.Collection("items"))
 	count := func(event string) { d.mu.Lock(); d.post[event]++; d.mu.Unlock() }
-	res.Hooks.Use(events.Hooks(outbox.New(db)), evecompat.Hooks{
-		OnInsert: []func(context.Context, []evecompat.Doc) error{
-			func(context.Context, []evecompat.Doc) error { d.mu.Lock(); d.pre++; d.mu.Unlock(); return nil },
+	res.Hooks.Use(events.Hooks(outbox.New(db)), rest.Hooks{
+		OnInsert: []func(context.Context, []rest.Doc) error{
+			func(context.Context, []rest.Doc) error { d.mu.Lock(); d.pre++; d.mu.Unlock(); return nil },
 		},
-		OnInserted: []func(context.Context, []evecompat.Doc) error{
-			func(context.Context, []evecompat.Doc) error { count("inserted"); return nil },
+		OnInserted: []func(context.Context, []rest.Doc) error{
+			func(context.Context, []rest.Doc) error { count("inserted"); return nil },
 		},
-		OnUpdated: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(context.Context, evecompat.Doc, evecompat.Doc) error { count("updated"); return nil },
+		OnUpdated: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(context.Context, rest.Doc, rest.Doc) error { count("updated"); return nil },
 		},
-		OnReplaced: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(context.Context, evecompat.Doc, evecompat.Doc) error { count("replaced"); return nil },
+		OnReplaced: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(context.Context, rest.Doc, rest.Doc) error { count("replaced"); return nil },
 		},
-		OnDeleted: []func(context.Context, evecompat.Doc) error{
-			func(context.Context, evecompat.Doc) error { count("deleted"); return nil },
+		OnDeleted: []func(context.Context, rest.Doc) error{
+			func(context.Context, rest.Doc) error { count("deleted"); return nil },
 		},
 	})
 	d.svc = d.api.Register(res)
@@ -142,15 +142,15 @@ func TestDryRunWrites(t *testing.T) {
 
 	// the events of a write go to the outbox in its transaction
 	ctxEvents := events.With(context.Background(), outbox.Event{Topic: "t", Body: "x"})
-	if _, err := d.svc.Insert(ctxEvents, []evecompat.Doc{{"name": "evento"}}, evecompat.WriteOptions{}); err != nil {
+	if _, err := d.svc.Insert(ctxEvents, []rest.Doc{{"name": "evento"}}, rest.WriteOptions{}); err != nil {
 		t.Errorf("Insert with events: %v", err)
 	}
 	res := d.dry.Do("POST", "/items", map[string]any{"name": "novo"})
 	if res.Status != http.StatusCreated || res.String("_status") != "OK" || res.String("_id") == "" {
 		t.Errorf("POST = %d %s", res.Status, res.Raw)
 	}
-	if res.Header.Get(evecompat.HeaderDryRun) != "true" {
-		t.Errorf("POST without %s", evecompat.HeaderDryRun)
+	if res.Header.Get(rest.HeaderDryRun) != "true" {
+		t.Errorf("POST without %s", rest.HeaderDryRun)
 	}
 	if res := d.dry.Do("POST", "/items", map[string]any{"name": 1}); res.Status != http.StatusUnprocessableEntity {
 		t.Errorf("invalid POST = %d", res.Status)
@@ -215,10 +215,10 @@ func TestDryRunWrites(t *testing.T) {
 func TestDryRunReadsAndNestedRequests(t *testing.T) {
 	d := newDryRunAPI(t)
 	logs := captureLogs(t)
-	if res := d.dry.Do("GET", "/items", nil); res.Status != http.StatusOK || res.Header.Get(evecompat.HeaderDryRun) != "true" {
-		t.Errorf("GET = %d, header %q", res.Status, res.Header.Get(evecompat.HeaderDryRun))
+	if res := d.dry.Do("GET", "/items", nil); res.Status != http.StatusOK || res.Header.Get(rest.HeaderDryRun) != "true" {
+		t.Errorf("GET = %d, header %q", res.Status, res.Header.Get(rest.HeaderDryRun))
 	}
-	if res := d.real.Do("GET", "/items", nil); res.Header.Get(evecompat.HeaderDryRun) != "" {
+	if res := d.real.Do("GET", "/items", nil); res.Header.Get(rest.HeaderDryRun) != "" {
 		t.Error("header without dry run")
 	}
 	d.api.Handle("POST /items/copy", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -242,10 +242,10 @@ func TestDryRunReadsAndNestedRequests(t *testing.T) {
 // next request until the mirrored one ends); a nested request keeps it.
 func TestDryRunTimeout(t *testing.T) {
 	logs := captureLogs(t)
-	api := evecompat.New(evecompat.Options{Transactor: evecompat.NoTransaction{}, DryRun: true, DryRunTimeout: 50 * time.Millisecond})
+	api := rest.New(rest.Options{Transactor: rest.NoTransaction{}, DryRun: true, DryRunTimeout: 50 * time.Millisecond})
 	api.Handle("POST /slow", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
-		evecompat.WriteError(w, r, evecompat.Abort(http.StatusServiceUnavailable, ""))
+		rest.WriteError(w, r, rest.Abort(http.StatusServiceUnavailable, ""))
 	}))
 	api.Handle("POST /nested", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r2 := r.Clone(r.Context())
@@ -269,11 +269,11 @@ func TestDryRunTimeout(t *testing.T) {
 	if _, rs, err := mongodb.TransactorFor(context.Background(), db.Client()); err != nil || !rs {
 		t.Skip("dry run needs a replica set")
 	}
-	eve := evecompat.New(evecompat.Options{Transactor: mongodb.Transactor{Client: db.Client(), Rollback: true},
+	eve := rest.New(rest.Options{Transactor: mongodb.Transactor{Client: db.Client(), Rollback: true},
 		DryRun: true, DryRunTimeout: 50 * time.Millisecond})
 	res := items()
 	res.Store = mongodb.NewStore(db.Collection("items"))
-	res.Hooks.OnInsert = []func(context.Context, []evecompat.Doc) error{func(ctx context.Context, _ []evecompat.Doc) error {
+	res.Hooks.OnInsert = []func(context.Context, []rest.Doc) error{func(ctx context.Context, _ []rest.Doc) error {
 		<-ctx.Done()
 		return nil
 	}}
@@ -289,7 +289,7 @@ func TestDryRunTimeout(t *testing.T) {
 	}
 
 	var deadline bool
-	real := evecompat.New(evecompat.Options{Transactor: evecompat.NoTransaction{}, DryRunTimeout: 50 * time.Millisecond})
+	real := rest.New(rest.Options{Transactor: rest.NoTransaction{}, DryRunTimeout: 50 * time.Millisecond})
 	real.Handle("GET /deadline", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, deadline = r.Context().Deadline()
 	}))
@@ -302,7 +302,7 @@ func TestDryRunTimeout(t *testing.T) {
 // The status recorder of the dry run writes keeps http.ResponseController
 // working (Flush, deadlines).
 func TestDryRunResponseController(t *testing.T) {
-	api := evecompat.New(evecompat.Options{Transactor: evecompat.NoTransaction{}, DryRun: true})
+	api := rest.New(rest.Options{Transactor: rest.NoTransaction{}, DryRun: true})
 	var flushErr error
 	api.Handle("POST /flush", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
@@ -317,13 +317,13 @@ func TestDryRunResponseController(t *testing.T) {
 // mirrored reads, and the slow ones are the ones to count.
 func TestDryRunReadTimeout(t *testing.T) {
 	logs := captureLogs(t)
-	api := evecompat.New(evecompat.Options{Transactor: evecompat.NoTransaction{}, DryRun: true, DryRunTimeout: 50 * time.Millisecond})
+	api := rest.New(rest.Options{Transactor: rest.NoTransaction{}, DryRun: true, DryRunTimeout: 50 * time.Millisecond})
 	api.Handle("GET /slow", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
-		evecompat.WriteError(w, r, evecompat.Abort(http.StatusServiceUnavailable, ""))
+		rest.WriteError(w, r, rest.Abort(http.StatusServiceUnavailable, ""))
 	}))
 	api.Handle("GET /fast", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		evecompat.WriteJSON(w, http.StatusOK, map[string]any{})
+		rest.WriteJSON(w, http.StatusOK, map[string]any{})
 	}))
 	c := testkit.NewClient(t, api)
 	if res := c.Do("GET", "/fast", nil); res.Status != http.StatusOK {

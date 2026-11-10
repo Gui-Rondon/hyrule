@@ -21,8 +21,8 @@ import (
 	"context"
 	"maps"
 
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/outbox"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 type key struct{}
@@ -34,23 +34,23 @@ func With(ctx context.Context, events ...outbox.Event) context.Context {
 }
 
 // Hooks store the events of the context in box during every pre-write hook.
-func Hooks(box *outbox.Outbox) evecompat.Hooks {
+func Hooks(box *outbox.Outbox) rest.Hooks {
 	add := func(ctx context.Context) error {
 		pending, _ := ctx.Value(key{}).([]outbox.Event)
 		return box.Add(ctx, pending...)
 	}
-	return evecompat.Hooks{
-		OnInsert: []func(context.Context, []evecompat.Doc) error{
-			func(ctx context.Context, _ []evecompat.Doc) error { return add(ctx) },
+	return rest.Hooks{
+		OnInsert: []func(context.Context, []rest.Doc) error{
+			func(ctx context.Context, _ []rest.Doc) error { return add(ctx) },
 		},
-		OnUpdate: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(ctx context.Context, _, _ evecompat.Doc) error { return add(ctx) },
+		OnUpdate: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(ctx context.Context, _, _ rest.Doc) error { return add(ctx) },
 		},
-		OnReplace: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(ctx context.Context, _, _ evecompat.Doc) error { return add(ctx) },
+		OnReplace: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(ctx context.Context, _, _ rest.Doc) error { return add(ctx) },
 		},
-		OnDelete: []func(context.Context, evecompat.Doc) error{
-			func(ctx context.Context, _ evecompat.Doc) error { return add(ctx) },
+		OnDelete: []func(context.Context, rest.Doc) error{
+			func(ctx context.Context, _ rest.Doc) error { return add(ctx) },
 		},
 	}
 }
@@ -61,17 +61,17 @@ func Hooks(box *outbox.Outbox) evecompat.Hooks {
 // insert. On update, where the hook only carries the changed fields, doc is
 // original shallow-merged with updates — enough for a Condition that reads
 // simple top-level fields such as status.
-func ConditionalHooks(box *outbox.Outbox, cond outbox.Condition) evecompat.Hooks {
-	onWrite := func(ctx context.Context, doc, original evecompat.Doc) error {
+func ConditionalHooks(box *outbox.Outbox, cond outbox.Condition) rest.Hooks {
+	onWrite := func(ctx context.Context, doc, original rest.Doc) error {
 		events, ok := cond(ctx, doc, original)
 		if !ok {
 			return nil
 		}
 		return box.Add(ctx, events...)
 	}
-	return evecompat.Hooks{
-		OnInsert: []func(context.Context, []evecompat.Doc) error{
-			func(ctx context.Context, docs []evecompat.Doc) error {
+	return rest.Hooks{
+		OnInsert: []func(context.Context, []rest.Doc) error{
+			func(ctx context.Context, docs []rest.Doc) error {
 				for _, doc := range docs {
 					if err := onWrite(ctx, doc, nil); err != nil {
 						return err
@@ -80,15 +80,15 @@ func ConditionalHooks(box *outbox.Outbox, cond outbox.Condition) evecompat.Hooks
 				return nil
 			},
 		},
-		OnUpdate: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(ctx context.Context, updates, original evecompat.Doc) error {
+		OnUpdate: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(ctx context.Context, updates, original rest.Doc) error {
 				merged := maps.Clone(original)
 				maps.Copy(merged, updates)
 				return onWrite(ctx, merged, original)
 			},
 		},
-		OnReplace: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(ctx context.Context, replacement, original evecompat.Doc) error {
+		OnReplace: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(ctx context.Context, replacement, original rest.Doc) error {
 				return onWrite(ctx, replacement, original)
 			},
 		},

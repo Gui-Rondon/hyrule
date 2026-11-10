@@ -1,4 +1,4 @@
-package evecompat_test
+package rest_test
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
@@ -128,7 +128,7 @@ func TestHomeCache(t *testing.T) {
 	if res := c.Do("GET", "/", nil); res.Header.Get("Cache-Control") != "" || res.Header.Get("Expires") != "" {
 		t.Errorf("no global cache: %v", res.Header)
 	}
-	api := evecompat.New(evecompat.Options{CacheControl: "max-age=20", CacheExpires: 20})
+	api := rest.New(rest.Options{CacheControl: "max-age=20", CacheExpires: 20})
 	res := testkit.NewClient(t, api).Do("GET", "/", nil)
 	exp, err := http.ParseTime(res.Header.Get("Expires"))
 	if res.Header.Get("Cache-Control") != "max-age=20" || err != nil || time.Until(exp) > 21*time.Second || time.Until(exp) < 18*time.Second {
@@ -219,28 +219,28 @@ func TestHardDelete(t *testing.T) {
 func TestCustomEndpointHelpers(t *testing.T) {
 	keys := testkit.NewKeys(t)
 	db := testkit.Mongo(t)
-	api := evecompat.New(evecompat.Options{Auth: keys.Authenticator(t)})
+	api := rest.New(rest.Options{Auth: keys.Authenticator(t)})
 	res := items()
 	res.Store = mongodb.NewStore(db.Collection("items"))
-	res.PublicMethods = evecompat.PublicGET
+	res.PublicMethods = rest.PublicGET
 	api.Register(res)
 	svc := api.Service("items")
 	if svc == nil || api.ResourceURLs()[0] != "items" {
 		t.Fatal("service not registered")
 	}
 	api.Handle("POST /items/{id}/rename", api.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := evecompat.ReadBody(r)
+		body, err := rest.ReadBody(r)
 		if err != nil {
-			evecompat.WriteError(w, r, err)
+			rest.WriteError(w, r, err)
 			return
 		}
 		oid, _ := bson.ObjectIDFromHex(r.PathValue("id"))
-		doc, err := svc.Patch(r.Context(), bson.M{"_id": oid}, evecompat.Doc{"name": body["name"]}, evecompat.WriteOptions{SkipConcurrency: true})
+		doc, err := svc.Patch(r.Context(), bson.M{"_id": oid}, rest.Doc{"name": body["name"]}, rest.WriteOptions{SkipConcurrency: true})
 		if err != nil {
-			evecompat.WriteError(w, r, err)
+			rest.WriteError(w, r, err)
 			return
 		}
-		evecompat.WriteJSON(w, http.StatusOK, svc.ItemBody(doc))
+		rest.WriteJSON(w, http.StatusOK, svc.ItemBody(doc))
 	})))
 	c := testkit.NewClient(t, api)
 	token := "Token " + keys.Token(t, "fulano")
@@ -267,13 +267,13 @@ func TestCustomEndpointHelpers(t *testing.T) {
 }
 
 func TestErrorTypes(t *testing.T) {
-	if (&evecompat.Error{Status: 404}).Error() != "Not Found" || evecompat.Abort(400, "x").Error() != "x" {
+	if (&rest.Error{Status: 404}).Error() != "Not Found" || rest.Abort(400, "x").Error() != "x" {
 		t.Error("Error()")
 	}
-	if (&evecompat.ValidationError{}).Error() == "" || (&evecompat.InsertError{}).Error() == "" || (&evecompat.PreconditionFailedError{}).Error() == "" {
+	if (&rest.ValidationError{}).Error() == "" || (&rest.InsertError{}).Error() == "" || (&rest.PreconditionFailedError{}).Error() == "" {
 		t.Error("empty messages")
 	}
-	if (evecompat.ErrDeniedOperator{Operator: "$where"}).Error() == "" {
+	if (rest.ErrDeniedOperator{Operator: "$where"}).Error() == "" {
 		t.Error("denied operator message")
 	}
 }
@@ -285,7 +285,7 @@ func TestQueryTimeout(t *testing.T) {
 	db := testkit.Mongo(t)
 	res := items()
 	res.Store = mongodb.NewStore(db.Collection("items"))
-	api := evecompat.New(evecompat.Options{QueryTimeout: time.Nanosecond})
+	api := rest.New(rest.Options{QueryTimeout: time.Nanosecond})
 	api.Register(res)
 	c := testkit.NewClient(t, api)
 	for _, path := range []string{"/items", "/items/" + bson.NewObjectID().Hex()} {

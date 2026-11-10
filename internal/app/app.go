@@ -28,13 +28,13 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/auth"
 	"github.com/Gui-Rondon/hyrule/internal/platform/config"
 	"github.com/Gui-Rondon/hyrule/internal/platform/health"
 	"github.com/Gui-Rondon/hyrule/internal/platform/metrics"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
 	"github.com/Gui-Rondon/hyrule/internal/platform/server"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 // Spec describes a service.
@@ -47,9 +47,9 @@ type Spec struct {
 	// Setup registers the resources, custom endpoints and checkers.
 	Setup func(ctx context.Context, env *Env) error
 	// Messages are the default error texts: nil (Werkzeug1), or
-	// evecompat.Werkzeug0 for an API that really runs Werkzeug 0.11.
-	Messages evecompat.Messages
-	// HTMLForbidden is evecompat.Options.HTMLForbidden (Eve 0.7 without 403
+	// rest.Werkzeug0 for an API that really runs Werkzeug 0.11.
+	Messages rest.Messages
+	// HTMLForbidden is rest.Options.HTMLForbidden (Eve 0.7 without 403
 	// in STANDARD_ERRORS).
 	HTMLForbidden bool
 	// CacheControl and CacheExpires are Eve's global CACHE_CONTROL and
@@ -69,7 +69,7 @@ type Spec struct {
 	NoDryRun string
 }
 
-// defaultDryRunTimeout limits each request in dry run (evecompat.Options)
+// defaultDryRunTimeout limits each request in dry run (rest.Options)
 // when DRY_RUN_TIMEOUT is not set: the mirror holds the client's next
 // request until the mirrored one ends.
 const defaultDryRunTimeout = 3 * time.Second
@@ -81,7 +81,7 @@ const defaultQueryTimeout = 10 * time.Second
 type Env struct {
 	Config config.Config
 	DB     *mongo.Database
-	API    *evecompat.API
+	API    *rest.API
 	Info   health.Info
 	// DryRun: the writes are rolled back, the post-write hooks and the
 	// background tasks do not run. A service whose routes have other
@@ -93,10 +93,10 @@ type Env struct {
 	wrappers []func(http.Handler) http.Handler
 }
 
-// Store builds the evecompat.Store of a collection, for Setup to assign to
-// evecompat.Resource.Store. DB stays available directly for anything that
+// Store builds the rest.Store of a collection, for Setup to assign to
+// rest.Resource.Store. DB stays available directly for anything that
 // needs the raw *mongo.Database (health checks, indexes, a custom query).
-func (e *Env) Store(collection string) evecompat.Store {
+func (e *Env) Store(collection string) rest.Store {
 	return mongodb.NewStore(e.DB.Collection(collection))
 }
 
@@ -260,7 +260,7 @@ func Build(ctx context.Context, spec Spec, deps Deps) (http.Handler, error) {
 	env := &Env{
 		Config: deps.Config,
 		DB:     deps.DB,
-		API: evecompat.New(evecompat.Options{
+		API: rest.New(rest.Options{
 			Auth: authn, Transactor: tx, Messages: spec.Messages, HTMLForbidden: spec.HTMLForbidden,
 			CacheControl: spec.CacheControl, CacheExpires: spec.CacheExpires,
 			QueryTimeout: queryTimeout, DryRun: dryRun, DryRunTimeout: dryRunTimeout,
@@ -312,16 +312,16 @@ func Build(ctx context.Context, spec Spec, deps Deps) (http.Handler, error) {
 // stripURLPrefix serves next under prefix; any other path is the Eve 404.
 func stripURLPrefix(prefix string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rest, ok := strings.CutPrefix(r.URL.Path, prefix)
-		if !ok || rest != "" && !strings.HasPrefix(rest, "/") {
-			evecompat.WriteError(w, r, evecompat.ErrNotFound)
+		tail, ok := strings.CutPrefix(r.URL.Path, prefix)
+		if !ok || tail != "" && !strings.HasPrefix(tail, "/") {
+			rest.WriteError(w, r, rest.ErrNotFound)
 			return
 		}
-		if rest == "" {
-			rest = "/"
+		if tail == "" {
+			tail = "/"
 		}
 		r2 := r.Clone(r.Context())
-		r2.URL.Path = rest
+		r2.URL.Path = tail
 		r2.URL.RawPath = ""
 		next.ServeHTTP(w, r2)
 	})

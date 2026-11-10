@@ -10,9 +10,9 @@ import (
 
 	"github.com/Gui-Rondon/hyrule/internal/behaviors/events"
 	"github.com/Gui-Rondon/hyrule/internal/declarative"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/outbox"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
@@ -70,7 +70,7 @@ func TestParseAndBuild(t *testing.T) {
 		t.Errorf("item methods = %v", res.ItemMethods)
 	}
 	name, ok := res.Schema["name"]
-	if !ok || name.Type != evecompat.TypeString || !name.Required {
+	if !ok || name.Type != rest.TypeString || !name.Required {
 		t.Errorf("name field = %+v", name)
 	}
 	slug, ok := res.Schema["slug"]
@@ -78,7 +78,7 @@ func TestParseAndBuild(t *testing.T) {
 		t.Errorf("slug field = %+v", slug)
 	}
 	enabled, ok := res.Schema["enabled"]
-	if !ok || enabled.Type != evecompat.TypeBoolean || enabled.Default != true {
+	if !ok || enabled.Type != rest.TypeBoolean || enabled.Default != true {
 		t.Errorf("enabled field = %+v", enabled)
 	}
 }
@@ -108,11 +108,11 @@ resources:
 		t.Fatal(err)
 	}
 	tags := res.Schema["tags"]
-	if tags.Type != evecompat.TypeList || tags.Items == nil || tags.Items.Type != evecompat.TypeString {
+	if tags.Type != rest.TypeList || tags.Items == nil || tags.Items.Type != rest.TypeString {
 		t.Errorf("tags field = %+v", tags)
 	}
 	seo := res.Schema["seo"]
-	if seo.Type != evecompat.TypeDict || seo.Schema == nil || seo.Schema["title"].Type != evecompat.TypeString {
+	if seo.Type != rest.TypeDict || seo.Schema == nil || seo.Schema["title"].Type != rest.TypeString {
 		t.Errorf("seo field = %+v", seo)
 	}
 }
@@ -186,19 +186,19 @@ resources:
 		t.Fatal(err)
 	}
 	res.Hooks.Use(events.ConditionalHooks(box, cond))
-	svc := evecompat.NewService(res, tx)
+	svc := rest.NewService(res, tx)
 	ctx := context.Background()
 	count := func() int64 {
 		n, _ := box.Collection().CountDocuments(ctx, bson.M{})
 		return n
 	}
 
-	docs, err := svc.Insert(ctx, []evecompat.Doc{{"status": "draft"}}, evecompat.WriteOptions{})
+	docs, err := svc.Insert(ctx, []rest.Doc{{"status": "draft"}}, rest.WriteOptions{})
 	if err != nil || count() != 0 {
 		t.Fatalf("insert draft: %v, events %d", err, count())
 	}
 	lookup := bson.M{"_id": docs[0]["_id"]}
-	if _, err := svc.Patch(ctx, lookup, evecompat.Doc{"status": "published"}, evecompat.WriteOptions{SkipConcurrency: true}); err != nil || count() != 1 {
+	if _, err := svc.Patch(ctx, lookup, rest.Doc{"status": "published"}, rest.WriteOptions{SkipConcurrency: true}); err != nil || count() != 1 {
 		t.Fatalf("patch to published: %v, events %d", err, count())
 	}
 }

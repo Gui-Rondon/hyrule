@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Resource via YAML
@@ -68,7 +68,7 @@ Method names accept either case (`get` or `GET`).
 
 ## What has no YAML equivalent
 
-Two fields of `evecompat.Field`/`Resource` carry arbitrary Go code, not
+Two fields of `rest.Field`/`Resource` carry arbitrary Go code, not
 data — so they can't be expressed here:
 
 - **`Field.Check`**: custom validation of a field (e.g. checking against
@@ -80,6 +80,6 @@ Outside the schema, `Resource.Datasource` (`bson.M` filters/projection)
 and every `Hooks` kind (`OnInsert`, `OnUpdate`, outbox, search,
 audit...) are also out of the loader's scope — a resource that needs any
 of those stays in Go. A resource built from YAML is a plain
-`*evecompat.Resource`, so nothing stops you from attaching hooks to it in
+`*rest.Resource`, so nothing stops you from attaching hooks to it in
 Go before registering — `internal/declarative/declarative_test.go`'s
 `TestBuiltResourceComposesWithConditionalOutbox` does exactly that.

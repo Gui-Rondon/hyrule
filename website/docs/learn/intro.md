@@ -13,12 +13,12 @@ transactional outbox for emitting events exactly once per write.
 You can describe that resource two ways. In Go:
 
 ```go
-res := &evecompat.Resource{
+res := &rest.Resource{
 	Name:  "tags",
 	Store: env.Store("tags"),
-	Schema: evecompat.Schema{
-		"name": {Type: evecompat.TypeString, Required: true},
-		"slug": {Type: evecompat.TypeString, Required: true, Unique: true},
+	Schema: rest.Schema{
+		"name": {Type: rest.TypeString, Required: true},
+		"slug": {Type: rest.TypeString, Required: true, Unique: true},
 	},
 }
 env.API.Register(res)

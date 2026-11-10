@@ -10,32 +10,32 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/Gui-Rondon/hyrule/internal/app"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 var slugRe = regexp.MustCompile(`^[\w-]+$`)
 
 func setup(_ context.Context, env *app.Env) error {
 	store := env.Store("categories")
-	res := &evecompat.Resource{
+	res := &rest.Resource{
 		Name:      "categories",
 		ItemTitle: "category",
 		Store:     store,
-		Schema: evecompat.Schema{
-			"name":        {Type: evecompat.TypeString, Required: true},
-			"slug":        {Type: evecompat.TypeString, Required: true, Unique: true, Regex: slugRe},
-			"description": {Type: evecompat.TypeString},
-			"parent_id":   {Type: evecompat.TypeObjectID, Nullable: true},
-			"path":        {Type: evecompat.TypeString},
-			"enabled":     {Type: evecompat.TypeBoolean, Default: true},
+		Schema: rest.Schema{
+			"name":        {Type: rest.TypeString, Required: true},
+			"slug":        {Type: rest.TypeString, Required: true, Unique: true, Regex: slugRe},
+			"description": {Type: rest.TypeString},
+			"parent_id":   {Type: rest.TypeObjectID, Nullable: true},
+			"path":        {Type: rest.TypeString},
+			"enabled":     {Type: rest.TypeBoolean, Default: true},
 		},
-		Datasource:        evecompat.Datasource{DefaultSort: bson.D{{Key: "name", Value: 1}}},
-		AdditionalLookup:  &evecompat.AdditionalLookup{Field: "slug", Pattern: slugRe},
+		Datasource:        rest.Datasource{DefaultSort: bson.D{{Key: "name", Value: 1}}},
+		AdditionalLookup:  &rest.AdditionalLookup{Field: "slug", Pattern: slugRe},
 		ResourceMethods:   []string{http.MethodGet, http.MethodPost},
 		ItemMethods:       []string{http.MethodGet, http.MethodPatch, http.MethodPut},
-		PublicMethods:     evecompat.PublicGET,
-		PublicItemMethods: evecompat.PublicGET,
-		QueryDenylist:     evecompat.DefaultQueryDenylist,
+		PublicMethods:     rest.PublicGET,
+		PublicItemMethods: rest.PublicGET,
+		QueryDenylist:     rest.DefaultQueryDenylist,
 	}
 	res.Hooks.Use(pathHooks(store))
 
@@ -52,7 +52,7 @@ type category = map[string]any
 
 // loadAll reads every category through the Store interface — no
 // *mongo.Collection anywhere in this file.
-func loadAll(ctx context.Context, store evecompat.Store) ([]category, error) {
+func loadAll(ctx context.Context, store rest.Store) ([]category, error) {
 	return store.Find(ctx, bson.M{}, 0, 0, nil, nil)
 }
 
@@ -110,31 +110,31 @@ func byPath(roots []category, path string) category {
 }
 
 // treeHandler serves GET /categories/tree[/path].
-func treeHandler(store evecompat.Store) http.Handler {
+func treeHandler(store rest.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("path")
 		docs, err := loadAll(r.Context(), store)
 		if err != nil {
-			evecompat.WriteError(w, r, err)
+			rest.WriteError(w, r, err)
 			return
 		}
 		roots := buildTree(docs)
 		if path == "" {
-			evecompat.WriteJSON(w, http.StatusOK, roots)
+			rest.WriteJSON(w, http.StatusOK, roots)
 			return
 		}
 		node := byPath(roots, path)
 		if node == nil {
-			evecompat.WriteError(w, r, evecompat.ErrNotFound)
+			rest.WriteError(w, r, rest.ErrNotFound)
 			return
 		}
-		evecompat.WriteJSON(w, http.StatusOK, node)
+		rest.WriteJSON(w, http.StatusOK, node)
 	})
 }
 
 // pathHooks keep "path" (parent's path + "/" + slug) correct on every
 // write, reading the current tree inside the write transaction.
-func pathHooks(store evecompat.Store) evecompat.Hooks {
+func pathHooks(store rest.Store) rest.Hooks {
 	pathFor := func(ctx context.Context, parentID any, slug string) (string, error) {
 		id := idString(parentID)
 		if id == "" {
@@ -146,9 +146,9 @@ func pathHooks(store evecompat.Store) evecompat.Hooks {
 		}
 		return strAt(parent, "path") + "/" + slug, nil
 	}
-	return evecompat.Hooks{
-		OnInsert: []func(context.Context, []evecompat.Doc) error{
-			func(ctx context.Context, docs []evecompat.Doc) error {
+	return rest.Hooks{
+		OnInsert: []func(context.Context, []rest.Doc) error{
+			func(ctx context.Context, docs []rest.Doc) error {
 				for _, doc := range docs {
 					p, err := pathFor(ctx, doc["parent_id"], strAt(doc, "slug"))
 					if err != nil {
@@ -159,15 +159,15 @@ func pathHooks(store evecompat.Store) evecompat.Hooks {
 				return nil
 			},
 		},
-		OnReplace: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(ctx context.Context, doc, _ evecompat.Doc) error {
+		OnReplace: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(ctx context.Context, doc, _ rest.Doc) error {
 				p, err := pathFor(ctx, doc["parent_id"], strAt(doc, "slug"))
 				doc["path"] = p
 				return err
 			},
 		},
-		OnUpdate: []func(context.Context, evecompat.Doc, evecompat.Doc) error{
-			func(ctx context.Context, updates, original evecompat.Doc) error {
+		OnUpdate: []func(context.Context, rest.Doc, rest.Doc) error{
+			func(ctx context.Context, updates, original rest.Doc) error {
 				slug := strAt(original, "slug")
 				if s, ok := updates["slug"].(string); ok {
 					slug = s

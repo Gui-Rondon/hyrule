@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # Dry run: run everything, write nothing
@@ -25,7 +25,7 @@ DRY_RUN=1 DRY_RUN_TIMEOUT=10s ./my-api
 - Post-write hooks (`OnInserted`, `OnUpdated`, `OnReplaced`,
   `OnDeleted`) don't run — they reach systems outside the transaction
   (ES, Pub/Sub...), which have no rollback. See `runPost` in
-  `internal/evecompat/service.go`.
+  `internal/rest/service.go`.
 - Background tasks registered with `env.Go` (the outbox relay, for
   instance) don't start.
 - `DRY_RUN_TIMEOUT` caps every request (default 3s,
@@ -38,7 +38,7 @@ DRY_RUN=1 DRY_RUN_TIMEOUT=10s ./my-api
 
 ## The write-outside-a-transaction tripwire
 
-Not every write goes through the normal `evecompat.Service` path — a
+Not every write goes through the normal `rest.Service` path — a
 custom endpoint can write straight to the `Store`. If that write isn't
 inside a transaction, the automatic rollback never reaches it: it would
 actually be stored, even in dry run.

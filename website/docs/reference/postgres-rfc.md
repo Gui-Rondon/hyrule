@@ -1,0 +1,147 @@
+---
+sidebar_position: 9
+---
+
+# RFC: a Postgres backend
+
+This page is a design document, not a feature reference: it records the
+open questions for a second, non-Mongo backend, and a recommendation for
+each — not something already built. Today there is a scaffold
+(`internal/platform/postgres`: a `Store`-shaped type with its own filter
+type, proven to compile and follow the same pattern as
+`internal/platform/mongodb`) and nothing wired to `rest` yet. Treat
+every "recommended" below as a starting position for discussion, not a
+decision already made; the two points marked open are explicitly not
+decided.
+
+## Why this exists
+
+[`store.md`](store.md) and [`architecture.md`](architecture.md) already
+say, explicitly, that today's storage portability is the `Store`
+*interface*, not the query language or the error semantics:
+`rest.Store`'s methods are typed in `bson.M`/`bson.D`, and
+`rest.Service`'s error translation (`queryError`, `duplicateKey` in
+`internal/rest/service.go`) checks Mongo driver types directly
+(`mongo.IsDuplicateKeyError`, `mongo.ServerError` codes, `mongo.IsTimeout`).
+That was a deliberate choice for the first round, not an oversight — this
+RFC is the "next round" those pages point to.
+
+## 1. The shape of a Postgres `Store`
+
+**Decided.** `internal/platform/postgres.Store` does not try to satisfy
+`rest.Store` — that interface is intentionally Mongo-shaped. Instead it
+has its own method set, patterned after it (`Find`, `CountDocuments`,
+`FindOne`, `InsertMany`, `UpdateOne`, `ReplaceOne`, `DeleteOne`), with
+Postgres-native types for the filter/update instead of `bson.M`/`bson.D`.
+This mirrors how `mongodb.Store` already "structurally satisfies"
+`rest.Store` without importing `rest` — the same pattern, a different
+package, with its own types.
+
+Explicitly **not** pursued: a shared filter AST that both `mongodb.Store`
+and `postgres.Store` compile from. `where=` stays Mongo's query language
+as-is; a Postgres-backed resource defines its own filtering convention,
+on its own schedule — not a translation of Mongo operators into SQL.
+
+## 2. How a resource would actually use it — open
+
+This is the question the interface split above doesn't answer:
+`rest.Resource.Store` is typed to the Mongo-shaped `Store` interface
+today, so a Postgres `Store` can't just be swapped in. Two paths, neither
+chosen yet:
+
+- **Bypass `rest` entirely (lower cost, recommended starting point).** A
+  Postgres-backed resource talks to `platform/postgres.Store` directly
+  from its own HTTP handler, the way `internal/outbox` already talks to
+  `*mongo.Collection` directly, on purpose, bypassing `rest.Store`
+  (`architecture.md`: "Storage is a decision separate from events").
+  It gets none of `rest`'s machinery for free — no `where=`, no Eve-style
+  pagination/links/etags — and defines its own query string convention.
+- **Generify `rest.Store`/`Service`/`Resource` (bigger lift, not
+  attempted yet).** Go generics (`Store[F, U any]`) could let `rest`
+  keep driving pagination/links/etags for both backends, with each
+  backend supplying its own filter type `F` and update type `U`. This
+  touches most of `internal/rest/service.go` and forces a decision on
+  what else has to become backend-pluggable — starting with point 3
+  below, since `queryError`/`duplicateKey` can't stay hardcoded to Mongo
+  error types once a second backend is real.
+
+## 3. Errors
+
+`internal/rest/service.go`'s `queryError`/`duplicateKey` check Mongo
+driver types directly today. A Postgres equivalent would check
+`*pgconn.PgError`:
+
+| Mongo today | Postgres equivalent | Meaning |
+|---|---|---|
+| `mongo.IsDuplicateKeyError` | `Code == "23505"` (`unique_violation`) | → 409 on insert, 400 on update/replace, same as `duplicateKey` does today |
+| error codes `2`, `9`, `51091`, `51108` (`clientQueryErrors`) | `22P02` (`invalid_text_representation`), `42601` (`syntax_error`), and similar | → 400, client-caused |
+| `mongo.IsTimeout` / `context.DeadlineExceeded` | statement/context timeout | → 503, same as today |
+
+Not pursued yet: a shared error-classification interface across
+backends. Point 2 above has to land first — there's no single place to
+hang it on until then.
+
+## 4. Indexes
+
+`internal/platform/mongodb`'s `IndexSpec`/`indices.conf` format
+(directions `1`, `-1`, `text`, `hashed`, `2dsphere`; options `unique`,
+`sparse`, `name=`, `ttl=`) is Mongo-shaped end to end — see
+[Query performance today](store.md#query-performance-today). A Postgres
+equivalent needs its own format, not a reuse of this parser: index
+*type* (`btree` default, `gin` for `jsonb`/array/full-text, `gist` for
+geometric/range types, `brin` for large naturally-ordered tables) instead
+of direction, plus partial and expression indexes, which have no Mongo
+equivalent at all. No native `ttl` — Postgres needs a cron job or trigger
+for expiry.
+
+## 5. Shape of the data — open, no recommendation yet
+
+Mongo stores schemaless documents; `rest.Doc` is `map[string]any`
+everywhere in `rest`/`declarative`. Postgres is relational, and there
+are two genuinely different ways to land on it, registered here without
+a recommendation:
+
+- **Columnar.** A resource's `rest.Schema`/declarative YAML would need
+  to generate real table DDL (and migrations). Gets native types and
+  indexing, the actual reason to reach for Postgres — but gives up the
+  schemaless `Doc` assumption baked into `rest`/`internal/declarative`
+  today.
+- **A single `jsonb` column.** Nearly zero translation — `Doc =
+  map[string]any` maps onto `jsonb` almost directly — but weakens the
+  case for Postgres in the first place: you'd mostly be buying
+  transactional/relational guarantees, not typed columns or real
+  indexing.
+
+## 6. Aggregations — not a parity gap
+
+Unlike Mongo, Postgres doesn't need an aggregation-pipeline escape hatch
+the way `categories-api`'s `GET /categories/tree` needs one today (see
+[`store.md`](store.md#places-that-still-go-straight-to-mongo-on-purpose)):
+joins, window functions and CTEs are native SQL. Recorded here so it
+isn't mistaken for a missing feature later — it's a difference in kind,
+not something Postgres support still owes.
+
+## 7. Driver
+
+**Recommended:** [`github.com/jackc/pgx/v5`](https://github.com/jackc/pgx)
+(`pgxpool` for pooling). It matches the project's existing pattern of a
+direct, idiomatic driver with no ORM in between (`mongo-driver/v2`,
+`go-redis/v9`), and `pgconn.PgError` gives the error codes in point 3
+natively, without a second parsing layer.
+
+## What exists today
+
+- `internal/platform/postgres.Store`: the method set above, backed by
+  `pgxpool.Pool`, with an equality-only filter (`map[string]any` read as
+  `column: value`, no operators) — real but intentionally minimal; not
+  the resting place for point 1's filter design, just enough to prove
+  the shape compiles and has somewhere to grow.
+- `internal/platform/postgres.IsDuplicateKeyError`/`IsTimeout`: the two
+  checks from point 3's table, mirroring `mongo-driver`'s helpers of the
+  same name.
+- A `postgres` service in `docker-compose.yml`, alongside `mongo`,
+  `redis` and `pubsub`, so the scaffold's tests run against a real
+  database, not a mock.
+- No change to `internal/rest` or any existing resource — this is an
+  isolated, new package; nothing above carries any regression risk for
+  what's in production today.

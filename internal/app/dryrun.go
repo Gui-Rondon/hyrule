@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/config"
 	"github.com/Gui-Rondon/hyrule/internal/platform/health"
 	"github.com/Gui-Rondon/hyrule/internal/platform/mongodb"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 )
 
 // DryRun tells whether the service runs in dry run, from the DRY_RUN
@@ -89,6 +89,6 @@ func (e *Env) RefuseInDryRun(reason string, h http.Handler) http.Handler {
 		return h
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		evecompat.WriteError(w, r, evecompat.Abort(http.StatusServiceUnavailable, "dry run: "+reason))
+		rest.WriteError(w, r, rest.Abort(http.StatusServiceUnavailable, "dry run: "+reason))
 	})
 }

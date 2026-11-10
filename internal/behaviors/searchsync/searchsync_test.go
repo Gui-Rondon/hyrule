@@ -8,29 +8,29 @@ import (
 	"time"
 
 	"github.com/Gui-Rondon/hyrule/internal/behaviors/searchsync"
-	"github.com/Gui-Rondon/hyrule/internal/evecompat"
 	"github.com/Gui-Rondon/hyrule/internal/platform/search"
+	"github.com/Gui-Rondon/hyrule/internal/rest"
 	"github.com/Gui-Rondon/hyrule/internal/testkit"
 )
 
 func newAPI(t *testing.T, opts ...searchsync.Option) (*testkit.Client, *testkit.ESRecorder) {
 	t.Helper()
 	es := testkit.NewES(t)
-	res := &evecompat.Resource{
+	res := &rest.Resource{
 		Name:            "items",
 		Store:           testkit.Store(t, "items"),
-		Schema:          evecompat.Schema{"name": {Type: evecompat.TypeString}},
+		Schema:          rest.Schema{"name": {Type: rest.TypeString}},
 		ResourceMethods: []string{http.MethodGet, http.MethodPost},
 		ItemMethods:     []string{http.MethodGet, http.MethodPatch, http.MethodDelete},
 	}
 	res.Hooks.Use(searchsync.Hooks(search.New([]string{es.URL}), "items", opts...))
-	api := evecompat.New(evecompat.Options{})
+	api := rest.New(rest.Options{})
 	api.Register(res)
 	return testkit.NewClient(t, api), es
 }
 
 func TestTransformAndDelete(t *testing.T) {
-	c, es := newAPI(t, searchsync.WithTransform(func(d evecompat.Doc) any {
+	c, es := newAPI(t, searchsync.WithTransform(func(d rest.Doc) any {
 		return map[string]any{"title": d["name"]}
 	}))
 	created := c.Do("POST", "/items", map[string]any{"name": "a"})
@@ -66,7 +66,7 @@ func TestIndexFailureIsNotAnError(t *testing.T) {
 }
 
 func TestID(t *testing.T) {
-	if got := searchsync.ID(evecompat.Doc{"_id": "abc"}); got != "abc" {
+	if got := searchsync.ID(rest.Doc{"_id": "abc"}); got != "abc" {
 		t.Errorf("ID = %q", got)
 	}
 }
@@ -85,7 +85,7 @@ func TestPatchIndexesNewMetaWithOffset(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("calls = %+v", calls)
 	}
-	at, err := time.Parse(evecompat.DateFormat, updated.String("_updated"))
+	at, err := time.Parse(rest.DateFormat, updated.String("_updated"))
 	if err != nil {
 		t.Fatal(err)
 	}

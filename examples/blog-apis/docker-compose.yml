@@ -1,6 +1,6 @@
 # Adds Elasticsearch to the framework's own docker-compose.yml (mongo,
-# pubsub, redis), for posts-api/authors-api/tags-api's optional search
-# indexing (internal/behaviors/searchsync).
+# pubsub, redis, postgres), for posts-api/authors-api/tags-api's optional
+# search indexing (internal/behaviors/searchsync).
 #
 # From the repo root: docker compose -f examples/blog-apis/docker-compose.yml --profile debug up
 include:
