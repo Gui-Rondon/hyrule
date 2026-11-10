@@ -127,7 +127,111 @@ not something Postgres support still owes.
 (`pgxpool` for pooling). It matches the project's existing pattern of a
 direct, idiomatic driver with no ORM in between (`mongo-driver/v2`,
 `go-redis/v9`), and `pgconn.PgError` gives the error codes in point 3
-natively, without a second parsing layer.
+natively, without a second parsing layer. It also satisfies everything
+points 8 and 9 below need — `LISTEN`/`NOTIFY`, `FOR UPDATE SKIP LOCKED`,
+`COPY`, batching, pool tuning — none of it requires a different driver
+or a second library.
+
+## 8. Security: SQL injection and beyond
+
+Today's scaffold has no raw-SQL-from-untrusted-input problem: every
+value reaches the database as a query parameter (`$N`), never built into
+the query text, and every identifier — table and column names — goes
+through `pgx.Identifier{...}.Sanitize()`, the same technique as
+Postgres' own `quote_ident()`, before being concatenated into SQL.
+There's no path from a `Filter`/`SortField`/column-list value to raw SQL
+text today.
+
+That holds because today's only caller is Go code written by whoever
+wires up the `Store` — the same trust model `mongodb.Store` has. It
+stops holding the moment point 2 is resolved and an HTTP request's
+`sort=`/`projection=`-equivalent query string, or a write's body, feeds
+`SortField.Column`, the `columns []string` argument, or `Filter`'s keys
+directly. `Sanitize()` still prevents *injection* in that case — a field
+named `x"; DROP TABLE y; --` renders as a syntactically safe, useless
+column reference, not executable SQL — but it doesn't prevent
+*unauthorized access*: nothing stops a client from asking to sort by, or
+read, a column the resource's Schema never meant to expose. Whatever
+bridges HTTP to `postgres.Store` needs to validate every client-supplied
+column name against an allowlist — the resource's declared Schema —
+before it reaches `Store`, the same job `rest` already does for Mongo by
+rejecting unknown fields during validation. Syntactic sanitization and
+authorization are two different jobs; today's code only does the first,
+because nothing calls it with untrusted column names yet.
+
+Two more gaps a production Postgres backend has that the scaffold
+doesn't close yet:
+
+- **A query timeout.** Nothing sets `statement_timeout` today, so a
+  pathological filter can hold a pool connection indefinitely —
+  `IsTimeout` already anticipates the resulting error (code `57014`),
+  but nothing produces it yet. `pgxpool.Config.ConnConfig.RuntimeParams`
+  (or a per-call `SET LOCAL statement_timeout`) closes this.
+- **A connection string that enforces TLS appropriately for the
+  environment** (`sslmode=require`/`verify-full` outside local dev) —
+  the same operational question `mongodb`'s connection setup already
+  answers, just not yet written down for Postgres (see point 9's
+  `Connect` gap).
+
+A future, richer filter language (point 1 isn't decided) carries the
+same rule forward: whatever syntax replaces equality-only `Filter`,
+every value it accepts — including a `LIKE` pattern — must still become
+a bound parameter, never text spliced into the query. It's the same
+posture Mongo's own `where=` takes with its operator denylist (`$where`,
+`$function`, `$accumulator` block code execution, not just bad syntax —
+see [`querying.md`](querying.md)).
+
+## 9. Beyond parity: what Postgres can do that this scaffold doesn't use yet
+
+Everything above is about reaching the shape Mongo's `Store` already
+has. Postgres also has capabilities this framework's Mongo side doesn't
+— not required for parity, but worth naming so a future round doesn't
+have to rediscover them. `pgx/v5` already covers all of it; none of this
+needs a different driver.
+
+- **A transactional outbox that doesn't need a separate transaction
+  mechanism.** `internal/outbox` writes to Mongo's `outbox` collection in
+  the same multi-document transaction as the resource write — a real
+  feature, but one Mongo needs a replica set and an explicit
+  `WithTransaction` for. In Postgres, writing a resource row and its
+  outbox row together is the default: one `BEGIN`/`COMMIT`, no special
+  setup. The relay side can go further than polling, too — a trigger
+  that `NOTIFY`s on insert, plus a relay that `LISTEN`s
+  (`pgx.Conn.Exec(ctx, "LISTEN outbox_insert")` +
+  `conn.WaitForNotification(ctx)`), delivers new events with no polling
+  latency, and `SELECT ... FOR UPDATE SKIP LOCKED` lets several relay
+  workers dequeue concurrently without fighting over the same rows —
+  plain SQL, nothing pgx-specific to add. The one real wrinkle: `LISTEN`/
+  `NOTIFY` needs a single dedicated connection held open for the relay's
+  lifetime, not `pgxpool.Pool`'s normal acquire-per-call pattern — the
+  listening connection can't be one the pool hands to someone else
+  mid-wait. Getting this for real means giving `internal/outbox` a
+  Postgres-shaped counterpart (it's hardcoded to `*mongo.Collection`
+  today) — a refactor that depends on point 2 landing first, not
+  something to start before there's a real Postgres-backed resource to
+  emit events from.
+- **Bulk inserts via `COPY`, not batched `INSERT`s.** `InsertMany` today
+  batches one `INSERT` per doc via `pgx.Batch` (see [`store.md`](store.md))
+  — correct, but `pgx.CopyFrom` is substantially faster for large
+  slices, using Postgres' binary copy protocol instead of N insert
+  statements. Worth it once `InsertMany` is handling production-sized
+  batches, not before.
+- **Real query plans.** [Query performance today](store.md#query-performance-today)
+  already contrasts Mongo's no-`explain()` story with `EXPLAIN ANALYZE`;
+  nothing in the scaffold surfaces it yet. A `Store.Explain` that runs
+  `EXPLAIN (FORMAT JSON) <query>` and returns the plan would be a small
+  addition once there's a real query worth tuning.
+- **Connection pool tuning.** `pgxpool.New` today takes the connection
+  string's own defaults — no exposed `MaxConns`/`MinConns`/health-check
+  interval, the way `mongodb.Connect` reads `mongo.*` config keys. A
+  `postgres.Connect`/`postgres.URI` pair mirroring `mongodb.go`'s is the
+  natural place for that, and for point 8's TLS/timeout settings — new
+  code, not a refactor of `Store` itself.
+
+One thing *not* on this list: pgx doesn't do read/write splitting or
+connection routing across replicas — that's a deployment concern
+(PgBouncer/PgCat, or several `pgxpool.Pool`s keyed by role), not
+something the driver or this `Store` should take on.
 
 ## What exists today
 

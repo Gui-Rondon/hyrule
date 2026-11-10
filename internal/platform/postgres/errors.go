@@ -15,8 +15,8 @@ const uniqueViolation = "23505"
 const queryCanceled = "57014"
 
 // IsDuplicateKeyError reports a unique constraint violation, mirroring
-// mongo.IsDuplicateKeyError for the error translation the Postgres RFC
-// (point 3) still needs a home for.
+// mongo.IsDuplicateKeyError for the error translation postgres-rfc.md's
+// point 3 still needs a home for.
 func IsDuplicateKeyError(err error) bool {
 	pgErr, ok := errors.AsType[*pgconn.PgError](err)
 	return ok && pgErr.Code == uniqueViolation

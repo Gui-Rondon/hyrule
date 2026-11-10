@@ -1,8 +1,9 @@
 // Package postgres is a scaffold: a Store-shaped type that proves the
 // pattern internal/platform/mongodb.Store already follows (its own types,
 // not an implementation of rest.Store) works for a second backend. See
-// the Postgres RFC (website/docs/reference/postgres-rfc.md) for what's
-// still open — most notably, no resource is wired to this yet.
+// the "Adding a Postgres backend" design notes
+// (website/docs/reference/postgres-rfc.md) for what's still open —
+// most notably, no resource is wired to this yet.
 package postgres
 
 import (
@@ -16,7 +17,7 @@ import (
 )
 
 // Store wraps a *pgxpool.Pool and one table. Unlike mongodb.Store, this
-// does not implement rest.Store — see the RFC's point 1.
+// does not implement rest.Store — see postgres-rfc.md's point 1.
 type Store struct {
 	Pool  *pgxpool.Pool
 	Table string
@@ -26,8 +27,8 @@ type Store struct {
 func NewStore(pool *pgxpool.Pool, table string) Store { return Store{Pool: pool, Table: table} }
 
 // Filter is equality only — column: value, ANDed together. No Mongo-style
-// operators; a richer filter language is explicitly not decided yet (RFC
-// point 1).
+// operators; a richer filter language is explicitly not decided yet
+// (postgres-rfc.md's point 1).
 type Filter map[string]any
 
 // SortField is one ORDER BY term.
@@ -202,7 +203,7 @@ func (s Store) UpdateOne(ctx context.Context, filter, update Filter) (int64, err
 
 // ReplaceOne is UpdateOne with every key of replacement as the SET list —
 // columns the table has that replacement doesn't are left untouched,
-// unlike Mongo's full-document replace. See the Postgres RFC.
+// unlike Mongo's full-document replace. See postgres-rfc.md.
 func (s Store) ReplaceOne(ctx context.Context, filter Filter, replacement map[string]any) (int64, error) {
 	return s.UpdateOne(ctx, filter, Filter(replacement))
 }
