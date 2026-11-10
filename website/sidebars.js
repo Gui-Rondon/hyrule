@@ -33,6 +33,8 @@ const sidebars = {
         'reference/observability',
         'reference/architecture',
         'reference/postgres-rfc',
+        'reference/architecture-decisions',
+        'reference/roadmap',
       ],
     },
   ],
