@@ -2,6 +2,9 @@
 
 # hyrule
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/Gui-Rondon/hyrule.svg)](https://pkg.go.dev/github.com/Gui-Rondon/hyrule)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A Go framework for building REST APIs on top of Mongo: describe a
 resource (schema, methods, lookups) and get full CRUD with validation,
 ETags, pagination and a transactional outbox — in Go, or with no Go at
