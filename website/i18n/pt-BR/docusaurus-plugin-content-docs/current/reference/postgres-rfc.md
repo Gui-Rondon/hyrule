@@ -2,7 +2,7 @@
 sidebar_position: 9
 ---
 
-# RFC: um backend Postgres
+# Adicionando um backend Postgres
 
 Esta página é um documento de design, não uma referência de feature: ela
 registra as decisões abertas para um segundo backend, além do Mongo, e
@@ -24,7 +24,7 @@ explicitamente, que a portabilidade de storage de hoje é a *interface*
 `internal/rest/service.go`) checa tipos do driver Mongo direto
 (`mongo.IsDuplicateKeyError`, códigos de `mongo.ServerError`,
 `mongo.IsTimeout`). Isso foi uma escolha deliberada pra primeira rodada,
-não um descuido — esta RFC é a "próxima rodada" que essas páginas
+não um descuido — esta página é a "próxima rodada" que essas páginas
 apontam.
 
 ## 1. A forma de um `Store` do Postgres
@@ -138,7 +138,11 @@ segunda camada de parsing.
   `pgxpool.Pool`, com um filtro só de igualdade (`map[string]any` lido
   como `coluna: valor`, sem operadores) — real, mas intencionalmente
   mínimo; não é o lugar de descanso do design de filtro do ponto 1, só o
-  suficiente pra provar que a forma compila e tem onde crescer.
+  suficiente pra provar que a forma compila e tem onde crescer. Um valor
+  `nil` significa `IS NULL` (não o `= NULL` do SQL, que é sempre falso),
+  e `InsertMany` rejeita qualquer doc cujas chaves não batam exatamente
+  com as de `docs[0]`, em vez de escrever `NULL` silenciosamente ou
+  descartar uma coluna.
 - `internal/platform/postgres.IsDuplicateKeyError`/`IsTimeout`: as duas
   checagens da tabela do ponto 3, espelhando os helpers de mesmo nome do
   `mongo-driver`.
@@ -148,3 +152,19 @@ segunda camada de parsing.
 - Nenhuma mudança em `internal/rest` nem em nenhum recurso existente —
   é um pacote novo e isolado; nada acima carrega risco de regressão pro
   que já está em produção hoje.
+
+Usado isolado, do jeito que o caminho recomendado do ponto 2 propõe
+(sem `rest` em volta, igual a `internal/outbox` falando com
+`*mongo.Collection` direto):
+
+```go
+pool, err := pgxpool.New(ctx, os.Getenv("POSTGRES_CONNECTION_STRING"))
+store := postgres.NewStore(pool, "tags")
+
+docs, err := store.Find(ctx, postgres.Filter{"status": "draft"}, 0, 10,
+	[]postgres.SortField{{Column: "created_at", Desc: true}}, nil)
+```
+
+Compare com o trecho do Mongo em [`store.md`](store.md) — mesma forma
+(`NewStore`, `Find` com filtro/skip/limit/sort/colunas), tipo de filtro
+diferente, e ainda sem um `rest.Resource` envolvendo isso.

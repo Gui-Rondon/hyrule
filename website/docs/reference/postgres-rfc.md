@@ -2,7 +2,7 @@
 sidebar_position: 9
 ---
 
-# RFC: a Postgres backend
+# Adding a Postgres backend
 
 This page is a design document, not a feature reference: it records the
 open questions for a second, non-Mongo backend, and a recommendation for
@@ -24,7 +24,7 @@ say, explicitly, that today's storage portability is the `Store`
 `internal/rest/service.go`) checks Mongo driver types directly
 (`mongo.IsDuplicateKeyError`, `mongo.ServerError` codes, `mongo.IsTimeout`).
 That was a deliberate choice for the first round, not an oversight — this
-RFC is the "next round" those pages point to.
+page is the "next round" those pages point to.
 
 ## 1. The shape of a Postgres `Store`
 
@@ -135,7 +135,10 @@ natively, without a second parsing layer.
   `pgxpool.Pool`, with an equality-only filter (`map[string]any` read as
   `column: value`, no operators) — real but intentionally minimal; not
   the resting place for point 1's filter design, just enough to prove
-  the shape compiles and has somewhere to grow.
+  the shape compiles and has somewhere to grow. A `nil` value means
+  `IS NULL` (not SQL's always-false `= NULL`), and `InsertMany` rejects
+  any doc whose keys don't exactly match `docs[0]`'s, rather than
+  silently writing `NULL`s or dropping a column.
 - `internal/platform/postgres.IsDuplicateKeyError`/`IsTimeout`: the two
   checks from point 3's table, mirroring `mongo-driver`'s helpers of the
   same name.
@@ -145,3 +148,19 @@ natively, without a second parsing layer.
 - No change to `internal/rest` or any existing resource — this is an
   isolated, new package; nothing above carries any regression risk for
   what's in production today.
+
+Used standalone, the way point 2's recommended path does (no `rest` in
+sight, same as `internal/outbox` talking to `*mongo.Collection`
+directly):
+
+```go
+pool, err := pgxpool.New(ctx, os.Getenv("POSTGRES_CONNECTION_STRING"))
+store := postgres.NewStore(pool, "tags")
+
+docs, err := store.Find(ctx, postgres.Filter{"status": "draft"}, 0, 10,
+	[]postgres.SortField{{Column: "created_at", Desc: true}}, nil)
+```
+
+Compare with the Mongo snippet in [`store.md`](store.md) — same shape
+(`NewStore`, `Find` with a filter/skip/limit/sort/columns), different
+filter type and no `rest.Resource` wrapping it yet.

@@ -11,7 +11,7 @@ hyrule gives you a working API: CRUD, request validation, ETags for
 optimistic concurrency, pagination, and a transactional outbox for
 emitting events exactly once per write. Backed by MongoDB today
 (Postgres support in progress — see the
-[Postgres RFC](/docs/reference/postgres-rfc)).
+[Postgres backend](/docs/reference/postgres-rfc) page).
 
 Speed doesn't stop at scaffolding: `testkit` gives every test an
 isolated database and an HTTP client with no service to stand up, and

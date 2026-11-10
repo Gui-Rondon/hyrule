@@ -42,7 +42,7 @@ exactly what it's there for, to be the glue between the two.
   Mongo driver returns. A real second backend (`internal/platform/postgres`
   today has only a scaffold, no resource wired to it yet) needs more than
   a new `Store` implementation — see [`store.md`](store.md) and the
-  [Postgres RFC](postgres-rfc.md) for what's still open.
+  [Postgres backend](postgres-rfc.md) page for what's still open.
 - **YAML covers data, not code.** `internal/declarative` expresses
   everything that's already plain data in `rest.Schema`/
   `Field`/`Resource`; `Field.Check`, `Resource.Validate`,

@@ -43,7 +43,7 @@ justamente pra ser a cola entre os dois.
   (`internal/platform/postgres` hoje é só um esqueleto, sem nenhum
   recurso ligado a ele ainda) exige mais do que uma nova implementação
   de `Store` — ver [`docs/store.md`](store.md) e a
-  [RFC do Postgres](postgres-rfc.md) pro que ainda está aberto.
+  [backend Postgres](postgres-rfc.md) pro que ainda está aberto.
 - **O YAML cobre dado, não código.** `internal/declarative` expressa tudo
   que já é plano em `rest.Schema`/`Field`/`Resource`; `Field.Check`,
   `Resource.Validate`, `Resource.Datasource` e todos os `Hooks` carregam

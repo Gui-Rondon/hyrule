@@ -33,6 +33,17 @@ res := &rest.Resource{Store: store, ...}
 In a service (`app.Env`), use `env.Store("collection-name")` instead of
 building the wrapper by hand.
 
+`internal/platform/postgres.Store` follows the same `NewStore`-wraps-a-
+client, `Find`/`FindOne`/... shape, for a relational database — it just
+isn't an implementation of the interface above (see
+[Postgres backend](postgres-rfc.md) for why), so nothing here wires it
+to a `rest.Resource` yet:
+
+```go
+store := postgres.NewStore(pool, "tags")
+docs, err := store.Find(ctx, postgres.Filter{"status": "draft"}, 0, 10, nil, nil)
+```
+
 ## What this decouples — and what it doesn't
 
 This interface decides **who talks to the database**, not **the language
@@ -52,7 +63,7 @@ In practice that means:
   `internal/rest/service.go` (`queryError`, `duplicateKey`) still
   assume Mongo. `internal/platform/postgres` has a first scaffold (its
   own `Store`-shaped type, not an implementation of this interface —
-  see the [Postgres RFC](postgres-rfc.md) for why and for what's still
+  see [Postgres backend](postgres-rfc.md) for why and for what's still
   open), but no resource is wired to it yet.
 
 ## Query performance today
@@ -86,7 +97,7 @@ Postgres' default index is a btree, with `gin` for `jsonb`/array/full-text
 columns, `gist` for geometric/range types and `brin` for large,
 naturally-ordered tables; there's no native `ttl` (it needs a cron job or
 trigger), and `EXPLAIN ANALYZE` gives a real query plan where Mongo's
-`where=` gives none. See the [Postgres RFC](postgres-rfc.md) for where
+`where=` gives none. See [Postgres backend](postgres-rfc.md) for where
 that's headed.
 
 ## Places that still go straight to Mongo, on purpose

@@ -74,7 +74,7 @@ The full docs are at **https://gui-rondon.github.io/hyrule/**:
 | [Reference → Testkit](https://gui-rondon.github.io/hyrule/docs/reference/testkit) | testing a resource (isolated Mongo, HTTP client, tokens) |
 | [Reference → Architecture](https://gui-rondon.github.io/hyrule/docs/reference/architecture) | the `services → behaviors → rest → platform` layering, and why it exists |
 | [Reference → Querying](https://gui-rondon.github.io/hyrule/docs/reference/querying) | the `where=`/`sort`/`projection` query language and how it's parsed |
-| [Reference → Postgres RFC](https://gui-rondon.github.io/hyrule/docs/reference/postgres-rfc) | the open design questions for a second, non-Mongo backend |
+| [Reference → Postgres backend](https://gui-rondon.github.io/hyrule/docs/reference/postgres-rfc) | the open design questions for a second, non-Mongo backend |
 
 ## Layout
 

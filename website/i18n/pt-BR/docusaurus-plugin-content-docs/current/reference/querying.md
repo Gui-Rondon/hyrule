@@ -108,6 +108,25 @@ resposta.
 `show_deleted` (presença, não o valor) inclui documentos soft-deleted num
 recurso com `SoftDelete` — convenção do próprio Eve.
 
+## Num backend relacional
+
+Nada do que foi dito acima é agnóstico de Mongo — `where=` **é** a
+linguagem de query do Mongo, operadores incluídos.
+`internal/platform/postgres.Filter` não carrega nada disso: é só
+igualdade (`coluna: valor`, combinados com AND, um valor `nil`
+significando `IS NULL`), sem `$gt`/`$in`/denylist pra falar, porque não
+há linguagem de query em JSON pra parsear, pra começo de conversa:
+
+```go
+docs, err := store.Find(ctx, postgres.Filter{"status": "published"}, 0, 10,
+	[]postgres.SortField{{Column: "published_at", Desc: true}}, nil)
+```
+
+Mesma forma do skip/limit/sort/colunas do `Find` acima, uma linguagem de
+filtro mais estreita de propósito — ver
+[backend Postgres](postgres-rfc.md) pro porquê de uma mais rica ainda não
+estar decidida.
+
 ## Otimizando essas queries
 
 Nada do que foi dito acima torna uma query rápida por si só — ver

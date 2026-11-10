@@ -32,6 +32,17 @@ res := &rest.Resource{Store: store, ...}
 Em um serviço (`app.Env`), use `env.Store("nome-da-colecao")` em vez de
 montar o wrapper na mão.
 
+`internal/platform/postgres.Store` segue a mesma forma — `NewStore`
+embrulha um client, `Find`/`FindOne`/... — pra um banco relacional; só
+não é uma implementação da interface acima (ver
+[backend Postgres](postgres-rfc.md) pro porquê), então nada aqui ainda
+liga isso a um `rest.Resource`:
+
+```go
+store := postgres.NewStore(pool, "tags")
+docs, err := store.Find(ctx, postgres.Filter{"status": "draft"}, 0, 10, nil, nil)
+```
+
 ## O que isso desacopla — e o que não desacopla
 
 Esta interface decide **quem fala com o banco**, não **em que linguagem a
@@ -50,7 +61,7 @@ Na prática isso quer dizer:
   (`queryError`, `duplicateKey`) ainda assumem Mongo.
   `internal/platform/postgres` já tem um primeiro esqueleto (seu próprio
   tipo no formato de `Store`, não uma implementação desta interface — ver
-  a [RFC do Postgres](postgres-rfc.md) pro porquê e pro que ainda está
+  [backend Postgres](postgres-rfc.md) pro porquê e pro que ainda está
   aberto), mas nenhum recurso está ligado a ele ainda.
 
 ## Performance de query hoje
@@ -84,8 +95,8 @@ pro Postgres: o índice padrão do Postgres é btree, com `gin` pra colunas
 `jsonb`/array/full-text, `gist` pra tipos geométricos/de intervalo e
 `brin` pra tabelas grandes e naturalmente ordenadas; não há `ttl` nativo
 (precisa de cron ou trigger), e `EXPLAIN ANALYZE` dá um plano de query de
-verdade onde o `where=` do Mongo não dá nenhum. Ver a
-[RFC do Postgres](postgres-rfc.md) pra onde isso está indo.
+verdade onde o `where=` do Mongo não dá nenhum. Ver
+[backend Postgres](postgres-rfc.md) pra onde isso está indo.
 
 ## Pontos que ainda usam Mongo direto, de propósito
 

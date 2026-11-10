@@ -107,6 +107,24 @@ every matching document comes back in one response.
 `show_deleted` (presence, not value) includes soft-deleted documents on
 a `SoftDelete` resource — Eve's own convention.
 
+## On a relational backend
+
+None of the above is Mongo-agnostic — `where=` *is* Mongo's query
+language, operators included. `internal/platform/postgres.Filter`
+doesn't carry any of this over: it's equality-only (`column: value`,
+ANDed together, a `nil` value meaning `IS NULL`), no `$gt`/`$in`/denylist
+to speak of, because there's no JSON query language to parse in the
+first place:
+
+```go
+docs, err := store.Find(ctx, postgres.Filter{"status": "published"}, 0, 10,
+	[]postgres.SortField{{Column: "published_at", Desc: true}}, nil)
+```
+
+Same shape as `Find`'s skip/limit/sort/columns above, a narrower filter
+language on purpose — see [Postgres backend](postgres-rfc.md) for why a
+richer one isn't decided yet.
+
 ## Optimizing these queries
 
 None of the above makes a query fast on its own — see
