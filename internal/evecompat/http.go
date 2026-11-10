@@ -41,7 +41,7 @@ type Options struct {
 	// When it runs out the response is 503 (D-27).
 	QueryTimeout time.Duration
 	// DryRun marks every response with X-Dry-Run, logs the writes and skips
-	// the post-write hooks. The Transactor must roll back (docs/dry-run.md).
+	// the post-write hooks. The Transactor must roll back.
 	DryRun bool
 	// DryRunTimeout limits each request in dry run; 0 means no limit. The
 	// mirror of ingress-nginx holds the client's next request on the

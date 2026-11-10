@@ -20,8 +20,10 @@ of capabilities.
 docker compose -f examples/blog-apis/docker-compose.yml --profile debug up -d --wait
 
 SERVICES_DIR=examples/blog-apis/services make build SERVICE=posts-api
+echo '{"auth": {"enable": "false"}, "pubsub": {"project_id": "local-dev"}}' > config.json
 MONGO_CONNECTION_STRING='mongodb://localhost:27018/posts?directConnection=true' \
-  PORT=8081 CONFIG_FILE=/dev/null .local/posts-api
+  PUBSUB_EMULATOR_HOST=localhost:8085 \
+  PORT=8081 CONFIG_FILE=config.json .local/posts-api
 ```
 
 Without a `CONFIG_FILE` pointing at a file with
@@ -34,4 +36,4 @@ the local config.
 
 This example isn't the framework — it's just a *use* of it. hyrule's own
 documentation (the `Store` interface, the conditional outbox, resources
-via YAML) lives in [`docs/`](../../docs/README.md) at the repo root.
+via YAML) lives at **https://gui-rondon.github.io/hyrule/**.

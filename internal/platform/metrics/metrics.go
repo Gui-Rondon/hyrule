@@ -1,6 +1,8 @@
-// Package metrics exposes the Prometheus metrics of an API at /metrics
-// (docs/observability.md): the duration and the response size of every
-// request by method, route and status, plus the Go runtime and the process.
+// Package metrics exposes the Prometheus metrics of an API at /metrics:
+// the duration and the response size of every request by method, route
+// and status, plus the Go runtime and the process.
+//
+// https://gui-rondon.github.io/hyrule/docs/reference/observability
 //
 // The route is the pattern of the mux (e.g. "GET /posts/{lookup}"), set by
 // evecompat with SetRoute; a request no route matched is "unmatched", so a
@@ -35,7 +37,7 @@ type Metrics struct {
 }
 
 // New registers the collectors of service; dryRun goes to every series, to
-// tell dry-run traffic apart from the rest (docs/dry-run.md).
+// tell dry-run traffic apart from the rest.
 func New(service string, dryRun bool) *Metrics {
 	labels := prometheus.Labels{"service": service, "dry_run": strconv.FormatBool(dryRun)}
 	m := &Metrics{

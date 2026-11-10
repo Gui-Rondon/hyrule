@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-// The cases of docs/ci.md against the real import graph of the repository
-// (the examples/blog-apis reference adopter).
+// The real import graph of the repository (the examples/blog-apis
+// reference adopter), exercised end to end.
 func TestRealGraph(t *testing.T) {
 	const dir = "examples/blog-apis/services"
 	const deployDir = "examples/blog-apis/deploy"

@@ -19,8 +19,7 @@ type Info struct {
 	// Branch is the content of git_branch.txt, written by the CI build job.
 	Branch string
 	// DryRun adds "dry_run": true to /status and /healthcheck, so a client
-	// can tell dry-run traffic apart (docs/dry-run.md). Without dry run the
-	// bodies are Eve's.
+	// can tell dry-run traffic apart. Without dry run the bodies are Eve's.
 	DryRun bool
 }
 
