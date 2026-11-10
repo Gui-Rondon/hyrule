@@ -5,7 +5,7 @@ import {themes as prismThemes} from 'prism-react-renderer';
 const config = {
   title: 'hyrule',
   tagline: 'A Go framework for building REST APIs on MongoDB',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/logo.png',
 
   future: {
     v4: true,
@@ -55,7 +55,7 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      image: 'img/logo.svg',
+      image: 'img/logo.png',
       colorMode: {
         respectPrefersColorScheme: true,
       },
@@ -63,7 +63,7 @@ const config = {
         title: 'hyrule',
         logo: {
           alt: 'hyrule logo',
-          src: 'img/logo.svg',
+          src: 'img/logo.png',
         },
         items: [
           {
