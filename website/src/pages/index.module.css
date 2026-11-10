@@ -34,6 +34,14 @@
   margin: 0 auto;
   text-align: left;
   border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: white;
+  padding: 1rem 1.25rem;
+}
+
+.codeTeaser code {
+  background: transparent;
+  color: inherit;
 }
 
 .cards {

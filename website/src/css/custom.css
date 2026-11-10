@@ -28,3 +28,18 @@
   --ifm-color-primary-lightest: #4fddbf;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
 }
+
+/* With only 2 footer columns, Infima's default .col (flex: 1 0; width:
+   100%) stretches each to half of the full-bleed footer container,
+   leaving "More" stranded near the horizontal middle of the page.
+   Size them to their content and space them out instead. */
+.footer__links {
+  flex-grow: 0;
+  gap: 4rem;
+}
+
+.footer__col {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
+}
