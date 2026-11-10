@@ -16,6 +16,12 @@ services:
     # and index, and the default 1024 descriptors abort mongod mid-suite
     ulimits:
       nofile: {soft: 64000, hard: 64000}
+    environment:
+      # mongod's bundled TCMalloc violates the rseq ABI on Linux 6.19+
+      # (kernel regression, fixed upstream in 7.0.14; mongod still blocks
+      # startup below that). This disables glibc's own rseq registration
+      # so TCMalloc's doesn't clash. See https://jira.mongodb.org/browse/SERVER-121912
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
     ports:
       - "127.0.0.1:27018:27017"
     healthcheck:
