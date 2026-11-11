@@ -1,6 +1,6 @@
 // @ts-check
 import {execSync} from 'node:child_process';
-import {themes as prismThemes} from 'prism-react-renderer';
+import hyruleCodeTheme from './src/prism/hyruleTheme.js';
 
 // The nearest release tag (e.g. "v0.100.0"), or null off a shallow clone
 // with no tags (the local working copy still builds, just without the
@@ -72,8 +72,10 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       image: 'img/logo.png',
+      // false (the default) keeps the navbar toggle a 2-state light/dark
+      // switch; true adds a third "system" state to the same button.
       colorMode: {
-        respectPrefersColorScheme: true,
+        respectPrefersColorScheme: false,
       },
       navbar: {
         title: 'hyrule',
@@ -143,8 +145,11 @@ const config = {
         copyright: `Copyright © ${new Date().getFullYear()} Guilherme Rondon. MIT licensed.`,
       },
       prism: {
-        theme: prismThemes.github,
-        darkTheme: prismThemes.dracula,
+        // Same dark forest/charcoal theme in both modes: code blocks are
+        // deliberately always dark, independent of the page's own
+        // light/dark toggle (see src/prism/hyruleTheme.js).
+        theme: hyruleCodeTheme,
+        darkTheme: hyruleCodeTheme,
         additionalLanguages: ['go', 'yaml', 'bash', 'json'],
       },
     }),

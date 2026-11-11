@@ -17,11 +17,11 @@
      colorful thing on the page — actually looks different after
      toggling light/dark, instead of making the toggle look like it
      didn't do anything. */
-  background: linear-gradient(135deg, #1f7a3c 0%, #b8860c 100%);
+  background: linear-gradient(135deg, #344d3b 0%, #b78b4c 100%);
 }
 
 [data-theme='dark'] .heroBanner {
-  background: linear-gradient(135deg, #123d21 0%, #7a5c12 100%);
+  background: linear-gradient(135deg, #192c24 0%, #644c2a 100%);
 }
 
 @media screen and (max-width: 996px) {
@@ -41,6 +41,16 @@
 .secondaryButton {
   color: white;
   border-color: white;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* A gold glint on hover, not a static border recolor: --hy-gold reads at
+   ~3:1 against white text/border at the gradient's own gold stop (tested
+   against #b78b4c), too low to use as a resting-state border — white
+   stays the one color legible across the whole gradient. */
+.secondaryButton:hover {
+  background-color: rgba(183, 139, 76, 0.2);
+  border-color: var(--hy-gold);
 }
 
 .codeTeaser {
@@ -78,14 +88,26 @@
   row-gap: 1.5rem;
 }
 
+/* "Wooden sign" feel: a restrained border in the palette's own tones
+   (not Infima's generic gray emphasis color) plus a soft shadow instead
+   of a heavier frame, modest corner radius. Light/dark use each other's
+   border color (moss on parchment, parchment on moss) — both measured
+   at the same 5.46:1 contrast against their own card surface. */
 .card {
   height: 100%;
   padding: 1.5rem;
-  border-radius: 8px;
-  border: 1px solid var(--ifm-color-emphasis-200);
-  transition: border-color 0.15s ease;
+  border-radius: 6px;
+  border: 1px solid var(--hy-moss);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-theme='dark'] .card {
+  border-color: var(--hy-parchment-aged);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 .card:hover {
   border-color: var(--hy-gold);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
