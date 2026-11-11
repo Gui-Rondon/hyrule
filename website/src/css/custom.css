@@ -119,3 +119,62 @@ pre {
   display: block;
   overflow-x: auto;
 }
+
+/* Callout recolor (:::tip/:::warning/:::danger/:::info), mapped onto
+   Infima's 4 existing alert variants rather than inventing a 5th
+   admonition type — Docusaurus's own ":::danger" is reused here as the
+   brief's "Important" (antique gold), not as an alarm color. Each variant
+   sets its own --ifm-alert-* trio directly (background/foreground/
+   border); overriding the global --ifm-color-{success,info,...} vars
+   instead would also recolor badges and other unrelated alert users. */
+.alert--success {
+  --ifm-alert-background-color: #dce4d5;
+  --ifm-alert-background-color-highlight: rgba(95, 122, 94, 0.15);
+  --ifm-alert-foreground-color: #1f2e22;
+  --ifm-alert-border-color: #5f7a5e;
+}
+
+[data-theme='dark'] .alert--success {
+  --ifm-alert-background-color: #26372b;
+  --ifm-alert-foreground-color: #cfe0c9;
+  --ifm-alert-border-color: #5f7a5e;
+}
+
+.alert--warning {
+  --ifm-alert-background-color: #f0e3c8;
+  --ifm-alert-background-color-highlight: rgba(185, 138, 61, 0.15);
+  --ifm-alert-foreground-color: #4a3414;
+  --ifm-alert-border-color: #b98a3d;
+}
+
+[data-theme='dark'] .alert--warning {
+  --ifm-alert-background-color: #3a2f1c;
+  --ifm-alert-foreground-color: #f0d9a8;
+  --ifm-alert-border-color: #b98a3d;
+}
+
+.alert--danger {
+  --ifm-alert-background-color: #f1e4c9;
+  --ifm-alert-background-color-highlight: rgba(183, 139, 76, 0.15);
+  --ifm-alert-foreground-color: #4a3b1e;
+  --ifm-alert-border-color: var(--hy-gold);
+}
+
+[data-theme='dark'] .alert--danger {
+  --ifm-alert-background-color: #3a3020;
+  --ifm-alert-foreground-color: #efd9ae;
+  --ifm-alert-border-color: var(--hy-gold);
+}
+
+.alert--info {
+  --ifm-alert-background-color: #dce8e6;
+  --ifm-alert-background-color-highlight: rgba(94, 140, 134, 0.15);
+  --ifm-alert-foreground-color: #1c3230;
+  --ifm-alert-border-color: #5e8c86;
+}
+
+[data-theme='dark'] .alert--info {
+  --ifm-alert-background-color: #203531;
+  --ifm-alert-foreground-color: #cde6e1;
+  --ifm-alert-border-color: #6fa39c;
+}
