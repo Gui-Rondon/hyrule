@@ -72,8 +72,10 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       image: 'img/logo.png',
+      // false (the default) keeps the navbar toggle a 2-state light/dark
+      // switch; true adds a third "system" state to the same button.
       colorMode: {
-        respectPrefersColorScheme: true,
+        respectPrefersColorScheme: false,
       },
       navbar: {
         title: 'hyrule',
