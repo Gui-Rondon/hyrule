@@ -87,6 +87,10 @@ projeto gerado tem seu próprio `go.mod`, `Makefile` e
 `docker-compose.yml`, no mesmo formato deste repositório; os
 subcomandos `dev`/`build --affected`/`deploy` são trabalho futuro (ver
 o [roadmap](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/roadmap)).
+O [guia da Platform](https://gui-rondon.github.io/hyrule/docs/platform/intro)
+(em inglês, como o resto do Learn) passa por isso passo a passo,
+incluindo copiar o padrão de CI de build afetado e deploy do
+`examples/blog-apis` pra um projeto gerado.
 
 ## Documentação
 

@@ -32,7 +32,7 @@ porque ainda estejam abertas.
 | Outbox entre backends | Implícito pela narrativa dual-mode | Fixo no Mongo | **Alto**, corretamente bloqueado até a questão do Store ser resolvida (ADR-0003) |
 | CLI / Platform | `hyrule new` / `service create` / `dev` / `build` / `deploy` | `cmd/hyrule` tem `new` e `service create` (ADR-0004); `dev`/`build --affected`/`deploy` nem começaram | **Parcialmente fechado** — scaffolding da Fase 3 pronto; envolver `ci/affected`/Makefile foi adiado de propósito |
 | Build afetado / deploy independente | Orquestrado pela plataforma | `ci/affected` roda de verdade em `.github/workflows/blog-apis-affected.yml`; deploy é uma costura documentada `deploy/<service>/deploy.sh`, não uma capacidade entregue (ADR-0006) | **Fechado pro exemplo, de propósito** — Fase 4; um adapter de deploy real e versionamento por serviço continuam sem começar até existir um consumidor real |
-| Documentação de duas jornadas | Learn (Framework) + Learn (Platform) + Reference compartilhada | Só existe a jornada Framework, e ela já é honesta sobre o que falta | **Médio** — não escrever a jornada Platform antes do CLI ser real |
+| Documentação de duas jornadas | Learn (Framework) + Learn (Platform) + Reference compartilhada | As duas jornadas existem (`/docs/learn`, `/docs/platform`), cada uma descrevendo só o que foi construído | **Fechado** — Fase 5 |
 | ADRs / versionamento | Um processo formal de decisão e compatibilidade | Não existia antes desta página | **Gap alto, custo baixo** — pura documentação |
 
 ## Fases
@@ -84,7 +84,16 @@ porque ainda estejam abertas.
   um time usando `hyrule new` copia e adapta.
 - **Fase 5 — Documentação.** Escrever a jornada Platform só quando o
   CLI for real, pra que o site publicado nunca descreva um comando que
-  ainda não existe.
+  ainda não existe. **Concluída.** Uma nova categoria "Platform" sob o
+  [Learn](/docs/learn/intro) — `/docs/platform/intro`,
+  `creating-a-project`, `creating-services`, `local-development` e
+  `ci-and-deploy` — cobre exatamente `hyrule new`/`hyrule service
+  create` e o padrão `ci/affected`/`deploy.sh` da Fase 4, nomeando
+  todo comando ainda não construído (`dev`, `build --affected`,
+  `deploy`) como não construído em vez de omitir silenciosamente. Só
+  em inglês, como o resto do Learn — ver o
+  [`README.pt-br.md`](https://github.com/Gui-Rondon/hyrule/blob/main/README.pt-br.md)
+  pra essa assimetria já existente.
 
 ## O que esta rodada não faz
 

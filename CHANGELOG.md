@@ -25,6 +25,13 @@ the minor version instead.
 
 ### Added
 
+- A "Platform" section under [Learn](website/docs/learn/intro.md):
+  `website/docs/platform/{intro,creating-a-project,creating-services,
+  local-development,ci-and-deploy}.md`. Covers exactly `hyrule
+  new`/`hyrule service create` and the Fase 4 `ci/affected`/`deploy.sh`
+  pattern — every unbuilt command (`dev`, `build --affected`, `deploy`)
+  is named as unbuilt, not omitted. English only, matching the rest of
+  Learn.
 - `.github/workflows/blog-apis-affected.yml` (ADR-0006): runs `ci/affected`
   for real on push/PR, builds only the services it reports, and calls each
   one's new `deploy/<service>/deploy.sh` (a stub — the configurable seam

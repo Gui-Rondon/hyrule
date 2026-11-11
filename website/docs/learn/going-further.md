@@ -73,6 +73,12 @@ directory is every snippet in this guide, in context, with its own
 tests — reading it end to end is the fastest way to see the whole
 framework at once.
 
+If what you're building is several of these services in one
+repository, rather than one, the [Platform](/docs/platform/intro)
+section picks up from here: `hyrule new`/`hyrule service create`
+generate the same `go.mod`/`Makefile`/`rest.Resource` this guide just
+taught you to write by hand.
+
 :::tip[Recap]
 - A resource stays YAML as long as its `setup` would only build a
   `Resource` and register it; anything with hooks, custom endpoints, or

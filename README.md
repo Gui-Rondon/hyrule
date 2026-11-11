@@ -86,6 +86,10 @@ project has its own `go.mod`, `Makefile`, and `docker-compose.yml`, in
 the same shape as this repo's own; `dev`/`build --affected`/`deploy`
 subcommands are future work (see the
 [roadmap](https://gui-rondon.github.io/hyrule/docs/reference/roadmap)).
+The [Platform guide](https://gui-rondon.github.io/hyrule/docs/platform/intro)
+walks through this step by step, including copying
+`examples/blog-apis`'s affected-build CI and deploy pattern into a
+generated project.
 
 ## Documentation
 
@@ -94,6 +98,7 @@ The full docs are at **https://gui-rondon.github.io/hyrule/**:
 | | |
 |---|---|
 | [Learn](https://gui-rondon.github.io/hyrule/docs/learn/intro) | a guided, step-by-step path through the framework, building up `examples/blog-apis` one concept at a time |
+| [Platform](https://gui-rondon.github.io/hyrule/docs/platform/intro) | `hyrule new`/`hyrule service create`, and copying the affected-build CI and deploy pattern into a generated project |
 | [Reference → Store](https://gui-rondon.github.io/hyrule/docs/reference/store) | the `Store` interface: what it decouples (and what it doesn't yet) |
 | [Reference → Outbox](https://gui-rondon.github.io/hyrule/docs/reference/outbox) | the transactional outbox, and the conditional primitive that fires an event straight from the write |
 | [Reference → resources.yaml](https://gui-rondon.github.io/hyrule/docs/reference/resources-yaml) | full reference of the resource YAML |
