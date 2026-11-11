@@ -10,6 +10,8 @@ test:
 	go test -race ./...
 
 build:
+	@test -n "$(SERVICE)" || { echo "SERVICE is required, e.g. make build SERVICE=articles" >&2; exit 1; }
+	@mkdir -p .local
 	go build -o .local/$(SERVICE) ./services/$(SERVICE)
 
 env-up:

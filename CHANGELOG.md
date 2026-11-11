@@ -23,6 +23,21 @@ the minor version instead.
   [ADR-0002](website/docs/reference/architecture-decisions.md#adr-0002--portability-of-the-reststore-contract) —
   no change to its contract in this round.
 
+### Fixed
+
+- `cmd/hyrule/templates/new/Makefile.tmpl`'s `build` target now fails
+  with a clear message when `SERVICE` is empty, instead of running a
+  broken `go build`. Also creates `.local/` explicitly before writing
+  to it (already implicit in Go ≥1.21's `go build -o`, kept explicit
+  for clarity and to not depend on that behavior).
+- Added `cmd/hyrule/e2e_test.go`'s `TestScaffoldBuilds`: the first
+  automated test that actually runs `hyrule new` → `hyrule service
+  create` → `go mod tidy`/`go vet` → `make build` on a generated
+  project and checks for a real binary, rather than only checking
+  which files got written. The generated project's own `go test` runs
+  too when `MONGO_TEST_URI` is set, skipped otherwise (no Docker
+  required for the rest of the test).
+
 ### Added
 
 - A "Platform" section under [Learn](website/docs/learn/intro.md):
@@ -50,6 +65,7 @@ the minor version instead.
   `replace` directive until a version is tagged), not just as a package
   inside this monorepo. A YAML-declared resource, one Go hook
   (`behaviors/audit`), and a `testkit`-based test.
-- Phase 0 architectural audit of the Framework/Platform evolution: five ADRs
-  ([`architecture-decisions.md`](website/docs/reference/architecture-decisions.md))
+- Phase 0 architectural audit of the Framework/Platform evolution: six ADRs
+  ([`architecture-decisions.md`](website/docs/reference/architecture-decisions.md),
+  each now with a **Status**/**Implemented in** line)
   and a phased [roadmap](website/docs/reference/roadmap.md).

@@ -4,49 +4,80 @@
  * work well for content-centric websites.
  */
 
-/* You can override the default Infima variables here. */
+/* Hyrule is a kingdom, not a product — the palette below leans into that:
+   a field green for the primary color (both modes), and a Triforce-gold
+   accent (--hy-gold, used by the homepage hero/cards) for the places a
+   second color earns its keep. Same structure risotto-site's and the
+   Gitea instance's "Dive" theme uses (a day palette and a night palette,
+   plus one accent that survives both) — recolored for Hyrule instead of
+   Dive's ocean, and without Dive's pixel fonts/pixel-art chrome: this
+   site stays plain Infima/Docusaurus underneath. */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
+  --ifm-color-primary: #1f7a3c;
+  --ifm-color-primary-dark: #1c6e36;
+  --ifm-color-primary-darker: #1a6833;
+  --ifm-color-primary-darkest: #15552a;
+  --ifm-color-primary-light: #228642;
+  --ifm-color-primary-lighter: #248c46;
+  --ifm-color-primary-lightest: #2aa352;
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --hy-gold: #b8860c;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
+  --ifm-color-primary: #3ecf7e;
+  --ifm-color-primary-dark: #30bd6e;
+  --ifm-color-primary-darker: #2db367;
+  --ifm-color-primary-darkest: #259355;
+  --ifm-color-primary-light: #4cd789;
+  --ifm-color-primary-lighter: #55da8f;
+  --ifm-color-primary-lightest: #76e2a4;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --hy-gold: #f0c242;
 }
 
 /* Infima's default .col (flex: 1 0; width: 100%) stretches each footer
    column to an equal share of the full-bleed footer container, which
    spreads a handful of short columns too far apart. Size them to their
-   content and space them out explicitly instead. */
-.footer__links {
-  flex-grow: 0;
-  gap: 4rem;
+   content and space them out explicitly instead — but only above
+   Infima's own mobile breakpoint (996px): below it, Infima stacks
+   .footer__col at 100% width on purpose, and overriding that
+   unconditionally is what made the footer overflow sideways on a phone. */
+@media (min-width: 997px) {
+  .footer__links {
+    flex-grow: 0;
+    gap: 4rem;
+  }
+
+  .footer__col {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: none;
+  }
+
+  /* Docs/More stay on the left; About/Get in Touch (3rd column onward)
+     are pushed to the right, with the gap landing between the two
+     groups instead of between every column. */
+  .footer__col:nth-child(3) {
+    margin-left: auto;
+  }
 }
 
-.footer__col {
-  flex: 0 0 auto;
-  width: auto;
-  max-width: none;
+/* Go snippets are indented with real tabs (gofmt); with no tab-size set,
+   browsers default to 8, which is unusually wide for a nested struct
+   literal and, combined with no line wrap in <pre>, is a big part of why
+   those blocks force horizontal scrolling on a phone-width viewport. */
+pre {
+  tab-size: 2;
+  -moz-tab-size: 2;
 }
 
-/* Docs/More stay on the left; About/Get in Touch (3rd column onward)
-   are pushed to the right, with the gap landing between the two
-   groups instead of between every column. */
-.footer__col:nth-child(3) {
-  margin-left: auto;
+/* Docusaurus doesn't wrap doc tables in a scrollable container by
+   default; the ADR and roadmap tables are wide enough to overflow a
+   phone-width viewport and push the whole page sideways otherwise. */
+.markdown table {
+  display: block;
+  overflow-x: auto;
 }

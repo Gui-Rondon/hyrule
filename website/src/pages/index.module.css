@@ -8,6 +8,20 @@
   text-align: center;
   position: relative;
   overflow: hidden;
+  /* Fixed colors, not --ifm-color-primary/--hy-gold: those brighten in
+     dark mode for use as link/accent colors against a dark page
+     background — the opposite contrast case from here, white hero text
+     over a background color. --hy-gold in dark mode in particular is
+     close to white and would wash the text out. Two separate fixed
+     gradients (not one shared one) so the hero — the biggest, most
+     colorful thing on the page — actually looks different after
+     toggling light/dark, instead of making the toggle look like it
+     didn't do anything. */
+  background: linear-gradient(135deg, #1f7a3c 0%, #b8860c 100%);
+}
+
+[data-theme='dark'] .heroBanner {
+  background: linear-gradient(135deg, #123d21 0%, #7a5c12 100%);
 }
 
 @media screen and (max-width: 996px) {
@@ -34,18 +48,34 @@
   margin: 0 auto;
   text-align: left;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.35);
   color: white;
   padding: 1rem 1.25rem;
+  /* The YAML inside is decorative, not something to copy-paste with
+     exact line breaks — wrapping long lines (instead of the default
+     <pre> horizontal scroll, which on a phone showed a scrollbar and
+     cut words off mid-line) keeps every line fully visible. */
+  overflow-wrap: anywhere;
 }
 
 .codeTeaser code {
   background: transparent;
   color: inherit;
+  white-space: pre-wrap;
 }
 
 .cards {
   padding: 3rem 0;
+}
+
+/* Infima's .row (display: flex; flex-wrap: wrap) sets no gap of its own;
+   at the mobile width where the three cards wrap into one column each,
+   they touched with nothing but their own borders between them.
+   row-gap on the flex container itself (rather than a margin on .card)
+   doesn't leave a dangling gap after the last card, and can't be
+   defeated by anything else setting a margin on the cards. */
+.cards :global(.row) {
+  row-gap: 1.5rem;
 }
 
 .card {
@@ -53,4 +83,9 @@
   padding: 1.5rem;
   border-radius: 8px;
   border: 1px solid var(--ifm-color-emphasis-200);
+  transition: border-color 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--hy-gold);
 }

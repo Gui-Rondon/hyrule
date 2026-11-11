@@ -5,13 +5,19 @@ sidebar_position: 10
 # Architecture decisions
 
 This page records decisions, not capabilities — it's the output of a
-Phase 0 audit of the actual code (not a plan written from assumptions),
-done before any of the structural changes described in
-[`roadmap.md`](roadmap.md) are attempted. Nothing below has been
-executed yet; each ADR says explicitly what, if anything, changes in
-the code as a result.
+Phase 0 audit of the actual code (not a plan written from assumptions).
+Each ADR's **Status** line tracks whether its decision has actually
+been implemented and validated, separately from whether the decision
+itself was accepted — accepting a direction and building it are two
+different facts, and this page doesn't conflate them. See
+[`roadmap.md`](roadmap.md) for how the phases that implement these
+decisions sequence against each other.
 
 ## ADR-0001 — Public surface of the framework
+
+**Status:** Implemented
+
+**Implemented in:** PR #6 (Fase 1, commit `2385f9e`)
 
 **Context.** Every package lives under `internal/`:
 `app`, `rest`, `behaviors/*`, `outbox`, `platform/*`, `testkit`,
@@ -59,6 +65,12 @@ without importing anything under `internal/`.
 
 ## ADR-0002 — Portability of the `rest.Store` contract
 
+**Status:** Accepted — implementation deferred
+
+**Implemented in:** not applicable; the decision itself is to defer the
+generics rework (see Decision below). `rest.Store` is unchanged in
+PR #6, as decided.
+
 **Context.** `rest.Store`'s methods are typed in `bson.M`/`bson.D`, and
 `rest.Service`'s error translation checks Mongo driver types directly
 (`mongo.ErrNoDocuments`, `mongo.IsDuplicateKeyError`, `mongo.IsTimeout`
@@ -105,6 +117,13 @@ going through `rest.Store`.
 
 ## ADR-0003 — Outbox and Postgres
 
+**Status:** Accepted — implementation deferred
+
+**Implemented in:** not applicable; the decision itself is to wait for
+a real Postgres-backed resource (see Decision below). `outbox` (moved
+from `internal/outbox` by ADR-0001/Fase 1) is unchanged in PR #6, as
+decided.
+
 **Context.** `internal/outbox` is hard-coded to `*mongo.Collection`/
 `*mongo.Database`, writes a resource and its event in the same Mongo
 transaction, and documents delivery as at-least-once, never
@@ -138,6 +157,10 @@ generic version before ADR-0002 unblocks it.
 Postgres outbox until a resource actually uses one.
 
 ## ADR-0004 — Initial scope of the CLI / Platform
+
+**Status:** Implemented
+
+**Implemented in:** PR #6 (Fase 3, commit `fff7a61`)
 
 **Context.** No multi-command CLI exists. `cmd/hyrule-serve` is a
 single generic server binary. `ci/affected` already does real
@@ -183,6 +206,12 @@ via the existing Makefile targets, without hand-copying
 
 ## ADR-0005 — Versioning and compatibility pre-1.0
 
+**Status:** Implemented
+
+**Implemented in:** PR #6 (Fase 0, commit `b19f31c`); every phase
+since has added its own `CHANGELOG.md` entry, in practice, not just on
+paper.
+
 **Context.** No `CHANGELOG`, one git tag (`v0.100.0`), no documented
 compatibility policy. `go.mod` has no major-version suffix, consistent
 with 0.x.
@@ -207,6 +236,10 @@ Changelog structure, and has an `Unreleased` section ready for Fase 1's
 entries.
 
 ## ADR-0006 — Fase 4 operational scope: affected-build CI, not a deploy system
+
+**Status:** Implemented
+
+**Implemented in:** PR #6 (Fase 4, commit `b07df31`)
 
 **Context.** `ci/affected` works (its own test exercises the real
 `examples/blog-apis` dependency graph — see [`store.md`](store.md) and
