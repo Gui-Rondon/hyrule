@@ -93,6 +93,7 @@ export default function Home() {
       title={siteConfig.title}
       description="A Go framework for scaffolding microservices fast: describe a resource in YAML and get a working REST API — CRUD, validation, ETags, a transactional outbox — with a testkit built in so you can test its flows without standing up the whole stack.">
       <HomepageHeader />
+      <hr className="hy-divider" />
       <main>
         <HomepageCards />
       </main>
