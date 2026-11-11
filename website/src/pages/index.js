@@ -29,8 +29,13 @@ function HomepageHeader() {
   - name: tags
     collection: tags
     schema:
-      name: {type: string, required: true}
-      slug: {type: string, required: true, unique: true}`}</code>
+      name:
+        type: string
+        required: true
+      slug:
+        type: string
+        required: true
+        unique: true`}</code>
         </pre>
       </div>
     </header>
