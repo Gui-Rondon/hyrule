@@ -4,7 +4,7 @@
 // index and Elasticsearch indexing.
 package main
 
-import "github.com/Gui-Rondon/hyrule/internal/app"
+import "github.com/Gui-Rondon/hyrule/app"
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"

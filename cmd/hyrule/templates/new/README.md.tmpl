@@ -1,0 +1,24 @@
+# {{.Module}}
+
+A Hyrule Platform project, scaffolded by `hyrule new`.
+
+## Add Hyrule as a dependency
+
+	go get github.com/Gui-Rondon/hyrule@main   # or a tagged version, once released
+
+## Add a service
+
+	hyrule service create <name>
+
+This writes `services/<name>/`: a small `app.Main` binary with one
+resource, a schema to extend, and a test using `testkit`.
+
+## Local development
+
+	make env-up              # Mongo, replica set, on :27017
+	make build SERVICE=<name>
+	make run SERVICE=<name>  # :8080, auth disabled
+
+## Tests
+
+	make test

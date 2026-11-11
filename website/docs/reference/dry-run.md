@@ -25,11 +25,11 @@ DRY_RUN=1 DRY_RUN_TIMEOUT=10s ./my-api
 - Post-write hooks (`OnInserted`, `OnUpdated`, `OnReplaced`,
   `OnDeleted`) don't run — they reach systems outside the transaction
   (ES, Pub/Sub...), which have no rollback. See `runPost` in
-  `internal/rest/service.go`.
+  `rest/service.go`.
 - Background tasks registered with `env.Go` (the outbox relay, for
   instance) don't start.
 - `DRY_RUN_TIMEOUT` caps every request (default 3s,
-  `internal/app/app.go`'s `defaultDryRunTimeout`); without it, a dry run
+  `app/app.go`'s `defaultDryRunTimeout`); without it, a dry run
   could hold the client's next request longer than the real thing would
   take to answer.
 - Dry run needs a replica set (no transaction to roll back without one)
@@ -43,11 +43,11 @@ custom endpoint can write straight to the `Store`. If that write isn't
 inside a transaction, the automatic rollback never reaches it: it would
 actually be stored, even in dry run.
 
-`mongodb.WriteGuard` (`internal/platform/mongodb/guard.go`) is a driver
+`mongodb.WriteGuard` (`platform/mongodb/guard.go`) is a driver
 command monitor: it can't stop the write (the driver gives no such
 hook), but it counts and logs every write it sees outside a transaction.
 `/healthcheck` fails permanently from the first violation on
-(`dryRunCheck` in `internal/app/dryrun.go`) — it stays red until the pod
+(`dryRunCheck` in `app/dryrun.go`) — it stays red until the pod
 restarts, but `/status` keeps answering, so the pod doesn't drop out of
 rotation because of it.
 

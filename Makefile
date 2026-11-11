@@ -10,7 +10,7 @@ export POSTGRES_TEST_URI ?= $(POSTGRES_URI)
 
 COVERAGE_MIN ?= 85
 
-.PHONY: test unit vet cover build image env-up env-down example-env-up example-env-down run loadtest
+.PHONY: test unit vet cover build image env-up env-down example-env-up example-env-down run loadtest standalone-example-test
 
 # All tests; the ones that need Mongo/Postgres use MONGO_TEST_URI/
 # POSTGRES_TEST_URI (make env-up).
@@ -29,7 +29,7 @@ SERVICES_DIR ?= examples/blog-apis/services
 # Same gate as the CI: fails below COVERAGE_MIN % (testkit excluded).
 cover:
 	@mkdir -p .local
-	go test -coverpkg=$$(go list ./internal/... ./$(SERVICES_DIR)/... | grep -v /testkit | paste -sd, -) \
+	go test -coverpkg=$$(go list ./app/... ./behaviors/... ./declarative/... ./outbox/... ./platform/... ./rest/... ./testkit/... ./internal/... ./$(SERVICES_DIR)/... | grep -v /testkit | paste -sd, -) \
 		-coverprofile=.local/coverage.out ./... > /dev/null
 	@go tool cover -func=.local/coverage.out | awk -v m=$(COVERAGE_MIN) \
 		'/^total:/ { sub("%", "", $$3); printf "coverage %s%% (minimum %s%%)\n", $$3, m; exit !($$3 + 0 >= m + 0) }'
@@ -68,3 +68,9 @@ run: build
 #   make loadtest BASE_URL=http://localhost:8081 RESOURCE=tags LOOKUP=go
 loadtest:
 	examples/blog-apis/loadtest/run.sh $(BASE_URL) $(RESOURCE) $(LOOKUP)
+
+# examples/standalone-tags-api is its own Go module (own go.mod/go.sum,
+# Fase 2's proof of external importability) — go test ./... from the repo
+# root doesn't descend into it, hence this separate target.
+standalone-example-test:
+	cd examples/standalone-tags-api && go test -race ./...

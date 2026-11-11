@@ -1,0 +1,27 @@
+SERVICE ?=
+MONGO_URI ?= mongodb://localhost:27017/?directConnection=true
+GO_PORT ?= 8080
+
+export MONGO_TEST_URI ?= $(MONGO_URI)
+
+.PHONY: test build run env-up env-down
+
+test:
+	go test -race ./...
+
+build:
+	go build -o .local/$(SERVICE) ./services/$(SERVICE)
+
+env-up:
+	docker compose up -d --wait
+
+env-down:
+	docker compose down
+
+# Runs the service with auth disabled against the local Mongo.
+run: build
+	@mkdir -p .local
+	@echo '{"auth": {"enable": "false"}}' > .local/$(SERVICE).json
+	CONFIG_FILE=.local/$(SERVICE).json \
+	MONGO_CONNECTION_STRING='mongodb://localhost:27017/$(SERVICE)?directConnection=true' \
+	PORT=$(GO_PORT) .local/$(SERVICE)

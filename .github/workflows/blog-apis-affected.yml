@@ -1,0 +1,57 @@
+# Illustrative, not a Hyrule capability (ADR-0006,
+# website/docs/reference/architecture-decisions.md): a copyable template
+# for what a "hyrule new" project's own CI would do with ci/affected —
+# detect which services a change actually touches, build only those, and
+# call each one's deploy.sh (a stub here; your real deploy command goes
+# there, never in Hyrule itself).
+name: blog-apis affected services
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+  workflow_dispatch: {}
+
+jobs:
+  affected:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Detect affected services
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
+            base="HEAD~1"
+          fi
+          services="$(go run ./ci/affected "$base")"
+          echo "$services"
+          {
+            echo "services<<EOF"
+            echo "$services"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build (and deploy-stub) each affected service
+        if: steps.detect.outputs.services != ''
+        run: |
+          echo "${{ steps.detect.outputs.services }}" | while IFS= read -r service; do
+            [ -z "$service" ] && continue
+            echo "::group::$service"
+            go build -o ".local/$service" "./examples/blog-apis/services/$service"
+            deploy="examples/blog-apis/deploy/$service/deploy.sh"
+            if [ -x "$deploy" ]; then
+              "$deploy"
+            fi
+            echo "::endgroup::"
+          done

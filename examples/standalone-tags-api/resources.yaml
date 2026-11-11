@@ -1,0 +1,23 @@
+# Embedded into the binary (see main.go) rather than read from
+# RESOURCES_FILE at runtime — this is the "a resource with its own logic
+# stays a small Go binary" path, not the ops-defined-at-deploy-time path
+# cmd/hyrule-serve covers.
+resources:
+  - name: tags
+    collection: tags
+    additional_lookup:
+      field: slug
+      pattern: '^[\w-]+$'
+    resource_methods: [get, post]
+    item_methods: [get, patch]
+    schema:
+      name:
+        type: string
+        required: true
+      slug:
+        type: string
+        required: true
+        unique: true
+      enabled:
+        type: boolean
+        default: true

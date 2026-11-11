@@ -5,7 +5,7 @@ const sidebars = {
   learnSidebar: [
     {
       type: 'category',
-      label: 'Learn',
+      label: 'Framework',
       collapsible: false,
       items: [
         'learn/intro',
@@ -15,6 +15,18 @@ const sidebars = {
         'learn/the-outbox',
         'learn/testing',
         'learn/going-further',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Platform',
+      collapsible: false,
+      items: [
+        'platform/intro',
+        'platform/creating-a-project',
+        'platform/creating-services',
+        'platform/local-development',
+        'platform/ci-and-deploy',
       ],
     },
   ],
@@ -33,6 +45,8 @@ const sidebars = {
         'reference/observability',
         'reference/architecture',
         'reference/postgres-rfc',
+        'reference/architecture-decisions',
+        'reference/roadmap',
       ],
     },
   ],

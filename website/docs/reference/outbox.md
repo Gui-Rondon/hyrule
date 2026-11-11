@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # Transactional outbox
 
-`internal/outbox` implements the outbox pattern: a write stores its
+`outbox` implements the outbox pattern: a write stores its
 events in the `outbox` collection, in the same Mongo transaction as the
 write — both are stored together or neither is. After the commit, a
 `Relay` publishes the pending events (at least once; every message

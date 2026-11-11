@@ -7,7 +7,7 @@ sidebar_position: 2
 Every list endpoint (the resource's root URL, and any custom list route
 built with `Service.WriteList`/`WriteListFallback`) reads `where`,
 `sort`, `projection`, `page` and `max_results` from the query string, the
-way Eve does. Parsing lives in `internal/rest/query.go`
+way Eve does. Parsing lives in `rest/query.go`
 (`ParseListQuery`/`parseWhere`/`ParseSort`) — this page documents that
 parsing, not an aspirational query language: what's below is exactly
 what the code accepts today.
@@ -110,7 +110,7 @@ a `SoftDelete` resource — Eve's own convention.
 ## On a relational backend
 
 None of the above is Mongo-agnostic — `where=` *is* Mongo's query
-language, operators included. `internal/platform/postgres.Filter`
+language, operators included. `platform/postgres.Filter`
 doesn't carry any of this over: it's equality-only (`column: value`,
 ANDed together, a `nil` value meaning `IS NULL`), no `$gt`/`$in`/denylist
 to speak of, because there's no JSON query language to parse in the

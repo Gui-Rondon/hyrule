@@ -7,7 +7,7 @@ sidebar_position: 2
 Toda rota de listagem (a URL raiz do recurso, e qualquer rota de lista
 customizada feita com `Service.WriteList`/`WriteListFallback`) lê
 `where`, `sort`, `projection`, `page` e `max_results` da query string, do
-mesmo jeito que o Eve. O parsing vive em `internal/rest/query.go`
+mesmo jeito que o Eve. O parsing vive em `rest/query.go`
 (`ParseListQuery`/`parseWhere`/`ParseSort`) — esta página documenta esse
 parsing, não uma linguagem de query aspiracional: o que vem abaixo é
 exatamente o que o código aceita hoje.
@@ -112,7 +112,7 @@ recurso com `SoftDelete` — convenção do próprio Eve.
 
 Nada do que foi dito acima é agnóstico de Mongo — `where=` **é** a
 linguagem de query do Mongo, operadores incluídos.
-`internal/platform/postgres.Filter` não carrega nada disso: é só
+`platform/postgres.Filter` não carrega nada disso: é só
 igualdade (`coluna: valor`, combinados com AND, um valor `nil`
 significando `IS NULL`), sem `$gt`/`$in`/denylist pra falar, porque não
 há linguagem de query em JSON pra parsear, pra começo de conversa:

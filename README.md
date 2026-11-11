@@ -16,7 +16,7 @@ database and an HTTP client, and dry run lets a whole service run
 against real traffic with every write rolled back — so you can exercise
 a service's actual flows without standing up the real stack or faking
 your way through it. Under the hood it keeps the HTTP contract of Eve
-(Python) (`internal/rest`), which is where the project migrated from.
+(Python) (`rest`), which is where the project migrated from.
 
 📖 **Full documentation: https://gui-rondon.github.io/hyrule/** — a
 guided [Learn](https://gui-rondon.github.io/hyrule/docs/learn/intro)
@@ -52,13 +52,44 @@ curl -X POST localhost:8080/tags -d '{"name":"Go","slug":"go"}'
 curl localhost:8080/tags/go
 ```
 
-That's `cmd/hyrule-serve` + `internal/declarative` — it covers the
+That's `cmd/hyrule-serve` + `declarative` — it covers the
 common case. A resource with its own logic (hooks, custom endpoints,
 conditional validation) stays a small Go binary with `app.Main`, like the
 4 examples in [`examples/blog-apis/`](examples/blog-apis/) — both paths
 register resources the same way and coexist in the same process. The
 [Learn guide](https://gui-rondon.github.io/hyrule/docs/learn/intro)
 walks through building both kinds, step by step.
+
+[`examples/standalone-tags-api/`](examples/standalone-tags-api/) is the
+same quickstart as above, but as its own Go module (own `go.mod`) that
+depends on this one — the proof that an external repository can really
+`go get` this framework, not just import it from inside this monorepo.
+
+## Platform: scaffolding a multi-service project
+
+```bash
+go install github.com/Gui-Rondon/hyrule/cmd/hyrule@main
+
+hyrule new my-platform
+cd my-platform
+go get github.com/Gui-Rondon/hyrule@main
+hyrule service create articles
+
+make env-up
+make build SERVICE=articles
+make run SERVICE=articles
+```
+
+`hyrule new`/`hyrule service create` are the only two commands today
+(ADR-0004) — scaffolding, not a build/deploy orchestrator. The generated
+project has its own `go.mod`, `Makefile`, and `docker-compose.yml`, in
+the same shape as this repo's own; `dev`/`build --affected`/`deploy`
+subcommands are future work (see the
+[roadmap](https://gui-rondon.github.io/hyrule/docs/reference/roadmap)).
+The [Platform guide](https://gui-rondon.github.io/hyrule/docs/platform/intro)
+walks through this step by step, including copying
+`examples/blog-apis`'s affected-build CI and deploy pattern into a
+generated project.
 
 ## Documentation
 
@@ -67,6 +98,7 @@ The full docs are at **https://gui-rondon.github.io/hyrule/**:
 | | |
 |---|---|
 | [Learn](https://gui-rondon.github.io/hyrule/docs/learn/intro) | a guided, step-by-step path through the framework, building up `examples/blog-apis` one concept at a time |
+| [Platform](https://gui-rondon.github.io/hyrule/docs/platform/intro) | `hyrule new`/`hyrule service create`, and copying the affected-build CI and deploy pattern into a generated project |
 | [Reference → Store](https://gui-rondon.github.io/hyrule/docs/reference/store) | the `Store` interface: what it decouples (and what it doesn't yet) |
 | [Reference → Outbox](https://gui-rondon.github.io/hyrule/docs/reference/outbox) | the transactional outbox, and the conditional primitive that fires an event straight from the write |
 | [Reference → resources.yaml](https://gui-rondon.github.io/hyrule/docs/reference/resources-yaml) | full reference of the resource YAML |
@@ -78,17 +110,20 @@ The full docs are at **https://gui-rondon.github.io/hyrule/**:
 
 ## Layout
 
-    internal/app/              shared bootstrap (app.Main / app.Build)
-    internal/behaviors/        reusable hooks: searchsync (ES), audit, events (outbox on write)
-    internal/rest/              the HTTP contract: Service (rules, no HTTP) + API (HTTP) + Store (storage interface)
-    internal/outbox/           transactional outbox, the Pub/Sub relay and the conditional primitive
-    internal/declarative/      loads a Resource/Schema from YAML (cmd/hyrule-serve)
-    internal/platform/         config, mongodb, auth, search, health, server, pubsub, redis
-    internal/testkit/          per-test isolated Mongo, ES recorder, tokens
-    cmd/hyrule-serve/          generic binary: registers the resources of a YAML, no domain Go
-    ci/                        ci/affected (picks the services a diff affects)
-    examples/blog-apis/        a real use of the framework (see that directory's README)
-    website/                  source of https://gui-rondon.github.io/hyrule/ (Docusaurus)
+    app/                           shared bootstrap (app.Main / app.Build)
+    behaviors/                     reusable hooks: searchsync (ES), audit, events (outbox on write)
+    rest/                          the HTTP contract: Service (rules, no HTTP) + API (HTTP) + Store (storage interface)
+    outbox/                        transactional outbox, the Pub/Sub relay and the conditional primitive
+    declarative/                   loads a Resource/Schema from YAML (cmd/hyrule-serve)
+    platform/                      config, mongodb, auth, search, health, server, pubsub, redis
+    testkit/                       per-test isolated Mongo, ES recorder, tokens
+    internal/domain/               the one package that stays internal (slug generation)
+    cmd/hyrule-serve/              generic binary: registers the resources of a YAML, no domain Go
+    cmd/hyrule/                    the Platform CLI: hyrule new, hyrule service create
+    ci/                            ci/affected (picks the services a diff affects)
+    examples/blog-apis/            a real use of the framework (see that directory's README)
+    examples/standalone-tags-api/  an external Go module (own go.mod) depending on this one
+    website/                       source of https://gui-rondon.github.io/hyrule/ (Docusaurus)
 
 ## Development
 

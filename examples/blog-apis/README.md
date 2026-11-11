@@ -29,8 +29,19 @@ MONGO_CONNECTION_STRING='mongodb://localhost:27018/posts?directConnection=true' 
 Without a `CONFIG_FILE` pointing at a file with
 `{"auth": {"enable": false}}`, the endpoints that require a token
 (`/publish`, `/schedule`) will ask for authentication — see
-`internal/testkit` to generate a test token, or turn off `auth.enable` in
+`testkit` to generate a test token, or turn off `auth.enable` in
 the local config.
+
+## CI: building only what changed
+
+[`.github/workflows/blog-apis-affected.yml`](../../.github/workflows/blog-apis-affected.yml)
+runs [`ci/affected`](../../ci) on every push/PR, builds only the
+services it reports affected, and calls each one's
+[`deploy/<service>/deploy.sh`](deploy) — a stub today, the seam where a
+real provider's deploy command goes (see
+[ADR-0006](https://gui-rondon.github.io/hyrule/docs/reference/architecture-decisions#adr-0006--fase-4-operational-scope-affected-build-ci-not-a-deploy-system)).
+This workflow is itself part of the example — copy and adapt it, the
+way a project scaffolded by `hyrule new` would.
 
 ## How this fits into the framework
 

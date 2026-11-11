@@ -7,4 +7,5 @@ git_branch.txt
 # binários do go build na raiz
 /*-api
 /shadow-proxy
+/examples/standalone-tags-api/standalone-tags-api
 __pycache__/

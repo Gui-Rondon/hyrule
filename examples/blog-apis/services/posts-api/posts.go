@@ -12,15 +12,15 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"github.com/Gui-Rondon/hyrule/internal/app"
-	"github.com/Gui-Rondon/hyrule/internal/behaviors/audit"
-	"github.com/Gui-Rondon/hyrule/internal/behaviors/events"
-	"github.com/Gui-Rondon/hyrule/internal/behaviors/searchsync"
-	"github.com/Gui-Rondon/hyrule/internal/outbox"
-	"github.com/Gui-Rondon/hyrule/internal/platform/pubsub"
-	"github.com/Gui-Rondon/hyrule/internal/platform/redis"
-	"github.com/Gui-Rondon/hyrule/internal/platform/search"
-	"github.com/Gui-Rondon/hyrule/internal/rest"
+	"github.com/Gui-Rondon/hyrule/app"
+	"github.com/Gui-Rondon/hyrule/behaviors/audit"
+	"github.com/Gui-Rondon/hyrule/behaviors/events"
+	"github.com/Gui-Rondon/hyrule/behaviors/searchsync"
+	"github.com/Gui-Rondon/hyrule/outbox"
+	"github.com/Gui-Rondon/hyrule/platform/pubsub"
+	"github.com/Gui-Rondon/hyrule/platform/redis"
+	"github.com/Gui-Rondon/hyrule/platform/search"
+	"github.com/Gui-Rondon/hyrule/rest"
 )
 
 const (

@@ -4,7 +4,7 @@ sidebar_position: 4
 
 # Resource via YAML
 
-`internal/declarative` loads one or more resources from a YAML file;
+`declarative` loads one or more resources from a YAML file;
 `cmd/hyrule-serve` registers them with no domain-specific Go code at all.
 It covers the common case — a resource with no custom hooks or endpoints
 (`examples/blog-apis/services/authors-api` and `tags-api` are exactly
@@ -81,5 +81,5 @@ and every `Hooks` kind (`OnInsert`, `OnUpdate`, outbox, search,
 audit...) are also out of the loader's scope — a resource that needs any
 of those stays in Go. A resource built from YAML is a plain
 `*rest.Resource`, so nothing stops you from attaching hooks to it in
-Go before registering — `internal/declarative/declarative_test.go`'s
+Go before registering — `declarative/declarative_test.go`'s
 `TestBuiltResourceComposesWithConditionalOutbox` does exactly that.

@@ -16,7 +16,7 @@ jeitos, o `testkit` dá a cada teste um banco isolado e um cliente HTTP,
 e o dry run deixa um serviço inteiro rodar contra tráfego real com toda
 escrita revertida — então você testa os fluxos de verdade de um serviço
 sem levantar a stack real nem simular na mão. Por baixo mantém o
-contrato HTTP do Eve (Python) (`internal/rest`), de onde o projeto
+contrato HTTP do Eve (Python) (`rest`), de onde o projeto
 migrou.
 
 📖 **Documentação completa: https://gui-rondon.github.io/hyrule/** — a
@@ -53,12 +53,44 @@ curl -X POST localhost:8080/tags -d '{"name":"Go","slug":"go"}'
 curl localhost:8080/tags/go
 ```
 
-Isso é o `cmd/hyrule-serve` + `internal/declarative` — cobre o caso
+Isso é o `cmd/hyrule-serve` + `declarative` — cobre o caso
 comum. Um recurso com lógica própria (hooks, endpoints custom, validação
 condicional) continua sendo um binário Go pequeno com `app.Main`, como os
 4 exemplos em [`examples/blog-apis/`](examples/blog-apis/README.pt-br.md)
 — os dois caminhos registram recursos da mesma forma e convivem no mesmo
 processo.
+
+[`examples/standalone-tags-api/`](examples/standalone-tags-api/README.pt-br.md)
+é o mesmo quickstart acima, mas como um módulo Go próprio (`go.mod`
+próprio) que depende deste — a prova de que um repositório externo
+consegue mesmo fazer `go get` neste framework, não só importar de dentro
+deste monorepo.
+
+## Platform: montando um projeto com múltiplos serviços
+
+```bash
+go install github.com/Gui-Rondon/hyrule/cmd/hyrule@main
+
+hyrule new my-platform
+cd my-platform
+go get github.com/Gui-Rondon/hyrule@main
+hyrule service create articles
+
+make env-up
+make build SERVICE=articles
+make run SERVICE=articles
+```
+
+`hyrule new`/`hyrule service create` são os dois únicos comandos hoje
+(ADR-0004) — scaffolding, não um orquestrador de build/deploy. O
+projeto gerado tem seu próprio `go.mod`, `Makefile` e
+`docker-compose.yml`, no mesmo formato deste repositório; os
+subcomandos `dev`/`build --affected`/`deploy` são trabalho futuro (ver
+o [roadmap](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/roadmap)).
+O [guia da Platform](https://gui-rondon.github.io/hyrule/docs/platform/intro)
+(em inglês, como o resto do Learn) passa por isso passo a passo,
+incluindo copiar o padrão de CI de build afetado e deploy do
+`examples/blog-apis` pra um projeto gerado.
 
 ## Documentação
 
@@ -77,17 +109,20 @@ A documentação completa está em **https://gui-rondon.github.io/hyrule/**:
 
 ## Estrutura
 
-    internal/app/              bootstrap comum (app.Main / app.Build)
-    internal/behaviors/        hooks reutilizáveis: searchsync (ES), audit, events (outbox na escrita)
-    internal/rest/              contrato HTTP: Service (regras, sem HTTP) + API (HTTP) + Store (interface de storage)
-    internal/outbox/           transactional outbox, relay para o Pub/Sub e o primitivo condicional
-    internal/declarative/      carrega um Resource/Schema de YAML (cmd/hyrule-serve)
-    internal/platform/         config, mongodb, auth, search, health, server, pubsub, redis
-    internal/testkit/          Mongo isolado por teste, ES gravador, tokens
-    cmd/hyrule-serve/          binário genérico: registra os recursos de um YAML, sem Go de domínio
-    ci/                        ci/affected (seleção de serviços afetados por um diff)
-    examples/blog-apis/        uso de exemplo do framework (ver o README desse diretório)
-    website/                  código-fonte de https://gui-rondon.github.io/hyrule/ (Docusaurus)
+    app/                           bootstrap comum (app.Main / app.Build)
+    behaviors/                     hooks reutilizáveis: searchsync (ES), audit, events (outbox na escrita)
+    rest/                          contrato HTTP: Service (regras, sem HTTP) + API (HTTP) + Store (interface de storage)
+    outbox/                        transactional outbox, relay para o Pub/Sub e o primitivo condicional
+    declarative/                   carrega um Resource/Schema de YAML (cmd/hyrule-serve)
+    platform/                      config, mongodb, auth, search, health, server, pubsub, redis
+    testkit/                       Mongo isolado por teste, ES gravador, tokens
+    internal/domain/               o único pacote que continua interno (geração de slug)
+    cmd/hyrule-serve/              binário genérico: registra os recursos de um YAML, sem Go de domínio
+    cmd/hyrule/                    o CLI da Platform: hyrule new, hyrule service create
+    ci/                            ci/affected (seleção de serviços afetados por um diff)
+    examples/blog-apis/            uso de exemplo do framework (ver o README desse diretório)
+    examples/standalone-tags-api/  um módulo Go externo (go.mod próprio) dependendo deste
+    website/                       código-fonte de https://gui-rondon.github.io/hyrule/ (Docusaurus)
 
 ## Desenvolvimento
 

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/Gui-Rondon/hyrule/internal/platform/config"
-	"github.com/Gui-Rondon/hyrule/internal/testkit"
+	"github.com/Gui-Rondon/hyrule/platform/config"
+	"github.com/Gui-Rondon/hyrule/testkit"
 )
 
 func TestCRUD(t *testing.T) {

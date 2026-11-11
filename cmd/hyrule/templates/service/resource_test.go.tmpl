@@ -1,0 +1,24 @@
+package main
+
+import (
+	"net/http"
+	"testing"
+
+	"github.com/Gui-Rondon/hyrule/platform/config"
+	"github.com/Gui-Rondon/hyrule/testkit"
+)
+
+// testkit gives this test its own throwaway Mongo database — set
+// MONGO_TEST_URI to point it at a real one (see the project's Makefile).
+func TestCRUD(t *testing.T) {
+	c, _ := testkit.Service(t, spec(), config.Config{}, testkit.DisabledAuth(t))
+
+	created := c.Do("POST", "/{{.Name}}", map[string]any{"name": "example"})
+	if created.Status != http.StatusCreated {
+		t.Fatalf("POST = %d %s", created.Status, created.Raw)
+	}
+
+	if res := c.Do("GET", "/{{.Name}}/"+created.String("_id"), nil); res.Status != http.StatusOK {
+		t.Errorf("GET = %d %s", res.Status, res.Raw)
+	}
+}

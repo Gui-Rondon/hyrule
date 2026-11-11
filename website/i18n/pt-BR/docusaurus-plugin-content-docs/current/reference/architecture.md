@@ -16,7 +16,7 @@ platform    (mongodb, postgres (esqueleto), config, auth, search, pubsub, redis,
 
 Cada camada só conhece a de baixo. `platform` nunca importa `rest`
 nem `behaviors`, mesmo quando isso pouparia uma linha — é assim que
-`internal/platform/mongodb.Store` consegue satisfazer
+`platform/mongodb.Store` consegue satisfazer
 `rest.Store` sem o pacote `mongodb` saber que `rest` existe (a
 interface usa só tipos de `bson`/stdlib nos métodos, não structs
 próprias de `rest`; ver [`docs/store.md`](store.md)). Inverter essa
@@ -30,7 +30,7 @@ justamente pra ser a cola entre os dois.
 
 ## Decisões que moldam o framework
 
-- **Storage é uma decisão separada da de eventos.** `internal/outbox`
+- **Storage é uma decisão separada da de eventos.** `outbox`
   grava na mesma transação Mongo do write — uma escolha própria, não uma
   consequência inevitável do Mongo. Se o storage de um recurso mudar, o
   outbox pode seguir o banco (fica mais simples) ou ficar como está (se a
@@ -40,11 +40,11 @@ justamente pra ser a cola entre os dois.
   `rest.Store` desacopla o cliente concreto; filtros continuam
   `bson.M` e os erros que `rest` verifica diretamente continuam no
   formato do driver Mongo. Um segundo backend de verdade
-  (`internal/platform/postgres` hoje é só um esqueleto, sem nenhum
+  (`platform/postgres` hoje é só um esqueleto, sem nenhum
   recurso ligado a ele ainda) exige mais do que uma nova implementação
   de `Store` — ver [`docs/store.md`](store.md) e a
   [backend Postgres](postgres-rfc.md) pro que ainda está aberto.
-- **O YAML cobre dado, não código.** `internal/declarative` expressa tudo
+- **O YAML cobre dado, não código.** `declarative` expressa tudo
   que já é plano em `rest.Schema`/`Field`/`Resource`; `Field.Check`,
   `Resource.Validate`, `Resource.Datasource` e todos os `Hooks` carregam
   comportamento arbitrário e ficam de fora de propósito — ver

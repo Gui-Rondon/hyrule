@@ -40,7 +40,7 @@ type `authors-api`'s hand-written `setup` builds. Nothing stops a single
 service from registering some resources from a YAML file and others by
 hand, or from taking a YAML-built resource and attaching hooks to it in
 Go before registering it.
-`internal/declarative/declarative_test.go`'s
+`declarative/declarative_test.go`'s
 `TestBuiltResourceComposesWithConditionalOutbox` does exactly that: parses
 a resource from YAML, then attaches the same conditional outbox hook from
 [The Transactional Outbox](./the-outbox.md) to it, in Go — proving the two
@@ -72,6 +72,12 @@ the storage interface actually decouples things today. The
 directory is every snippet in this guide, in context, with its own
 tests — reading it end to end is the fastest way to see the whole
 framework at once.
+
+If what you're building is several of these services in one
+repository, rather than one, the [Platform](/docs/platform/intro)
+section picks up from here: `hyrule new`/`hyrule service create`
+generate the same `go.mod`/`Makefile`/`rest.Resource` this guide just
+taught you to write by hand.
 
 :::tip[Recap]
 - A resource stays YAML as long as its `setup` would only build a
