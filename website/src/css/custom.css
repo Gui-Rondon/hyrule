@@ -4,6 +4,18 @@
  * work well for content-centric websites.
  */
 
+/* Self-hosted (no Google Fonts CDN call at runtime): Spectral for
+   headings, Inter for body text, JetBrains Mono for code. Only the
+   weights actually used below. */
+@import '@fontsource/spectral/500.css';
+@import '@fontsource/spectral/600.css';
+@import '@fontsource/spectral/700.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
 /* Hyrule is a kingdom, not a product — the palette below leans into that:
    a field green for the primary color (both modes), and a Triforce-gold
    accent (--hy-gold, used by the homepage hero/cards) for the places a
@@ -11,7 +23,12 @@
    Gitea instance's "Dive" theme uses (a day palette and a night palette,
    plus one accent that survives both) — recolored for Hyrule instead of
    Dive's ocean, and without Dive's pixel fonts/pixel-art chrome: this
-   site stays plain Infima/Docusaurus underneath. */
+   site stays plain Infima/Docusaurus underneath.
+
+   --hy-forest-deep/moss/fern/parchment-aged/parchment-bg/ink are the
+   Kokiri Forest redesign's named palette, kept as their own tokens
+   (rather than overwriting the --ifm-* names directly) so later PRs can
+   reference them by their brief-given names. */
 :root {
   --ifm-color-primary: #1f7a3c;
   --ifm-color-primary-dark: #1c6e36;
@@ -22,7 +39,22 @@
   --ifm-color-primary-lightest: #2aa352;
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
-  --hy-gold: #b8860c;
+  --hy-gold: #b78b4c;
+
+  --hy-forest-deep: #192c24;
+  --hy-moss: #344d3b;
+  --hy-fern: #82916b;
+  --hy-parchment-aged: #d5c69f;
+  --hy-parchment-bg: #e8dfc8;
+  --hy-ink: #252b25;
+
+  --ifm-background-color: var(--hy-parchment-bg);
+  --ifm-background-surface-color: var(--hy-parchment-aged);
+  --ifm-font-color-base: var(--hy-ink);
+
+  --ifm-font-family-base: 'Inter', system-ui, -apple-system, sans-serif;
+  --ifm-heading-font-family: 'Spectral', Georgia, serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
@@ -35,7 +67,13 @@
   --ifm-color-primary-lighter: #55da8f;
   --ifm-color-primary-lightest: #76e2a4;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
-  --hy-gold: #f0c242;
+  --hy-gold: #cdae82;
+
+  --ifm-background-color: var(--hy-forest-deep);
+  --ifm-background-surface-color: var(--hy-moss);
+  /* Parchment-toned text on the forest-at-night background, instead of a
+     plain off-white — keeps the day/night palettes visibly related. */
+  --ifm-font-color-base: var(--hy-parchment-bg);
 }
 
 /* Infima's default .col (flex: 1 0; width: 100%) stretches each footer
