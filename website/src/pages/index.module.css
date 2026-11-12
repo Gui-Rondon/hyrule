@@ -27,12 +27,22 @@
      gradients (not one shared one) so the hero — the biggest, most
      colorful thing on the page — actually looks different after
      toggling light/dark, instead of making the toggle look like it
-     didn't do anything. */
-  background: linear-gradient(135deg, #344d3b 0%, #b78b4c 100%);
+     didn't do anything.
+
+     Layered with a tiled triangle-grid texture (src/css/motifs/
+     zelda-grid.svg, supplied already as a seamless tile with its
+     stroke baked in at 10% white opacity — no mask/recolor needed, it
+     reads fine over either gradient as-is). Background layers paint
+     first-listed on top, so the texture sits above the gradient. */
+  background-image: url('../css/motifs/zelda-grid.svg'),
+    linear-gradient(135deg, #344d3b 0%, #b78b4c 100%);
+  background-repeat: repeat, no-repeat;
+  background-size: 320px auto, cover;
 }
 
 [data-theme='dark'] .heroBanner {
-  background: linear-gradient(135deg, #192c24 0%, #644c2a 100%);
+  background-image: url('../css/motifs/zelda-grid.svg'),
+    linear-gradient(135deg, #192c24 0%, #644c2a 100%);
 }
 
 @media screen and (max-width: 996px) {
@@ -105,6 +115,7 @@
    border color (moss on parchment, parchment on moss) — both measured
    at the same 5.46:1 contrast against their own card surface. */
 .card {
+  position: relative;
   height: 100%;
   padding: 1.5rem;
   border-radius: 6px;
@@ -116,6 +127,29 @@
 [data-theme='dark'] .card {
   border-color: var(--hy-parchment-aged);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* Corner marker detail, restrained to a single small glyph rather than
+   the glow/blur treatment it came with — opposite corners only (not
+   all 4), same --hy-gold used everywhere else as an accent. */
+.card::before,
+.card::after {
+  content: '◆';
+  position: absolute;
+  font-size: 0.6rem;
+  color: var(--hy-gold);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.card::before {
+  top: 6px;
+  left: 8px;
+}
+
+.card::after {
+  bottom: 6px;
+  right: 8px;
 }
 
 .card:hover {
