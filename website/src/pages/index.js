@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
@@ -13,6 +14,11 @@ function HomepageHeader() {
       <span className={styles.diamondCenter} aria-hidden="true" />
       <span className={styles.diamondRight} aria-hidden="true" />
       <div className="container">
+        <img
+          src={useBaseUrl('/img/triforce.png')}
+          alt=""
+          className={styles.triforce}
+        />
         <Heading as="h1" className="hero__title">
           {siteConfig.title}
         </Heading>
