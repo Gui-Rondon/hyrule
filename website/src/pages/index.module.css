@@ -31,16 +31,24 @@
    hero text/buttons) stays visible across the whole gradient in both
    modes. z-index:1 on the real content keeps it below the title/
    buttons regardless of source order, since the mask is an absolutely
-   positioned pseudo-element with no z-index of its own. */
+   positioned pseudo-element with no z-index of its own.
+
+   Sized and faded down from an earlier pass that read as a solid,
+   clearly-legible watermark rather than a subtle accent: a translucent
+   white shape still has plenty of contrast against this dark a
+   gradient even at fairly low opacity, so "low opacity" alone wasn't
+   enough — it also needed to be smaller. Inset with positive top/right
+   (not a negative offset bleeding toward the navbar above) so it reads
+   as sitting inside the corner. */
 .heroBanner::after {
   content: '';
   position: absolute;
-  top: -1rem;
-  right: -1rem;
-  width: 6rem;
-  height: 6rem;
+  top: 1rem;
+  right: 1.25rem;
+  width: 3rem;
+  height: 3rem;
   background-color: white;
-  opacity: 0.12;
+  opacity: 0.08;
   mask-image: url('../css/motifs/rune-mark.svg');
   -webkit-mask-image: url('../css/motifs/rune-mark.svg');
   mask-size: contain;
