@@ -7,10 +7,7 @@
   padding: 4rem 0 2rem;
   text-align: center;
   position: relative;
-  /* No overflow:hidden here (deliberately, unlike an earlier pass): the
-     stretched diamonds below are meant to bleed past the hero's own
-     top/bottom edges — see .cards further down for how that overflow
-     gets covered instead of clipped. */
+  overflow: hidden;
   /* Fixed colors, not --ifm-color-primary/--hy-gold: those brighten in
      dark mode for use as link/accent colors against a dark page
      background — the opposite contrast case from here, white hero text
@@ -27,124 +24,10 @@
   background: linear-gradient(135deg, #192c24 0%, #644c2a 100%);
 }
 
-.heroBanner > :global(.container) {
-  position: relative;
-  z-index: 1;
-}
-
-/* Three instances of the same losango (src/css/motifs/rune-mark.svg: an
-   outer diamond plus a smaller concentric inner one, original line-art,
-   not a game asset). The SVG's own viewBox is now tall (0 0 100 400)
-   with the elongation baked into the path data, rather than stretching
-   a square icon non-uniformly via width≪height + mask-size:100% 100%
-   as an earlier pass did — a stroked shape scaled non-uniformly gets a
-   visibly uneven line weight (thicker on the more-stretched axis);
-   authoring the tall proportions directly keeps stroke-width=3 uniform.
-   mask-size:contain fits that fixed aspect into each box without
-   re-distorting it; box width/height still roughly track the 1:4
-   aspect so there's little unused letterboxing, but since `contain`
-   centers by default, the "seam" math below only depends on the box's
-   own height either way.
-
-   Not rotated: a diamond is already left/right-symmetric, so the same
-   file works unmirrored on both sides. For a rhombus the two side
-   vertices sit exactly level with its geometric center, so centering
-   that point on a section seam leaves only the fan of 4 edges
-   (outer+inner diamond, 2 each) above the seam visible.
-
-   blur+mix-blend-mode instead of a flat white cutout at low opacity
-   (what an earlier pass did): a crisp vector mask read as a sticker
-   stamped on top of the gradient, not part of it. soft-light lets the
-   gradient's own color show through the shape instead of overlaying
-   flat white, and a 2px blur softens the mask's hard vector edge — the
-   combination is meant to read as something etched/worn into the
-   gradient rather than laid over it. White rather than --hy-gold: same
-   contrast reason as .secondaryButton below. z-index:0 (explicit, not
-   auto) so .cards further down — given z-index:1 for exactly this
-   reason — reliably paints over whatever bleeds past the hero's bottom
-   edge, regardless of DOM order. */
-.diamondMotif {
-  position: absolute;
-  z-index: 0;
-  background-color: white;
-  mix-blend-mode: soft-light;
-  filter: blur(2px);
-  mask-image: url('../css/motifs/rune-mark.svg');
-  -webkit-mask-image: url('../css/motifs/rune-mark.svg');
-  mask-size: contain;
-  -webkit-mask-size: contain;
-  mask-repeat: no-repeat;
-  -webkit-mask-repeat: no-repeat;
-  pointer-events: none;
-}
-
-/* Center exactly on the hero/.cards seam: bottom:-50% of the box's own
-   height puts its vertical center at the container's own bottom edge.
-   Opacity is much higher than the old flat-white version used — on
-   purpose, since soft-light's effect is far weaker than plain alpha
-   compositing at the same number. */
-.diamondLeft {
-  composes: diamondMotif;
-  left: -2rem;
-  width: 8.5rem;
-  height: 34rem;
-  bottom: -17rem;
-  opacity: 0.55;
-}
-
-.diamondRight {
-  composes: diamondMotif;
-  right: -2rem;
-  width: 8.5rem;
-  height: 34rem;
-  bottom: -17rem;
-  opacity: 0.55;
-}
-
-/* Center on the hero/navbar seam instead (top:-50% of its own height),
-   not the bottom one — small and high enough that only its lower fan
-   hangs down into the hero's own top padding, clear of the title. */
-.diamondCenter {
-  composes: diamondMotif;
-  left: 50%;
-  width: 2rem;
-  height: 8rem;
-  top: -4rem;
-  transform: translateX(-50%);
-  opacity: 0.45;
-}
-
-@media screen and (max-width: 996px) {
-  .diamondCenter {
-    display: none;
-  }
-
-  .diamondLeft,
-  .diamondRight {
-    width: 5rem;
-    height: 20rem;
-    bottom: -10rem;
-  }
-}
-
 @media screen and (max-width: 996px) {
   .heroBanner {
     padding: 2rem;
   }
-}
-
-/* Sits above the "hyrule" title, its own gold kept as-is (not masked to
-   a CSS var like the diamonds above — it's a full-color emblem, not a
-   flat accent shape). z-index:1 alongside the title/buttons (not the
-   diamonds' z-index:0): position:relative on .heroBanner > .container
-   above already covers this since the image is a normal child of that
-   container, not a sibling pseudo-element — no separate z-index needed
-   here, it naturally stacks with the rest of the real content. */
-.triforce {
-  display: block;
-  width: 3.25rem;
-  margin: 0 auto 0.75rem;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
 }
 
 .buttons {
@@ -191,16 +74,7 @@
   white-space: pre-wrap;
 }
 
-/* position+z-index (not just the background alone) so this section
-   reliably paints over the reed sweeps' overflow from the hero above —
-   an absolutely positioned, explicit z-index:0 element doesn't
-   automatically get covered by a later plain in-flow block otherwise.
-   The background-color itself isn't a visual change: it's the same
-   color this section already showed through from `html` beneath it. */
 .cards {
-  position: relative;
-  z-index: 1;
-  background-color: var(--ifm-background-color);
   padding: 3rem 0;
 }
 
