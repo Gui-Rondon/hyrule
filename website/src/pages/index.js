@@ -9,6 +9,9 @@ function HomepageHeader() {
   const {siteConfig} = useDocusaurusContext();
   return (
     <header className={clsx('hero hero--primary', styles.heroBanner)}>
+      <span className={styles.reedSweepLeft} aria-hidden="true" />
+      <span className={styles.reedSweepLeftInner} aria-hidden="true" />
+      <span className={styles.reedSweepRight} aria-hidden="true" />
       <div className="container">
         <Heading as="h1" className="hero__title">
           {siteConfig.title}

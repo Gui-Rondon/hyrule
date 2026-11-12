@@ -7,7 +7,10 @@
   padding: 4rem 0 2rem;
   text-align: center;
   position: relative;
-  overflow: hidden;
+  /* No overflow:hidden here (deliberately, unlike an earlier pass): the
+     reed sweeps below are meant to bleed past the hero's own bottom
+     edge — see .cards further down for how that overflow gets covered
+     instead of clipped. */
   /* Fixed colors, not --ifm-color-primary/--hy-gold: those brighten in
      dark mode for use as link/accent colors against a dark page
      background — the opposite contrast case from here, white hero text
@@ -24,43 +27,75 @@
   background: linear-gradient(135deg, #192c24 0%, #644c2a 100%);
 }
 
-/* One small, restrained corner motif (an original abstract diamond
-   rune, src/css/motifs/rune-mark.svg) — not a large illustration. White
-   at low opacity rather than --hy-gold: gold reads at ~1:1 against the
-   gradient's own gold stop, so it would vanish there; white (like the
-   hero text/buttons) stays visible across the whole gradient in both
-   modes. z-index:1 on the real content keeps it below the title/
-   buttons regardless of source order, since the mask is an absolutely
-   positioned pseudo-element with no z-index of its own.
+.heroBanner > :global(.container) {
+  position: relative;
+  z-index: 1;
+}
 
-   Sized and faded down from an earlier pass that read as a solid,
-   clearly-legible watermark rather than a subtle accent: a translucent
-   white shape still has plenty of contrast against this dark a
-   gradient even at fairly low opacity, so "low opacity" alone wasn't
-   enough — it also needed to be smaller. Inset with positive top/right
-   (not a negative offset bleeding toward the navbar above) so it reads
-   as sitting inside the corner. */
-.heroBanner::after {
-  content: '';
+/* Three instances of the same reed/frond sweep (src/css/motifs/
+   reed-sweep.svg, an original two-blade line-art shape, not a game
+   asset), framing the hero rather than one small corner accent — the
+   corner diamond read as a crisp watermark even scaled down (see git
+   history), so this replaces it instead of also keeping it. mask-image
+   (not background-image/<img>) so the visible color stays a CSS var
+   and automatically tracks theme; white rather than --hy-gold for the
+   same contrast reason as .secondaryButton below. z-index:0 (explicit,
+   not auto) so .cards below — given z-index:1 for exactly this reason
+   — reliably paints over the portion that bleeds past the hero's
+   bottom edge, regardless of DOM order. */
+.reedSweep {
   position: absolute;
-  top: 1rem;
-  right: 1.25rem;
-  width: 3rem;
-  height: 3rem;
+  z-index: 0;
   background-color: white;
-  opacity: 0.08;
-  mask-image: url('../css/motifs/rune-mark.svg');
-  -webkit-mask-image: url('../css/motifs/rune-mark.svg');
-  mask-size: contain;
-  -webkit-mask-size: contain;
+  mask-image: url('../css/motifs/reed-sweep.svg');
+  -webkit-mask-image: url('../css/motifs/reed-sweep.svg');
+  mask-size: 100% 100%;
+  -webkit-mask-size: 100% 100%;
   mask-repeat: no-repeat;
   -webkit-mask-repeat: no-repeat;
   pointer-events: none;
 }
 
-.heroBanner > :global(.container) {
-  position: relative;
-  z-index: 1;
+.reedSweepLeft {
+  composes: reedSweep;
+  left: -1.5rem;
+  bottom: -3rem;
+  width: 11rem;
+  height: 32rem;
+  opacity: 0.1;
+  transform: rotate(-10deg);
+}
+
+.reedSweepLeftInner {
+  composes: reedSweep;
+  left: 11rem;
+  bottom: -2rem;
+  width: 7rem;
+  height: 20rem;
+  opacity: 0.08;
+  transform: rotate(6deg);
+}
+
+.reedSweepRight {
+  composes: reedSweep;
+  right: -2rem;
+  bottom: -3rem;
+  width: 13rem;
+  height: 36rem;
+  opacity: 0.1;
+  transform: scaleX(-1) rotate(-12deg);
+}
+
+@media screen and (max-width: 996px) {
+  .reedSweepLeftInner {
+    display: none;
+  }
+
+  .reedSweepLeft,
+  .reedSweepRight {
+    width: 7rem;
+    height: 20rem;
+  }
 }
 
 @media screen and (max-width: 996px) {
@@ -113,7 +148,16 @@
   white-space: pre-wrap;
 }
 
+/* position+z-index (not just the background alone) so this section
+   reliably paints over the reed sweeps' overflow from the hero above —
+   an absolutely positioned, explicit z-index:0 element doesn't
+   automatically get covered by a later plain in-flow block otherwise.
+   The background-color itself isn't a visual change: it's the same
+   color this section already showed through from `html` beneath it. */
 .cards {
+  position: relative;
+  z-index: 1;
+  background-color: var(--ifm-background-color);
   padding: 3rem 0;
 }
 
