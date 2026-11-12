@@ -222,3 +222,27 @@ html {
   background-attachment: fixed;
   background-size: cover;
 }
+
+/* Section marker: one small, restrained motif before every doc h2 — not
+   a large illustration, just enough to give sections their own identity
+   per the brief. mask-image (not background-image) so the icon's actual
+   color comes from --hy-fern and stays theme-aware automatically; the
+   SVG itself only needs to supply the shape (any opaque stroke works as
+   a mask). These two SVGs (src/css/motifs/) are original line-art — a
+   fern frond and an abstract diamond rune — not reproductions of any
+   game asset. */
+.markdown h2::before {
+  content: '';
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.4em;
+  vertical-align: -0.1em;
+  background-color: var(--hy-fern);
+  mask-image: url('./motifs/fern-mark.svg');
+  -webkit-mask-image: url('./motifs/fern-mark.svg');
+  mask-size: contain;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}

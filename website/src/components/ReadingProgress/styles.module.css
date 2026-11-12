@@ -1,0 +1,23 @@
+/* Fixed at the very top of the viewport, above the sticky navbar
+   (--ifm-z-index-fixed is 200) so it stays visible while scrolling a
+   long doc page. Track is intentionally almost invisible — only the
+   gold fill is meant to read as the indicator, same restrained spirit
+   as the rest of the site (the reference "stamina bar" this reuses had
+   a visible dark track + a neon glow; we keep neither). */
+.track {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 500;
+  background: rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+}
+
+.fill {
+  height: 100%;
+  background-color: var(--hy-gold);
+  box-shadow: 0 0 4px rgba(183, 139, 76, 0.4);
+  transition: width 0.1s linear;
+}
