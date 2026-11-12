@@ -8,9 +8,9 @@
   text-align: center;
   position: relative;
   /* No overflow:hidden here (deliberately, unlike an earlier pass): the
-     reed sweeps below are meant to bleed past the hero's own bottom
-     edge — see .cards further down for how that overflow gets covered
-     instead of clipped. */
+     stretched diamonds below are meant to bleed past the hero's own
+     top/bottom edges — see .cards further down for how that overflow
+     gets covered instead of clipped. */
   /* Fixed colors, not --ifm-color-primary/--hy-gold: those brighten in
      dark mode for use as link/accent colors against a dark page
      background — the opposite contrast case from here, white hero text
@@ -32,23 +32,26 @@
   z-index: 1;
 }
 
-/* Three instances of the same reed/frond sweep (src/css/motifs/
-   reed-sweep.svg, an original two-blade line-art shape, not a game
-   asset), framing the hero rather than one small corner accent — the
-   corner diamond read as a crisp watermark even scaled down (see git
-   history), so this replaces it instead of also keeping it. mask-image
-   (not background-image/<img>) so the visible color stays a CSS var
-   and automatically tracks theme; white rather than --hy-gold for the
-   same contrast reason as .secondaryButton below. z-index:0 (explicit,
-   not auto) so .cards below — given z-index:1 for exactly this reason
-   — reliably paints over the portion that bleeds past the hero's
-   bottom edge, regardless of DOM order. */
-.reedSweep {
+/* Three instances of the same losango (src/css/motifs/rune-mark.svg: an
+   outer diamond plus a smaller concentric inner one, original line-art,
+   not a game asset) stretched into a tall, narrow rhombus via width ≪
+   height on the element itself (mask-size:100% 100% maps the square
+   viewBox onto that box non-uniformly) — not rotated, a diamond is
+   already left/right-symmetric so the same shape works unmirrored on
+   both sides. For a rhombus the two side vertices sit exactly level
+   with its geometric center, so centering that point on a section seam
+   leaves only the fan of 4 edges (outer+inner diamond, 2 each) above
+   the seam visible — which is what the stretched shape is for. White
+   rather than --hy-gold: same contrast reason as .secondaryButton
+   below. z-index:0 (explicit, not auto) so .cards further down — given
+   z-index:1 for exactly this reason — reliably paints over whatever
+   bleeds past the hero's bottom edge, regardless of DOM order. */
+.diamondMotif {
   position: absolute;
   z-index: 0;
   background-color: white;
-  mask-image: url('../css/motifs/reed-sweep.svg');
-  -webkit-mask-image: url('../css/motifs/reed-sweep.svg');
+  mask-image: url('../css/motifs/rune-mark.svg');
+  -webkit-mask-image: url('../css/motifs/rune-mark.svg');
   mask-size: 100% 100%;
   -webkit-mask-size: 100% 100%;
   mask-repeat: no-repeat;
@@ -56,45 +59,49 @@
   pointer-events: none;
 }
 
-.reedSweepLeft {
-  composes: reedSweep;
-  left: -1.5rem;
-  bottom: -3rem;
-  width: 11rem;
-  height: 32rem;
+/* Center exactly on the hero/.cards seam: bottom:-50% of the box's own
+   height puts its vertical center at the container's own bottom edge. */
+.diamondLeft {
+  composes: diamondMotif;
+  left: -2rem;
+  width: 9rem;
+  height: 34rem;
+  bottom: -17rem;
   opacity: 0.1;
-  transform: rotate(-10deg);
 }
 
-.reedSweepLeftInner {
-  composes: reedSweep;
-  left: 11rem;
-  bottom: -2rem;
-  width: 7rem;
-  height: 20rem;
-  opacity: 0.08;
-  transform: rotate(6deg);
-}
-
-.reedSweepRight {
-  composes: reedSweep;
+.diamondRight {
+  composes: diamondMotif;
   right: -2rem;
-  bottom: -3rem;
-  width: 13rem;
-  height: 36rem;
+  width: 9rem;
+  height: 34rem;
+  bottom: -17rem;
   opacity: 0.1;
-  transform: scaleX(-1) rotate(-12deg);
+}
+
+/* Center on the hero/navbar seam instead (top:-50% of its own height),
+   not the bottom one — small and high enough that only its lower fan
+   hangs down into the hero's own top padding, clear of the title. */
+.diamondCenter {
+  composes: diamondMotif;
+  left: 50%;
+  width: 4.5rem;
+  height: 8rem;
+  top: -4rem;
+  transform: translateX(-50%);
+  opacity: 0.08;
 }
 
 @media screen and (max-width: 996px) {
-  .reedSweepLeftInner {
+  .diamondCenter {
     display: none;
   }
 
-  .reedSweepLeft,
-  .reedSweepRight {
-    width: 7rem;
+  .diamondLeft,
+  .diamondRight {
+    width: 5rem;
     height: 20rem;
+    bottom: -10rem;
   }
 }
 
