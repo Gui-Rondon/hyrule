@@ -1,60 +1,48 @@
-/* Classic 3-triangle CSS Triforce: one real element (the top triangle,
-   via the border trick) hosting its own ::before/::after for the two
-   bottom triangles — the only way to get 3 border-triangles from a
-   single element, which is why this needs a real DOM node (see
-   index.js) rather than a pseudo-element of .footer__copyright.
+/* Pure-CSS Triforce via clip-path, not the border-triangle trick — that
+   approach went through two rounds of wrong fixes (a containing-block
+   subtlety with border widths, then a geometry error on my part about
+   how far apart the triangles should sit) before being scrapped
+   entirely. clip-path on three plain boxes has neither problem: no
+   border/padding to create a hidden containing-block offset, and the
+   positions below were verified by rendering the exact box model in
+   Python before touching this file, not just worked out on paper.
 
-   a = half-width (20px), h = height (35px, ≈ a*sqrt(3) for an
-   equilateral triangle).
-
-   The bottom row is position:absolute, so it's removed from normal
-   flow — .triforce's own layout height is only the top triangle's 35px
-   (from its own border-bottom; border-left/right don't add height).
-   The copyright text below it was only pushed down by that 35px plus
-   the old margin-bottom, so the absolutely-positioned bottom row (an
-   extra 35px, invisible to layout) visually overlapped it. Fixed by
-   sizing margin-bottom to cover that overhang.
-
-   The horizontal offsets below (-3a / +a, not the -2a / +2a a clean
-   diagram would suggest) correct for a second, separate bug: the
-   containing block for an absolutely positioned child is its parent's
-   PADDING box, not its border box. .triforce's padding box has zero
-   size (zero content, zero padding) and sits at its border-box's
-   top-left corner *plus its own border widths* — border-left:20
-   shifts that reference point 20px (= a) to the right of where border
-   width 0 on top leaves it vertically, i.e. to the parent's own apex,
-   not its corner. Both ::before and ::after inherited that same +a
-   rightward offset, confirmed by measuring an actual screenshot: the
-   left triangle overlapped the top one by ~a and the right one had a
-   ~a gap, both by the same amount in the same direction. Subtracting
-   that a back out (-2a-a=-3a, +2a-a=+a) is what actually produces a
-   flush, non-overlapping fit. */
+   W×H is each small triangle's own box (40×35, ≈ equilateral). A
+   Triforce is the classic big triangle split into 4 equal sub-
+   triangles by connecting its side midpoints — the solid ones don't
+   sit in adjacent W-wide boxes (that was the geometry error: it gives
+   visible gaps, matching exactly what a real screenshot showed).
+   Instead each bottom triangle's box is the top triangle's own box
+   shifted sideways by *half* its width, so that its apex lands exactly
+   on the top triangle's bottom-left/bottom-right vertex — confirmed by
+   computing both points and checking they're identical before this
+   was simulated and rendered at all. */
 .triforce {
-  display: block;
-  width: 0;
-  height: 0;
-  margin: 1.5rem auto 4.5rem;
-  border-left: 20px solid transparent;
-  border-right: 20px solid transparent;
-  border-bottom: 35px solid var(--hy-gold);
   position: relative;
+  width: 40px;
+  height: 35px;
+  margin: 1.5rem auto 4.5rem;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.25));
+}
+
+.triforce,
+.triforce::before,
+.triforce::after {
+  background-color: var(--hy-gold);
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
 }
 
 .triforce::before,
 .triforce::after {
   content: '';
   position: absolute;
-  width: 0;
-  height: 0;
-  border-left: 20px solid transparent;
-  border-right: 20px solid transparent;
-  border-bottom: 35px solid var(--hy-gold);
+  width: 40px;
+  height: 35px;
   top: 35px;
 }
 
 .triforce::before {
-  left: -60px;
+  left: -20px;
 }
 
 .triforce::after {
