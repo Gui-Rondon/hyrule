@@ -1,28 +1,23 @@
-/* Pure-CSS Triforce via clip-path, not the border-triangle trick — that
-   approach went through two rounds of wrong fixes (a containing-block
-   subtlety with border widths, then a geometry error on my part about
-   how far apart the triangles should sit) before being scrapped
-   entirely. clip-path on three plain boxes has neither problem: no
-   border/padding to create a hidden containing-block offset, and the
-   positions below were verified by rendering the exact box model in
-   Python before touching this file, not just worked out on paper.
-
-   W×H is each small triangle's own box (40×35, ≈ equilateral). A
-   Triforce is the classic big triangle split into 4 equal sub-
-   triangles by connecting its side midpoints — the solid ones don't
-   sit in adjacent W-wide boxes (that was the geometry error: it gives
-   visible gaps, matching exactly what a real screenshot showed).
-   Instead each bottom triangle's box is the top triangle's own box
-   shifted sideways by *half* its width, so that its apex lands exactly
-   on the top triangle's bottom-left/bottom-right vertex — confirmed by
-   computing both points and checking they're identical before this
-   was simulated and rendered at all. */
+/* Pure-CSS Triforce via clip-path. Earlier attempts put the bottom two
+   triangles *outside* .triforce's own box (absolutely positioned,
+   overflowing it) — which broke again once display:block was restored
+   and the shapes became visible: only the top one (which stays inside
+   its own box) rendered, the other two didn't. clip-path (and filter,
+   both present on .triforce) clips the element's content to its own
+   box; anything a descendant paints beyond that box's edges has no
+   polygon coordinate space to land in and is clipped away, regardless
+   of overflow. Fixed by sizing .triforce to the shape's *entire*
+   bounding box (80×70 — the previous 40×35 was only the top
+   triangle's own box) and giving each of the 3 triangles a clip-path
+   expressed as percentages of that full box, each covering exactly its
+   own quarter, so nothing ever extends past the box edges. Verified in
+   Python/PIL before writing this, same as the geometry fix before it. */
 .triforce {
   display: block;
   position: relative;
-  width: 40px;
-  height: 35px;
-  margin: 1.5rem auto 4.5rem;
+  width: 80px;
+  height: 70px;
+  margin: 1.5rem auto 1.5rem;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.25));
 }
 
@@ -30,24 +25,25 @@
 .triforce::before,
 .triforce::after {
   background-color: var(--hy-gold);
-  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+}
+
+.triforce {
+  clip-path: polygon(50% 0%, 75% 50%, 25% 50%);
 }
 
 .triforce::before,
 .triforce::after {
   content: '';
   position: absolute;
-  width: 40px;
-  height: 35px;
-  top: 35px;
+  inset: 0;
 }
 
 .triforce::before {
-  left: -20px;
+  clip-path: polygon(25% 50%, 50% 100%, 0% 100%);
 }
 
 .triforce::after {
-  left: 20px;
+  clip-path: polygon(75% 50%, 100% 100%, 50% 100%);
 }
 
 /* Responsive per instructions: drop it on mobile rather than cramming
