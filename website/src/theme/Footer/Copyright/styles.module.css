@@ -8,12 +8,21 @@
    equilateral triangle). The two bottom triangles sit at ±2a from the
    top triangle's own center — NOT one of them at 0, which would stack
    it directly under the top triangle instead of mirroring the other
-   side (a reference recipe passed along had exactly that mistake). */
+   side (a reference recipe passed along had exactly that mistake).
+
+   The bottom row is position:absolute, so it's removed from normal
+   flow — .triforce's own layout height is only the top triangle's 35px
+   (from its own border-bottom; border-left/right don't add height).
+   The copyright text below it was only pushed down by that 35px plus
+   the old margin-bottom, so the absolutely-positioned bottom row (an
+   extra 35px, invisible to layout) visually overlapped it. Fixed by
+   sizing margin-bottom to cover that overhang, not just by moving the
+   shape — the shape's own geometry was already correct. */
 .triforce {
   display: block;
   width: 0;
   height: 0;
-  margin: 2.5rem auto 1.5rem;
+  margin: 1.5rem auto 4.5rem;
   border-left: 20px solid transparent;
   border-right: 20px solid transparent;
   border-bottom: 35px solid var(--hy-gold);
@@ -39,4 +48,12 @@
 
 .triforce::after {
   left: 40px;
+}
+
+/* Responsive per instructions: drop it on mobile rather than cramming
+   it into a narrower footer. */
+@media screen and (max-width: 996px) {
+  .triforce {
+    display: none;
+  }
 }
