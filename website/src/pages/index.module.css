@@ -8,6 +8,17 @@
   text-align: center;
   position: relative;
   overflow: hidden;
+  /* Infima's .hero--primary sets --ifm-hero-text-color from
+     --ifm-font-color-base-inverse, which chains down to
+     --ifm-color-emphasis-0 — a value Infima itself flips to near-black
+     in dark mode (it's "the color closest to the page background",
+     which is dark there). We never touched that variable, so the title
+     and subtitle rendered correctly white in light mode but black in
+     dark mode. Hero text is meant to be white in both modes (see the
+     comment below on secondaryButton/codeTeaser, which already assumed
+     that) — pin it directly instead of depending on a chain tuned for
+     Infima's own default palette, not ours. */
+  --ifm-hero-text-color: #fff;
   /* Fixed colors, not --ifm-color-primary/--hy-gold: those brighten in
      dark mode for use as link/accent colors against a dark page
      background — the opposite contrast case from here, white hero text
