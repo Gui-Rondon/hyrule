@@ -16,25 +16,25 @@ func TestKindSQLCast(t *testing.T) {
 		{KindObject, "text"},
 	}
 	for _, c := range cases {
-		if got := c.kind.sqlCast(); got != c.want {
-			t.Errorf("Kind(%d).sqlCast() = %q, want %q", c.kind, got, c.want)
+		if got := c.kind.SQLCast(); got != c.want {
+			t.Errorf("Kind(%d).SQLCast() = %q, want %q", c.kind, got, c.want)
 		}
 	}
 }
 
 func TestSchemaSpecKindDefault(t *testing.T) {
 	spec := SchemaSpec{Fields: map[string]Kind{"views": KindInteger}}
-	if got := spec.kind("views"); got != KindInteger {
+	if got := spec.FieldKind("views"); got != KindInteger {
 		t.Errorf("kind(declared) = %v, want KindInteger", got)
 	}
-	if got := spec.kind("unknown_field"); got != KindString {
+	if got := spec.FieldKind("unknown_field"); got != KindString {
 		t.Errorf("kind(undeclared) = %v, want KindString (the cast-agnostic default)", got)
 	}
 }
 
 func TestSchemaSpecKindNilFields(t *testing.T) {
 	var spec SchemaSpec // Fields is nil
-	if got := spec.kind("anything"); got != KindString {
+	if got := spec.FieldKind("anything"); got != KindString {
 		t.Errorf("kind on zero-value SchemaSpec = %v, want KindString", got)
 	}
 }
@@ -44,13 +44,13 @@ func TestSchemaSpecElementKindIsIndependentFromFieldKind(t *testing.T) {
 		Fields:       map[string]Kind{"scores": KindArray},
 		ElementKinds: map[string]Kind{"scores": KindInteger},
 	}
-	if got := spec.kind("scores"); got != KindArray {
+	if got := spec.FieldKind("scores"); got != KindArray {
 		t.Errorf("kind(\"scores\") = %v, want KindArray", got)
 	}
-	if got := spec.elementKind("scores"); got != KindInteger {
+	if got := spec.ElementKind("scores"); got != KindInteger {
 		t.Errorf("elementKind(\"scores\") = %v, want KindInteger", got)
 	}
-	if got := spec.elementKind("undeclared"); got != KindString {
+	if got := spec.ElementKind("undeclared"); got != KindString {
 		t.Errorf("elementKind(undeclared) = %v, want KindString (the cast-agnostic default)", got)
 	}
 }
