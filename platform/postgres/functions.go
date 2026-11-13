@@ -9,9 +9,10 @@ import (
 
 // The three functions below convert a jsonb-sourced text value to a
 // typed SQL value without ever raising inside a query -- every
-// malformed or out-of-range input returns SQL NULL, not an error (see
-// postgres-rfc.md §10 for the Postgres numeric/timestamp limits each
-// one guards against, e.g. `numeric`'s 131072-digit cap).
+// malformed or out-of-range input returns SQL NULL, not an error. Each
+// guards against a real Postgres limit: numeric's 131072-digit cap for
+// hyrule_safe_integer/hyrule_safe_numeric, and timestamptz parsing
+// raising on garbage input for hyrule_safe_timestamptz.
 const (
 	hyruleSafeIntegerSQL = `
 CREATE OR REPLACE FUNCTION hyrule_safe_integer(value text) RETURNS numeric

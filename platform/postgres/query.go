@@ -15,8 +15,48 @@ import (
 // an implicit $eq, or an operator map such as Query{"$gt": 5, "$lt":
 // 10}, ANDed together) or one of $and/$or (value []Query) / $not (value
 // Query). A dotted field name ("a.b") addresses a nested path and
-// accepts only $exists/$eq/$ne (see postgres-rfc.md §10.6).
+// accepts only $exists/$eq/$ne.
+//
+// Operator maps and $and/$or lists are also accepted as plain
+// map[string]any/[]any -- what json.Unmarshal actually produces for a
+// JSON object/array decoded into an any field, since a caller building
+// a Query from a client's raw JSON query string never gets the named
+// Query/[]Query types back from the decoder. See asQuery/asQueryList.
 type Query map[string]any
+
+// asQuery normalizes v into a Query, accepting both the named Query
+// type and the map[string]any json.Unmarshal produces for a JSON
+// object -- the two are the same underlying type, so this is a cheap
+// reinterpretation, not a copy.
+func asQuery(v any) (Query, bool) {
+	switch q := v.(type) {
+	case Query:
+		return q, true
+	case map[string]any:
+		return Query(q), true
+	}
+	return nil, false
+}
+
+// asQueryList normalizes v into a []Query, accepting both []Query and
+// the []any json.Unmarshal produces for a JSON array of objects.
+func asQueryList(v any) ([]Query, bool) {
+	switch list := v.(type) {
+	case []Query:
+		return list, true
+	case []any:
+		out := make([]Query, len(list))
+		for i, item := range list {
+			q, ok := asQuery(item)
+			if !ok {
+				return nil, false
+			}
+			out[i] = q
+		}
+		return out, true
+	}
+	return nil, false
+}
 
 // CompileFilter compiles q into a parameterized boolean SQL expression,
 // usable directly as a WHERE clause (no leading "WHERE"), against a
@@ -86,8 +126,7 @@ func checkKindValue(val any, kind Kind) error {
 // content: 'null'::jsonb for a nil value (JSON null, never SQL NULL),
 // otherwise to_jsonb($N::<kind's cast>) so e.g. a KindInteger field
 // compares against a jsonb number, never a jsonb string of the same
-// digits (postgres-rfc.md §10's "Tipagem por Kind do campo, nunca text
-// fixo").
+// digits.
 func (c *compiler) jsonbLiteral(val any, kind Kind) (string, error) {
 	if val == nil {
 		return "'null'::jsonb", nil
@@ -118,6 +157,14 @@ func (c *compiler) compileQuery(q Query) (string, error) {
 		}
 		parts = append(parts, expr)
 	}
+	// An empty Query (no top-level keys) compiles to "TRUE" -- matches
+	// every row, the AND-identity -- rather than the syntactically
+	// invalid "()". Reached both directly (CompileFilter's own q) and
+	// recursively (an empty sub-Query inside $not/$and/$or, or as a
+	// field's empty operator map via compileField/compileTopField).
+	if len(parts) == 0 {
+		return "TRUE", nil
+	}
 	if len(parts) == 1 {
 		return parts[0], nil
 	}
@@ -131,7 +178,7 @@ func (c *compiler) compileTop(key string, value any) (string, error) {
 	case "$or":
 		return c.compileBoolList(value, " OR ")
 	case "$not":
-		inner, ok := value.(Query)
+		inner, ok := asQuery(value)
 		if !ok {
 			return "", fmt.Errorf("postgres: $not expects a Query, got %T", value)
 		}
@@ -146,7 +193,7 @@ func (c *compiler) compileTop(key string, value any) (string, error) {
 }
 
 func (c *compiler) compileBoolList(value any, sep string) (string, error) {
-	list, ok := value.([]Query)
+	list, ok := asQueryList(value)
 	if !ok {
 		return "", fmt.Errorf("postgres: operator expects []Query, got %T", value)
 	}
@@ -165,7 +212,7 @@ func (c *compiler) compileBoolList(value any, sep string) (string, error) {
 }
 
 func (c *compiler) compileField(field string, value any) (string, error) {
-	ops, isOps := value.(Query)
+	ops, isOps := asQuery(value)
 	if !isOps {
 		ops = Query{"$eq": value}
 	}
@@ -176,7 +223,7 @@ func (c *compiler) compileField(field string, value any) (string, error) {
 }
 
 // compileNestedField supports only $exists/$eq/$ne for a dotted path --
-// postgres-rfc.md §10.6 names no other operator for nested content.
+// no other operator is defined for nested content.
 func (c *compiler) compileNestedField(path []string, ops Query) (string, error) {
 	if len(ops) != 1 {
 		return "", fmt.Errorf("postgres: nested path %q: exactly one of $exists/$eq/$ne, got %d operators", strings.Join(path, "."), len(ops))
@@ -228,6 +275,11 @@ func (c *compiler) compileTopField(field string, ops Query) (string, error) {
 			return "", err
 		}
 		parts = append(parts, expr)
+	}
+	// An empty operator map (e.g. Query{"field": Query{}}) compiles to
+	// "TRUE" -- same rationale as compileQuery's empty-Query case.
+	if len(parts) == 0 {
+		return "TRUE", nil
 	}
 	if len(parts) == 1 {
 		return parts[0], nil
@@ -281,20 +333,35 @@ func (c *compiler) compileOp(field string, kind Kind, op string, val any) (strin
 		}
 		return fmt.Sprintf("(NOT (doc ? %s::text)) IS TRUE", ptr), nil
 	case "$has":
-		return c.compileHas(field, val, kind)
+		return c.compileHas(field, val, c.schema.elementKind(field))
 	case "$hasSome":
-		return c.compileHasSome(field, kind, val)
+		return c.compileHasSome(field, c.schema.elementKind(field), val)
 	case "$hasEvery":
-		return c.compileHasEvery(field, kind, val)
+		return c.compileHasEvery(field, c.schema.elementKind(field), val)
 	default:
 		return "", fmt.Errorf("postgres: unsupported operator %q on field %q", op, field)
 	}
 }
 
+// jsonbArray renders list as a Postgres jsonb[] array literal, one
+// jsonbLiteral-cast element per item -- shared by $in/$nin/$hasSome, so
+// a future change to how the array literal is assembled only needs to
+// happen in one place.
+func (c *compiler) jsonbArray(list []any, kind Kind) (string, error) {
+	elems := make([]string, len(list))
+	for i, v := range list {
+		lit, err := c.jsonbLiteral(v, kind)
+		if err != nil {
+			return "", err
+		}
+		elems[i] = lit
+	}
+	return "ARRAY[" + strings.Join(elems, ", ") + "]::jsonb[]", nil
+}
+
 // compileInNin: $in on an empty list never matches (vacuous); $nin on
-// an empty list always matches (postgres-rfc.md §10.3) -- both return
-// before touching doc at all, so field's placeholder is never consumed
-// for an empty list.
+// an empty list always matches -- both return before touching doc at
+// all, so field's placeholder is never consumed for an empty list.
 func (c *compiler) compileInNin(field string, kind Kind, op string, val any) (string, error) {
 	list, ok := val.([]any)
 	if !ok {
@@ -307,15 +374,10 @@ func (c *compiler) compileInNin(field string, kind Kind, op string, val any) (st
 		return "TRUE", nil
 	}
 	ref := c.docRef(field)
-	elems := make([]string, len(list))
-	for i, v := range list {
-		lit, err := c.jsonbLiteral(v, kind)
-		if err != nil {
-			return "", err
-		}
-		elems[i] = lit
+	arr, err := c.jsonbArray(list, kind)
+	if err != nil {
+		return "", err
 	}
-	arr := "ARRAY[" + strings.Join(elems, ", ") + "]::jsonb[]"
 	exists := fmt.Sprintf("EXISTS (SELECT 1 FROM unnest(%s) AS item(value) WHERE %s IS NOT DISTINCT FROM item.value)", arr, ref)
 	if op == "$in" {
 		return "(" + exists + ") IS TRUE", nil
@@ -323,7 +385,7 @@ func (c *compiler) compileInNin(field string, kind Kind, op string, val any) (st
 	return "(NOT (" + exists + ")) IS TRUE", nil
 }
 
-// compileHas: doc[field] is an array containing exactly val (postgres-rfc.md §10.5).
+// compileHas: doc[field] is an array containing exactly val.
 func (c *compiler) compileHas(field string, val any, kind Kind) (string, error) {
 	ref := c.docRef(field)
 	elem := "'null'::jsonb"
@@ -342,20 +404,21 @@ func (c *compiler) compileHasSome(field string, kind Kind, val any) (string, err
 		return "", fmt.Errorf("postgres: $hasSome expects a slice, got %T", val)
 	}
 	ref := c.docRef(field)
-	elems := make([]string, len(list))
-	for i, v := range list {
-		lit, err := c.jsonbLiteral(v, kind)
-		if err != nil {
-			return "", err
-		}
-		elems[i] = lit
+	arr, err := c.jsonbArray(list, kind)
+	if err != nil {
+		return "", err
 	}
-	arr := "ARRAY[" + strings.Join(elems, ", ") + "]::jsonb[]"
 	return fmt.Sprintf(
 		"(CASE WHEN jsonb_typeof(%s) = 'array' THEN EXISTS (SELECT 1 FROM jsonb_array_elements(%s) AS e(value) WHERE e.value = ANY(%s)) ELSE FALSE END)",
 		ref, ref, arr), nil
 }
 
+// compileHasEvery builds its jsonb array via jsonb_build_array (which
+// takes each cast element directly, not wrapped in to_jsonb like
+// jsonbArray's ARRAY[...]::jsonb[] elements), but reuses jsonbLiteral
+// for the null/cast/kind-check logic rather than duplicating it --
+// jsonbLiteral's to_jsonb(...) output nests fine as a jsonb_build_array
+// argument.
 func (c *compiler) compileHasEvery(field string, kind Kind, val any) (string, error) {
 	list, ok := val.([]any)
 	if !ok {
@@ -364,14 +427,11 @@ func (c *compiler) compileHasEvery(field string, kind Kind, val any) (string, er
 	ref := c.docRef(field)
 	elems := make([]string, len(list))
 	for i, v := range list {
-		if v == nil {
-			elems[i] = "'null'::jsonb"
-			continue
-		}
-		if err := checkKindValue(v, kind); err != nil {
+		lit, err := c.jsonbLiteral(v, kind)
+		if err != nil {
 			return "", err
 		}
-		elems[i] = fmt.Sprintf("to_jsonb(%s::%s)", c.param(v), kind.sqlCast())
+		elems[i] = lit
 	}
 	arr := "jsonb_build_array(" + strings.Join(elems, ", ") + ")"
 	return fmt.Sprintf("(CASE WHEN jsonb_typeof(%s) = 'array' THEN %s @> %s ELSE FALSE END)", ref, ref, arr), nil

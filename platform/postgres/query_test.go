@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 )
@@ -31,7 +32,7 @@ func TestCompileFilterImplicitEq(t *testing.T) {
 
 func TestCompileFilterEqNull(t *testing.T) {
 	// $eq: null compiles against the 'null'::jsonb literal, no extra
-	// bind parameter for the value (postgres-rfc.md §10.1).
+	// bind parameter for the value.
 	where, args, err := CompileFilter(Query{"status": Query{"$eq": nil}}, SchemaSpec{}, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -215,6 +216,128 @@ func TestCompileFilterAndOr(t *testing.T) {
 func TestCompileFilterAndOrEmptyListRejected(t *testing.T) {
 	if _, _, err := CompileFilter(Query{"$and": []Query{}}, SchemaSpec{}, 0); err == nil {
 		t.Fatal("expected an error for an empty $and list")
+	}
+}
+
+func TestCompileFilterEmptyOperatorMapMatchesEverything(t *testing.T) {
+	// A field with no operators (e.g. an empty JSON object as its
+	// filter value) must compile to "TRUE", not the syntactically
+	// invalid "()".
+	where, args, err := CompileFilter(Query{"status": Query{}}, SchemaSpec{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if where != "TRUE" || len(args) != 0 {
+		t.Fatalf("where, args = %q, %v, want TRUE, []", where, args)
+	}
+}
+
+func TestCompileFilterEmptySubQueryInsideAndOr(t *testing.T) {
+	// An empty sub-Query inside $and must not inject a bare "()" into
+	// the joined SQL text.
+	where, _, err := CompileFilter(Query{"$and": []Query{{}, {"status": "x"}}}, SchemaSpec{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `(TRUE AND (doc->$1::text = to_jsonb($2::text)) IS TRUE)`
+	if where != want {
+		t.Fatalf("where = %q, want %q", where, want)
+	}
+}
+
+// jsonRoundTrip decodes query, the way a real client's JSON request
+// body would be decoded into an any field -- json.Unmarshal never
+// produces the named Query/[]Query types, only map[string]any/[]any.
+func jsonRoundTrip(t *testing.T, query string) any {
+	t.Helper()
+	var v any
+	if err := json.Unmarshal([]byte(query), &v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func TestCompileFilterAcceptsJSONDecodedOperatorMap(t *testing.T) {
+	// A string comparison value, not numeric: json.Unmarshal's default
+	// float64 for JSON numbers is a separate, already-handled concern
+	// (restpostgres's Schema validation normalizes declared numeric
+	// fields to int64/json.Number before a Query is ever built) --
+	// this test isolates the operator-map decoding shape alone.
+	decoded := jsonRoundTrip(t, `{"status": {"$gt": "abc"}}`)
+	q, ok := decoded.(map[string]any)
+	if !ok {
+		t.Fatalf("decoded = %T, want map[string]any", decoded)
+	}
+	// Before the fix, this failed with "value of type map[string]
+	// interface {} does not match field kind 0": compileField's
+	// value.(Query) assertion rejected the map[string]any operator
+	// map outright, so it was treated as a literal $eq value instead.
+	where, args, err := CompileFilter(Query(q), SchemaSpec{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `(doc->$1::text > to_jsonb($2::text)) IS TRUE`; where != want {
+		t.Fatalf("where = %q, want %q", where, want)
+	}
+	if !reflect.DeepEqual(args, []any{"status", "abc"}) {
+		t.Fatalf("args = %v", args)
+	}
+}
+
+func TestCompileFilterAcceptsJSONDecodedAndOr(t *testing.T) {
+	decoded := jsonRoundTrip(t, `{"$and": [{"status": "x"}, {"$or": [{"status": "y"}]}]}`)
+	q, ok := decoded.(map[string]any)
+	if !ok {
+		t.Fatalf("decoded = %T, want map[string]any", decoded)
+	}
+	// Before the fix, this failed with "operator expects []Query, got
+	// []interface {}" -- $and/$or's value decodes as []any, never
+	// []Query.
+	where, _, err := CompileFilter(Query(q), SchemaSpec{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// compileBoolList always wraps its list in parens, even a
+	// single-element one -- hence the extra (( )) around $or's part.
+	want := `((doc->$1::text = to_jsonb($2::text)) IS TRUE AND ((doc->$3::text = to_jsonb($4::text)) IS TRUE))`
+	if where != want {
+		t.Fatalf("where = %q, want %q", where, want)
+	}
+}
+
+func TestCompileFilterAcceptsJSONDecodedNot(t *testing.T) {
+	decoded := jsonRoundTrip(t, `{"$not": {"status": "x"}}`)
+	q, ok := decoded.(map[string]any)
+	if !ok {
+		t.Fatalf("decoded = %T, want map[string]any", decoded)
+	}
+	// Before the fix, this failed with "$not expects a Query, got
+	// map[string]interface {}".
+	where, _, err := CompileFilter(Query(q), SchemaSpec{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `(NOT ((doc->$1::text = to_jsonb($2::text)) IS TRUE))`
+	if where != want {
+		t.Fatalf("where = %q, want %q", where, want)
+	}
+}
+
+func TestAsQueryRejectsNonMap(t *testing.T) {
+	if _, ok := asQuery("not a map"); ok {
+		t.Fatal("expected asQuery to reject a string")
+	}
+}
+
+func TestAsQueryListRejectsNonList(t *testing.T) {
+	if _, ok := asQueryList("not a list"); ok {
+		t.Fatal("expected asQueryList to reject a string")
+	}
+}
+
+func TestAsQueryListRejectsListOfNonObjects(t *testing.T) {
+	if _, ok := asQueryList([]any{"not an object"}); ok {
+		t.Fatal("expected asQueryList to reject a list whose elements aren't objects")
 	}
 }
 

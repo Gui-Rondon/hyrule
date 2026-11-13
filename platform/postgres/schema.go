@@ -3,10 +3,8 @@ package postgres
 // Kind is the neutral type of a declared document field. query.go's DSL
 // compiler uses it to pick the SQL cast (to_jsonb($N::<cast>)) so a
 // filter value compares against doc's jsonb content as the field's real
-// type, never as a bare string -- see postgres-rfc.md §10's "Tipagem por
-// Kind do campo, nunca text fixo". It mirrors rest.Schema's field kinds
-// without importing rest: platform/postgres never imports rest
-// (postgres-rfc.md's restrictions, reaffirmed for Fase 1).
+// type, never as a bare string. It mirrors rest.Schema's field kinds
+// without importing rest: platform/postgres never imports rest.
 type Kind int
 
 const (
@@ -44,6 +42,13 @@ func (k Kind) sqlCast() string {
 // rest.Schema's shape.
 type SchemaSpec struct {
 	Fields map[string]Kind
+	// ElementKinds declares the Kind of the elements inside an array
+	// field, for $has/$hasSome/$hasEvery's search-value cast. This is
+	// independent from Fields[field]: an array field's own Kind is
+	// KindArray, which says nothing about what's inside it (e.g. a
+	// KindArray field of integers still needs KindInteger here for its
+	// elements to cast correctly).
+	ElementKinds map[string]Kind
 }
 
 // kind reports field's declared Kind, or KindString for a field with no
@@ -51,6 +56,16 @@ type SchemaSpec struct {
 // able to filter/sort by an AllowUnknown field the schema never declared.
 func (s SchemaSpec) kind(field string) Kind {
 	if k, ok := s.Fields[field]; ok {
+		return k
+	}
+	return KindString
+}
+
+// elementKind reports the declared Kind of field's array elements, or
+// KindString for a field with no entry -- same cast-agnostic default as
+// kind.
+func (s SchemaSpec) elementKind(field string) Kind {
+	if k, ok := s.ElementKinds[field]; ok {
 		return k
 	}
 	return KindString

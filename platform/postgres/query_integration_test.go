@@ -7,9 +7,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// docQuerier is the minimal surface query_integration_test.go needs
-// against a jsonb "doc" table -- real Postgres, never a mock of jsonb
-// semantics (postgres-rfc.md §20's Fase 1 gate).
+// setupDocTable creates the minimal table query_integration_test.go
+// needs against a jsonb "doc" column -- real Postgres, never a mock of
+// jsonb semantics.
 func setupDocTable(t *testing.T, pool *pgxpool.Pool, table string) {
 	ctx := context.Background()
 	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
@@ -70,9 +70,9 @@ func assertNames(t *testing.T, got []string, want ...string) {
 }
 
 func TestCompileFilterIntegrationEqSemantics(t *testing.T) {
-	// Locks in postgres-rfc.md §10.1's table: $eq:"x" matches only the
-	// literal; $eq:null matches only an explicit null, never an absent
-	// field -- the named Mongo/Postgres divergence.
+	// $eq:"x" matches only the literal; $eq:null matches only an
+	// explicit null, never an absent field -- the named Mongo/Postgres
+	// divergence.
 	pool := testPool(t)
 	table := "query_eq_test"
 	setupDocTable(t, pool, table)
@@ -88,10 +88,10 @@ func TestCompileFilterIntegrationEqSemantics(t *testing.T) {
 	// $ne: "x" matches absent and null too (IS DISTINCT FROM is never
 	// UNKNOWN), plus any other value -- everything except "x".
 	assertNames(t, namesMatching(t, pool, table, Query{"status": Query{"$ne": "x"}}, SchemaSpec{}), "absent", "nullish", "y")
-	// $ne: null matches absent too (postgres-rfc.md §10.1's table: only
-	// an explicit "null" value is excluded) -- confirmed against real
-	// Postgres rather than assumed; SQL NULL (an absent key) IS
-	// DISTINCT FROM the jsonb value 'null'::jsonb.
+	// $ne: null matches absent too (only an explicit "null" value is
+	// excluded) -- confirmed against real Postgres rather than
+	// assumed; SQL NULL (an absent key) IS DISTINCT FROM the jsonb
+	// value 'null'::jsonb.
 	assertNames(t, namesMatching(t, pool, table, Query{"status": Query{"$ne": nil}}, SchemaSpec{}), "absent", "x", "y")
 }
 
@@ -160,14 +160,34 @@ func TestCompileFilterIntegrationHasFamily(t *testing.T) {
 	assertNames(t, namesMatching(t, pool, table, Query{"tags": Query{"$has": "go"}}, SchemaSpec{}), "a", "b")
 	assertNames(t, namesMatching(t, pool, table, Query{"tags": Query{"$hasSome": []any{"rest", "nope"}}}, SchemaSpec{}), "a")
 	assertNames(t, namesMatching(t, pool, table, Query{"tags": Query{"$hasEvery": []any{"go", "rest"}}}, SchemaSpec{}), "a")
-	// A null element in the $hasEvery list exercises the branch that
-	// doesn't go through jsonbLiteral (the function builds a raw
-	// jsonb_build_array directly) -- no row has a literal null in
-	// tags, so this is expected to match nothing.
+	// A null element in the $hasEvery list -- no row has a literal null
+	// in tags, so this is expected to match nothing.
 	assertNames(t, namesMatching(t, pool, table, Query{"tags": Query{"$hasEvery": []any{nil}}}, SchemaSpec{}))
 	// $has/$hasSome/$hasEvery on a non-array (null, missing) never
-	// match -- the CASE's ELSE FALSE branch (postgres-rfc.md §10.5).
+	// match -- the CASE's ELSE FALSE branch.
 	assertNames(t, namesMatching(t, pool, table, Query{"tags": Query{"$has": "go"}}, SchemaSpec{}), "a", "b")
+}
+
+func TestCompileFilterIntegrationHasFamilyUsesElementKindNotFieldKind(t *testing.T) {
+	// A KindArray field's search value must cast using
+	// SchemaSpec.ElementKinds, not Fields[field] (KindArray itself) --
+	// before the fix, $has/$hasSome/$hasEvery always cast the search
+	// value as text (KindArray/KindObject fall through sqlCast's
+	// default), so a numeric element search silently matched nothing.
+	pool := testPool(t)
+	table := "query_has_element_kind_test"
+	setupDocTable(t, pool, table)
+	insertDocs(t, pool, table,
+		`{"name": "a", "scores": [1, 5, 9]}`,
+		`{"name": "b", "scores": [2, 4]}`,
+	)
+	schema := SchemaSpec{
+		Fields:       map[string]Kind{"scores": KindArray},
+		ElementKinds: map[string]Kind{"scores": KindInteger},
+	}
+	assertNames(t, namesMatching(t, pool, table, Query{"scores": Query{"$has": 5}}, schema), "a")
+	assertNames(t, namesMatching(t, pool, table, Query{"scores": Query{"$hasSome": []any{4, 100}}}, schema), "b")
+	assertNames(t, namesMatching(t, pool, table, Query{"scores": Query{"$hasEvery": []any{1, 9}}}, schema), "a")
 }
 
 func TestCompileFilterIntegrationNestedPath(t *testing.T) {
@@ -198,8 +218,7 @@ func TestCompileFilterIntegrationNotAndOr(t *testing.T) {
 	schema := SchemaSpec{Fields: map[string]Kind{"views": KindInteger}}
 
 	// $not on views > 100: matches every row where the leaf isn't
-	// TRUE, including absent/non-numeric -- postgres-rfc.md §10.4's
-	// table.
+	// TRUE, including absent/non-numeric.
 	assertNames(t, namesMatching(t, pool, table, Query{"$not": Query{"views": Query{"$gt": 100}}}, schema), "b", "c", "d")
 	assertNames(t, namesMatching(t, pool, table, Query{"$or": []Query{{"views": Query{"$gt": 100}}, {"name": "c"}}}, schema), "a", "c")
 }
