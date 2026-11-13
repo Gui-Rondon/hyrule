@@ -2,7 +2,6 @@ package rest
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // Service runs the operations of a resource with Eve's rules. It is the
@@ -183,7 +181,7 @@ func (s *Service) findOneWith(ctx context.Context, filter, projection bson.M) (D
 	readCtx, cancel := s.readContext(ctx)
 	defer cancel()
 	doc, err := s.res.Store.FindOne(readCtx, filter, projection)
-	if errors.Is(err, mongo.ErrNoDocuments) {
+	if defaultAdapter.IsNotFound(err) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
@@ -226,7 +224,7 @@ func (s *Service) Insert(ctx context.Context, docs []Doc, opts WriteOptions) ([]
 		}
 		// assigned before the hooks so an outbox event can reference it
 		if _, ok := doc["_id"]; !ok {
-			doc["_id"] = bson.NewObjectID()
+			doc["_id"] = defaultAdapter.NewID()
 		}
 	}
 
@@ -662,7 +660,7 @@ func truthyValue(v any) bool {
 // duplicateKey turns a unique index violation into Eve's status for
 // pymongo's DuplicateKeyError: 409 on insert, 400 on update and replace.
 func duplicateKey(err error, status int) error {
-	if mongo.IsDuplicateKeyError(err) {
+	if defaultAdapter.IsDuplicateKey(err) {
 		return Abort(status, "")
 	}
 	return err
@@ -675,17 +673,12 @@ var clientQueryErrors = []int{2, 9, 51091, 51108}
 // queryError turns Mongo errors caused by the client query into 400 (Eve
 // answered 500, V-16).
 func queryError(err error) error {
-	if mongo.IsTimeout(err) || errors.Is(err, context.DeadlineExceeded) {
+	if defaultAdapter.IsTimeout(err) {
 		slog.Warn("query timed out", "error", err)
 		return Abort(http.StatusServiceUnavailable, "")
 	}
-	var srvErr mongo.ServerError
-	if errors.As(err, &srvErr) {
-		for _, code := range clientQueryErrors {
-			if srvErr.HasErrorCode(code) {
-				return Abort(400, "")
-			}
-		}
+	if defaultAdapter.IsClientError(err) {
+		return Abort(400, "")
 	}
 	return err
 }

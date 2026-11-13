@@ -328,9 +328,8 @@ func (h *handler) serveItem(w http.ResponseWriter, r *http.Request) {
 // itemLookup maps the URL value to a filter: an ObjectID, or the additional
 // lookup, which Eve registers for reads only.
 func (h *handler) itemLookup(value string) (bson.M, []string) {
-	if objectIDRe.MatchString(value) {
-		oid, _ := bson.ObjectIDFromHex(value)
-		return bson.M{"_id": oid}, h.res().ItemMethods
+	if id, ok := defaultAdapter.LookupByID(value); ok {
+		return bson.M{"_id": id}, h.res().ItemMethods
 	}
 	if al := h.res().AdditionalLookup; al != nil && al.Pattern.MatchString(value) {
 		if al.Filter != nil {
