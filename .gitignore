@@ -9,3 +9,7 @@ git_branch.txt
 /shadow-proxy
 /examples/standalone-tags-api/standalone-tags-api
 __pycache__/
+
+# e2e harness: throwaway RSA key pair and JMeter run artifacts
+/examples/blog-apis/e2e/.keys/
+/examples/blog-apis/e2e/results/
