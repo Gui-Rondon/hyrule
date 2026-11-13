@@ -29,7 +29,7 @@ SERVICES_DIR ?= examples/blog-apis/services
 # Same gate as the CI: fails below COVERAGE_MIN % (testkit excluded).
 cover:
 	@mkdir -p .local
-	go test -coverpkg=$$(go list ./app/... ./behaviors/... ./declarative/... ./outbox/... ./platform/... ./rest/... ./testkit/... ./internal/... ./$(SERVICES_DIR)/... | grep -v /testkit | paste -sd, -) \
+	go test -coverpkg=$$(go list ./app/... ./behaviors/... ./declarative/... ./outbox/... ./platform/... ./rest/... ./restpostgres/... ./testkit/... ./internal/... ./$(SERVICES_DIR)/... | grep -v /testkit | paste -sd, -) \
 		-coverprofile=.local/coverage.out ./... > /dev/null
 	@go tool cover -func=.local/coverage.out | awk -v m=$(COVERAGE_MIN) \
 		'/^total:/ { sub("%", "", $$3); printf "coverage %s%% (minimum %s%%)\n", $$3, m; exit !($$3 + 0 >= m + 0) }'
