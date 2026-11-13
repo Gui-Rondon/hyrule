@@ -101,10 +101,7 @@ func (s *Service) List(ctx context.Context, q *ListQuery) (*ListResult, error) {
 	if q.MaxResults > 0 {
 		skip, limit = int64((q.Page-1)*q.MaxResults), int64(q.MaxResults)
 	}
-	sort := q.Sort
-	if len(sort) == 0 {
-		sort = s.res.Datasource.DefaultSort
-	}
+	sort := combineSort(s.res, q.Sort)
 	projection := s.projection(q.Projection)
 
 	readCtx, cancel := s.readContext(ctx)
@@ -486,6 +483,12 @@ func (s *Service) compatibleEtag(original Doc, etag string) bool {
 // writeFilter conditions the write on the etag read, as Eve 2.x's
 // _change_request does, so concurrent writers cannot both win.
 func (s *Service) writeFilter(original Doc) bson.M {
+	return writeLookup(original)
+}
+
+// writeLookup is writeFilter's body, extracted (Fase 0, rest.Adapter's
+// WriteLookup) so mongoAdapter can expose the same, unchanged logic.
+func writeLookup(original Doc) bson.M {
 	filter := bson.M{"_id": original["_id"]}
 	if etag, ok := original["_etag"].(string); ok && etag != "" {
 		filter["_etag"] = etag
@@ -504,6 +507,16 @@ func (s *Service) checkMatched(ctx context.Context, matched int64, original Doc)
 	return &PreconditionFailedError{Current: current}
 }
 
+// combineSort is List's inline sort fallback, extracted (Fase 0,
+// rest.Adapter's CombineSort): clientSort, or res's Datasource.DefaultSort
+// when clientSort is empty.
+func combineSort(res *Resource, clientSort bson.D) bson.D {
+	if len(clientSort) == 0 {
+		return res.Datasource.DefaultSort
+	}
+	return clientSort
+}
+
 // readFilter combines the lookup with the datasource filter and soft delete.
 func (s *Service) readFilter(lookup bson.M) bson.M {
 	return s.filter(lookup, false)
@@ -515,14 +528,20 @@ func (s *Service) filterIncludingDeleted(lookup bson.M) bson.M {
 }
 
 func (s *Service) filter(lookup bson.M, includeDeleted bool) bson.M {
+	return combineFilter(s.res, lookup, includeDeleted)
+}
+
+// combineFilter is filter's body, extracted (Fase 0, rest.Adapter's
+// CombineFilter) so mongoAdapter can expose the same, unchanged logic.
+func combineFilter(res *Resource, lookup bson.M, includeDeleted bool) bson.M {
 	var parts []bson.M
-	if len(s.res.Datasource.Filter) > 0 {
-		parts = append(parts, s.res.Datasource.Filter)
+	if len(res.Datasource.Filter) > 0 {
+		parts = append(parts, res.Datasource.Filter)
 	}
 	if len(lookup) > 0 {
 		parts = append(parts, lookup)
 	}
-	if s.res.SoftDelete && !includeDeleted {
+	if res.SoftDelete && !includeDeleted {
 		parts = append(parts, bson.M{"_deleted": bson.M{"$ne": true}})
 	}
 	switch len(parts) {
@@ -539,9 +558,9 @@ func (s *Service) filter(lookup bson.M, includeDeleted bool) bson.M {
 }
 
 // metaFields are Eve's auto_fields stored in the document.
-func (s *Service) metaFields() []string {
+func metaFields(res *Resource) []string {
 	meta := []string{"_id", "_created", "_updated", "_etag"}
-	if s.res.SoftDelete {
+	if res.SoftDelete {
 		meta = append(meta, "_deleted")
 	}
 	return meta
@@ -583,8 +602,14 @@ func schemaProjection(res *Resource) bson.M {
 // datasource projection (allow_unknown) the client one applies as sent,
 // minus its falsy values: an exclusion is ignored.
 func (s *Service) projection(client bson.M) bson.M {
-	meta := s.metaFields()
-	ds := s.res.Datasource.Projection
+	return combineProjection(s.res, client)
+}
+
+// combineProjection is projection's body, extracted (Fase 0, rest.Adapter's
+// CombineProjection) so mongoAdapter can expose the same, unchanged logic.
+func combineProjection(res *Resource, client bson.M) bson.M {
+	meta := metaFields(res)
+	ds := res.Datasource.Projection
 	if len(ds) > 0 {
 		fields := maps.Clone(ds)
 		for _, f := range meta {

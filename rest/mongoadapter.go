@@ -8,10 +8,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-// mongoAdapter implements ErrorClassifier and IDCodec for the only Store
-// implementation today (platform/mongodb.Store). It is stateless: every
-// method here is exactly the check/generation that was inlined in
-// rest/service.go and rest/http.go before this extraction (Fase 0).
+// mongoAdapter implements ErrorClassifier, IDCodec and QueryAdapter for
+// the only Store implementation today (platform/mongodb.Store). It is
+// stateless: every method here is exactly the check/generation/query
+// logic that was inlined in rest/service.go, rest/query.go and
+// rest/http.go before this extraction (Fase 0).
 type mongoAdapter struct{}
 
 // defaultAdapter is the one instance Service and the HTTP handler use.
@@ -66,3 +67,40 @@ func (mongoAdapter) LookupByID(value string) (any, bool) {
 // LookupID is the identity function for Mongo: a Doc's "_id" is already
 // the bson.ObjectID a filter needs, nothing to adapt.
 func (mongoAdapter) LookupID(id any) any { return id }
+
+// ParseWhere decodes raw with res's own QueryDenylist/QueryObjectIDAsString
+// -- the same call parseListQuery (rest/query.go) already makes for the
+// resource's own HTTP list endpoint.
+func (mongoAdapter) ParseWhere(raw string, res *Resource) (any, error) {
+	return parseWhere(raw, res.QueryDenylist, res.QueryObjectIDAsString)
+}
+
+func (mongoAdapter) ParseSort(raw string) (any, error) {
+	return ParseSort(raw)
+}
+
+func (mongoAdapter) ParseProjection(raw string) (any, error) {
+	return parseProjection(raw)
+}
+
+// CombineFilter is combineFilter (rest/service.go), typed for the Adapter
+// interface: clientFilter is asserted to bson.M, nil for any other (or
+// absent) value -- the same as an empty client filter today.
+func (mongoAdapter) CombineFilter(res *Resource, clientFilter any, includeDeleted bool) (any, error) {
+	lookup, _ := clientFilter.(bson.M)
+	return combineFilter(res, lookup, includeDeleted), nil
+}
+
+func (mongoAdapter) CombineSort(res *Resource, clientSort any) any {
+	sort, _ := clientSort.(bson.D)
+	return combineSort(res, sort)
+}
+
+func (mongoAdapter) CombineProjection(res *Resource, clientProjection any) (any, error) {
+	client, _ := clientProjection.(bson.M)
+	return combineProjection(res, client), nil
+}
+
+func (mongoAdapter) WriteLookup(original Doc) (any, error) {
+	return writeLookup(original), nil
+}

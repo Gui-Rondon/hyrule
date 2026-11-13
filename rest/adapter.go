@@ -37,3 +37,35 @@ type IDCodec interface {
 	// check).
 	LookupID(id any) any
 }
+
+// QueryAdapter parses the client's where/sort/projection query parameters
+// and combines them with a Resource's own defaults (datasource filter,
+// soft delete, default sort, datasource projection), and builds the CAS
+// lookup a write conditions on. Same Fase 0 extraction as ErrorClassifier/
+// IDCodec: mongoAdapter implements it exactly as rest/query.go and
+// rest/service.go already behaved.
+type QueryAdapter interface {
+	// ParseWhere decodes the client's "where" query parameter into a
+	// filter, applying res's QueryDenylist/QueryObjectIDAsString.
+	ParseWhere(raw string, res *Resource) (any, error)
+	// ParseSort decodes the client's "sort" query parameter.
+	ParseSort(raw string) (any, error)
+	// ParseProjection decodes the client's "projection" query parameter.
+	ParseProjection(raw string) (any, error)
+
+	// CombineFilter combines clientFilter with res's datasource filter
+	// and, unless includeDeleted, the soft delete condition.
+	CombineFilter(res *Resource, clientFilter any, includeDeleted bool) (any, error)
+	// CombineSort falls back to res's Datasource.DefaultSort when
+	// clientSort is empty.
+	CombineSort(res *Resource, clientSort any) any
+	// CombineProjection narrows res's datasource projection by
+	// clientProjection, or applies clientProjection as sent when res has
+	// none (AllowUnknown).
+	CombineProjection(res *Resource, clientProjection any) (any, error)
+
+	// WriteLookup builds the CAS condition a write conditions on, from
+	// the document read before the write (original) -- always from
+	// original, never from a client's match/SkipConcurrency.
+	WriteLookup(original Doc) (any, error)
+}
