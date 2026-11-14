@@ -294,6 +294,61 @@ func TestCompileFilterIntegrationDateTimeComparisons(t *testing.T) {
 	assertNames(t, namesMatching(t, pool, table, Query{"published_at": Query{"$eq": nil}}, schema), "nullish")
 }
 
+func TestCompileFilterIntegrationDateTimeInNin(t *testing.T) {
+	// $in/$nin on a KindDateTime field must compare by instant too --
+	// found missing, in code review of this same revision's $eq/$ne
+	// fix, before any test exercised it: $in silently matched nothing
+	// for the exact same instant, the same bug $eq had.
+	pool := testPool(t)
+	if err := EnsureFunctions(context.Background(), pool); err != nil {
+		t.Fatal(err)
+	}
+	table := "query_datetime_in_test"
+	setupDocTable(t, pool, table)
+	insertDocs(t, pool, table,
+		`{"name": "old", "published_at": "2020-01-01T00:00:00Z"}`,
+		`{"name": "mid", "published_at": "2023-06-15T12:00:00Z"}`,
+		`{"name": "new", "published_at": "2026-01-01T00:00:00Z"}`,
+		`{"name": "absent"}`,
+		`{"name": "nullish", "published_at": null}`,
+	)
+	schema := SchemaSpec{Fields: map[string]Kind{"published_at": KindDateTime}}
+
+	// The "Z"-suffixed literal must match the "Z"-suffixed stored value
+	// -- before the fix, this matched nothing (to_jsonb's "+00:00"
+	// never equals the stored "Z" text).
+	assertNames(t, namesMatching(t, pool, table, Query{"published_at": Query{"$in": []any{"2020-01-01T00:00:00Z", "2026-01-01T00:00:00Z"}}}, schema), "new", "old")
+	assertNames(t, namesMatching(t, pool, table, Query{"published_at": Query{"$nin": []any{"2020-01-01T00:00:00Z", "2026-01-01T00:00:00Z"}}}, schema), "absent", "mid", "nullish")
+	// An explicit nil inside the list matches the explicit-null row,
+	// via dateTimeLiteral's NULL::timestamptz and IS NOT DISTINCT FROM
+	// -- never the absent row (hyrule_safe_timestamptz(doc->>field) is
+	// SQL NULL for both, but IS NOT DISTINCT FROM NULL still matches an
+	// absent field too, same as TestCompileFilterIntegrationInNinWithNullAndAbsent's
+	// finding for the untyped path -- confirmed, not assumed).
+	assertNames(t, namesMatching(t, pool, table, Query{"published_at": Query{"$in": []any{nil}}}, schema), "absent", "nullish")
+}
+
+func TestCompileFilterDateTimeHasFamilyUnsupported(t *testing.T) {
+	// $has/$hasSome/$hasEvery on a KindDateTime element fail loudly at
+	// compile time, rather than silently reusing jsonb containment's
+	// text comparison (the same bug this revision fixed for $eq/$ne) --
+	// no instant-aware equivalent of @> exists yet.
+	schema := SchemaSpec{
+		Fields:       map[string]Kind{"dates": KindArray},
+		ElementKinds: map[string]Kind{"dates": KindDateTime},
+	}
+	cases := []Query{
+		{"dates": Query{"$has": "2020-01-01T00:00:00Z"}},
+		{"dates": Query{"$hasSome": []any{"2020-01-01T00:00:00Z"}}},
+		{"dates": Query{"$hasEvery": []any{"2020-01-01T00:00:00Z"}}},
+	}
+	for _, q := range cases {
+		if _, _, err := CompileFilter(q, schema, 0); err == nil {
+			t.Errorf("%v: expected an error, got none", q)
+		}
+	}
+}
+
 func TestCompileFilterIntegrationNumberKindDecimal(t *testing.T) {
 	// KindNumber ("numeric" cast) with non-integer values -- only
 	// KindInteger was exercised against real Postgres before this
