@@ -813,7 +813,13 @@ func writeInsertionFailure(w http.ResponseWriter, e *InsertError, isList bool) {
 	WriteJSON(w, http.StatusUnprocessableEntity, body)
 }
 
-// ReadBody decodes a JSON object; custom endpoints use it.
+// ReadBody decodes a JSON object; custom endpoints use it. A JSON
+// number in the result is a json.Number (Fase 0b of the Postgres
+// portability plan, exact literal text, never a lossy float64) -- a
+// caller written before this change that still does body["age"].
+// (float64) gets ok=false now, not the old value, since the type
+// genuinely changed; switch to body["age"].(json.Number) and its
+// Int64()/Float64() methods.
 func ReadBody(r *http.Request) (Doc, error) {
 	docs, _, err := readBody(r, false)
 	if err != nil {
@@ -839,12 +845,23 @@ func readBody(r *http.Request, allowList bool) ([]Doc, bool, error) {
 		}
 		return formDoc(r.PostForm, "No form-urlencoded data supplied")
 	}
-	data, err := io.ReadAll(r.Body)
-	if err != nil {
+	// UseNumber() keeps every JSON number as its exact literal text
+	// (json.Number) instead of float64 -- rest/schema.go's checkType/
+	// convert (TypeInteger/TypeNumber) and bsonizeNumbers
+	// (rest/mongoadapter.go) are what turn it into a concrete Go value,
+	// each from the exact text, never from an already-lossy float64
+	// (Fase 0b of the Postgres portability plan). A Decoder, unlike
+	// json.Unmarshal, only reads one JSON value and says nothing about
+	// what follows it in the stream -- the second Decode call below,
+	// expecting io.EOF, is what rejects trailing content Unmarshal used
+	// to reject for free.
+	dec := json.NewDecoder(r.Body)
+	dec.UseNumber()
+	var raw any
+	if err := dec.Decode(&raw); err != nil {
 		return nil, false, bad
 	}
-	var raw any
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if err := dec.Decode(new(any)); err != io.EOF {
 		return nil, false, bad
 	}
 	switch t := raw.(type) {

@@ -2,6 +2,7 @@ package restpostgres
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -99,9 +100,13 @@ func TestInsertManyBatchIsIndividuallyReadable(t *testing.T) {
 		if err != nil {
 			t.Fatalf("doc %d: %v", i, err)
 		}
-		// json.Unmarshal decodes a JSON number into float64 -- confirm
-		// without assuming a specific numeric Go type.
-		if n, ok := got["i"].(float64); !ok || int(n) != i {
+		// decodeDoc (restpostgres/crud.go, Fase 0b) decodes the stored
+		// doc with UseNumber() -- every number read back is a
+		// json.Number, never float64, so a declared TypeInteger field
+		// (and, as here, an undeclared one just the same) comes back
+		// exact instead of rounded through float64.
+		n, err := got["i"].(json.Number).Int64()
+		if err != nil || int(n) != i {
 			t.Fatalf("doc %d: got[i] = %v (%T), want %d", i, got["i"], got["i"], i)
 		}
 		if got["_etag"] != "1" {

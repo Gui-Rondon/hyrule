@@ -1,6 +1,7 @@
 package restpostgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -109,18 +110,43 @@ const selectColumns = "id::text, doc, created_at, updated_at, version, deleted"
 
 func (a *postgresAdapter) scanDoc(row pgx.Rows) (rest.Doc, error) {
 	var idText string
-	var fields map[string]any
+	var rawDoc []byte
 	var createdAt, updatedAt time.Time
 	var version int64
 	var deleted bool
-	if err := row.Scan(&idText, &fields, &createdAt, &updatedAt, &version, &deleted); err != nil {
+	if err := row.Scan(&idText, &rawDoc, &createdAt, &updatedAt, &version, &deleted); err != nil {
 		return nil, err
+	}
+	fields, err := decodeDoc(rawDoc)
+	if err != nil {
+		return nil, fmt.Errorf("restpostgres: stored doc is not valid JSON: %w", err)
 	}
 	id, err := uuid.Parse(idText)
 	if err != nil {
 		return nil, fmt.Errorf("restpostgres: stored id %q is not a valid uuid: %w", idText, err)
 	}
 	return a.hydrate(id, fields, createdAt, updatedAt, version, deleted), nil
+}
+
+// decodeDoc decodes raw (the doc jsonb column's bytes, scanned as
+// []byte instead of straight into map[string]any) with UseNumber() --
+// a declared TypeInteger field's exact value, already written byte
+// for byte by json.Marshal (businessFieldsOnly below), needs to come
+// back exact too. Scanning straight into map[string]any instead (what
+// this used to do) routes through pgx's own jsonb codec, which decodes
+// with the standard library's plain json.Unmarshal -- the same float64
+// rounding readBody used to have before Fase 0b, confirmed empirically
+// against a real Postgres: 9007199254740993 round-tripped to
+// 9007199254740992 before this fix, same corruption on the read side
+// this whole phase exists to close on the write side.
+func decodeDoc(raw []byte) (map[string]any, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var fields map[string]any
+	if err := dec.Decode(&fields); err != nil {
+		return nil, err
+	}
+	return fields, nil
 }
 
 // Find lists documents matching filter; limit <= 0 means no

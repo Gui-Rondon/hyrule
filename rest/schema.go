@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -202,11 +203,32 @@ func checkType(field Field, value any) string {
 			return "must be of boolean type"
 		}
 	case TypeInteger:
-		if f, ok := value.(float64); !ok || f != math.Trunc(f) {
+		if _, ok := parseExactInteger(value); !ok {
 			return "must be of integer type"
 		}
 	case TypeNumber:
-		if _, ok := value.(float64); !ok {
+		switch v := value.(type) {
+		case json.Number:
+			if !numberLiteralRe.MatchString(string(v)) {
+				return "must be of number type"
+			}
+			// A magnitude within float64's finite range still only
+			// loses precision (the accepted historical trade-off,
+			// seção 10.2) -- but truly beyond it, Float64() returns
+			// +-Inf with an error, not a rounded value: fail loud
+			// here (same principle as bigint overflow) instead of
+			// letting it through to silently bypass checkRules' Max
+			// (asFloat64 would fail too, read as "not comparable"
+			// rather than "out of range") and get stored as a BSON
+			// Infinity by concreteNumber's own discarded error.
+			if _, err := v.Float64(); err != nil {
+				return "must be of number type"
+			}
+		case float64:
+			if math.IsNaN(v) || math.IsInf(v, 0) {
+				return "must be of number type"
+			}
+		default:
 			return "must be of number type"
 		}
 	case TypeObjectID:
@@ -249,7 +271,7 @@ func checkRules(field Field, value any) string {
 			return fmt.Sprintf("max length is %d", field.MaxLength)
 		}
 	}
-	if f, ok := value.(float64); ok {
+	if f, ok := asFloat64(value); ok {
 		if field.Min != nil && f < *field.Min {
 			return "min value is " + pyNumber(*field.Min)
 		}
@@ -301,8 +323,8 @@ func length(value any) (int, bool) {
 func convert(field Field, value any) (any, bool) {
 	switch field.Type {
 	case TypeInteger:
-		if f, ok := value.(float64); ok {
-			return int64(f), true
+		if n, ok := parseExactInteger(value); ok {
+			return n, true
 		}
 	case TypeObjectID:
 		if s, ok := value.(string); ok {
@@ -373,6 +395,13 @@ func (v validator) checkUnique(ctx context.Context, doc map[string]any, selfID a
 		if _, bad := failed[key]; !field.Unique || !ok || bad || value == nil {
 			continue
 		}
+		// convert() never touches a declared TypeNumber field on
+		// purpose (checkType's doc comment) -- a Unique one is still
+		// a json.Number here, which no Adapter's EqualsFilter expects
+		// (same gap bsonizeNumbers exists to close on the write path).
+		if n, ok := value.(json.Number); ok {
+			value = concreteNumber(n)
+		}
 		filter, err := v.adapter.EqualsFilter(key, value, selfID)
 		if err != nil {
 			return nil, err
@@ -411,6 +440,80 @@ func pyNumber(f float64) string {
 		return fmt.Sprintf("%d", int64(f))
 	}
 	return fmt.Sprint(f)
+}
+
+// numberLiteralRe matches a JSON number literal's text with no
+// scientific notation -- TypeNumber's declared-field format check
+// (Fase 0b, seção 16: "1e3" is rejected, approved 2026-11-14, even
+// though readBody's json.Number already carries the exact text no
+// matter the field's declared type). A json.Number always already
+// matches the general JSON number grammar (it only exists because the
+// decoder accepted it), so this only needs to rule out 'e'/'E'.
+//
+// integerLiteralRe is the same grammar, but the fractional part (if
+// any) must be all zeros -- "1.0" stays accepted (idêntico ao
+// histórico), "1.5" stays rejected either way since parseExactInteger
+// below never reaches a non-zero fraction.
+var (
+	numberLiteralRe  = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?$`)
+	integerLiteralRe = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.0+)?$`)
+)
+
+// maxInt64AsFloat is 2^63, the smallest float64 that no longer fits in
+// an int64 (1<<63 is exactly representable; MaxInt64 itself, 2^63-1,
+// is not -- the nearest float64 to it already rounds up to this same
+// value, so comparing against it directly is the precise bound, not
+// an approximation).
+const maxInt64AsFloat = 1 << 63
+
+// parseExactInteger validates that value is an exact int64 and
+// returns it: no fractional part beyond trailing zeros, no scientific
+// notation -- rejected by the literal text even when the value itself
+// is a whole number, e.g. "1e3" (seção 16's 🔴 decision, approved
+// 2026-11-14) -- and in int64's range, rejecting what used to be
+// silently rounded through float64 (the other 🔴 decision, same
+// approval). value is a json.Number when it came through readBody's
+// UseNumber() decode (the normal path, seção 10.2), or a float64 for
+// a Doc a Go caller (a hook, a custom endpoint) built directly without
+// going through JSON at all -- that compatibility path can only
+// reject NaN/Inf/a non-whole number/a magnitude already outside
+// float64's exact range, never recover text precision that was never
+// there to begin with.
+func parseExactInteger(value any) (int64, bool) {
+	switch v := value.(type) {
+	case json.Number:
+		if !integerLiteralRe.MatchString(string(v)) {
+			return 0, false
+		}
+		s, _, _ := strings.Cut(string(v), ".") // ".0+" suffix, if any, already confirmed all zeros
+		n, err := strconv.ParseInt(s, 10, 64)
+		return n, err == nil
+	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) || v != math.Trunc(v) {
+			return 0, false
+		}
+		if v < -maxInt64AsFloat || v >= maxInt64AsFloat {
+			return 0, false
+		}
+		return int64(v), true
+	}
+	return 0, false
+}
+
+// asFloat64 is checkRules' Min/Max comparison value, from either a
+// json.Number (readBody's normal decode) or a float64 (the
+// programmatic-caller compatibility path) -- Min/Max are declared as
+// *float64 themselves (Field.Min/Max), so this never needs more
+// precision than a float64 already has.
+func asFloat64(value any) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case json.Number:
+		f, err := v.Float64()
+		return f, err == nil
+	}
+	return 0, false
 }
 
 // ValidateDict validates a nested document against schema; custom checks use

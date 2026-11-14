@@ -245,11 +245,7 @@ func mongotize(v any, idsAsString bool) any {
 		}
 		return t
 	case json.Number:
-		if i, err := t.Int64(); err == nil {
-			return i
-		}
-		f, _ := t.Float64()
-		return f
+		return concreteNumber(t)
 	}
 	return v
 }
