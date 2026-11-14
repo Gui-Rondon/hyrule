@@ -35,8 +35,9 @@ type equalsFilter struct {
 
 // compileFilter renders filter as a boolean SQL expression, starting
 // placeholders at startAt (as postgres.CompileFilter's own startAt
-// does). filter is nil (matches every row), a postgres.Query, or an
-// equalsFilter (EqualsFilter's result).
+// does). filter is nil (matches every row), a postgres.Query, an
+// equalsFilter (EqualsFilter's result), or a combinedFilter
+// (CombineFilter's result, query.go).
 func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any, error) {
 	switch f := filter.(type) {
 	case nil:
@@ -53,8 +54,21 @@ func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any,
 		}
 		args = append(args, f.excludeID.String())
 		return fmt.Sprintf("(%s) AND id != $%d::uuid", where, startAt+len(args)), args, nil
+	case combinedFilter:
+		where, args, err := postgres.CompileFilter(f.query, a.schema, startAt)
+		if err != nil {
+			return "", nil, err
+		}
+		if !f.excludeDeleted {
+			return where, args, nil
+		}
+		// "deleted" is a physical column, never part of the jsonb doc --
+		// CompileFilter has no way to express this, so it's ANDed in
+		// here as raw SQL instead, no bind parameter needed (a literal
+		// boolean, never client input).
+		return fmt.Sprintf("(%s) AND deleted = false", where), args, nil
 	default:
-		return "", nil, fmt.Errorf("restpostgres: filter must be a postgres.Query or EqualsFilter's result, got %T", filter)
+		return "", nil, fmt.Errorf("restpostgres: filter must be a postgres.Query, EqualsFilter's result, or CombineFilter's result, got %T", filter)
 	}
 }
 

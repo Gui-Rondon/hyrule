@@ -73,13 +73,18 @@ func (r RetryOptions) validate() error {
 	return nil
 }
 
-// postgresAdapter implements rest.IDCodec and rest.ErrorClassifier in
-// full, plus WriteLookup/MergePatch/EqualsFilter and the CRUD methods a
-// future rest.Adapter (Fase 4 -- not defined yet; see ADR-0002) will
-// need. It expects store's table to have the shape
-// restpostgres/adapter_test.go's setupResourceTable creates: id uuid
-// primary key, doc jsonb, created_at/updated_at timestamptz, version
-// bigint, deleted boolean.
+// postgresAdapter implements rest.Adapter in full (Fase 4b's first
+// cut completed it: QueryAdapter, in query.go, was the missing
+// third -- IDCodec/ErrorClassifier were already complete since Fase
+// 2, plus the CRUD/MergePatch/EqualsFilter methods below). It expects
+// store's table to have the shape restpostgres/adapter_test.go's
+// setupResourceTable creates: id uuid primary key, doc jsonb,
+// created_at/updated_at timestamptz, version bigint, deleted boolean.
+//
+// Not yet usable end-to-end over HTTP, though: rest/http.go and
+// ListQuery (rest/query.go) are still bson.M/bson.D-typed and never
+// call through Resource.Adapter for query parsing -- see query.go's
+// doc comment for exactly what's deferred and why.
 type postgresAdapter struct {
 	store  postgres.Store
 	tx     postgres.Transactor
@@ -92,10 +97,7 @@ type postgresAdapter struct {
 	softDelete bool
 }
 
-var (
-	_ rest.IDCodec         = (*postgresAdapter)(nil)
-	_ rest.ErrorClassifier = (*postgresAdapter)(nil)
-)
+var _ rest.Adapter = (*postgresAdapter)(nil)
 
 // NewAdapter validates opts and builds an adapter over store's table.
 // Errors here are a registration-time failure (the resource never
