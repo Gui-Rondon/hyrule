@@ -17,7 +17,7 @@ func TestRealGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := Select(services, Change{Toolchain: true}, deployDir)
-	if len(all) != 4 {
+	if len(all) != 5 {
 		t.Fatalf("services = %v", all)
 	}
 	cases := []struct {

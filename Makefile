@@ -10,7 +10,7 @@ export POSTGRES_TEST_URI ?= $(POSTGRES_URI)
 
 COVERAGE_MIN ?= 85
 
-.PHONY: test unit vet cover build image env-up env-down example-env-up example-env-down run loadtest standalone-example-test
+.PHONY: test unit vet cover build image env-up env-down example-env-up example-env-down run loadtest e2e e2e-down standalone-example-test
 
 # All tests; the ones that need Mongo/Postgres use MONGO_TEST_URI/
 # POSTGRES_TEST_URI (make env-up).
@@ -68,6 +68,16 @@ run: build
 #   make loadtest BASE_URL=http://localhost:8081 RESOURCE=tags LOOKUP=go
 loadtest:
 	examples/blog-apis/loadtest/run.sh $(BASE_URL) $(RESOURCE) $(LOOKUP)
+
+# Functional/concurrency e2e checks (CRUD, hooks, outbox, auth, CAS) for
+# the blog-apis example, over a real JMeter run in Docker:
+#   make e2e [LOOPS=1]
+#   make e2e-down   # remove the containers/network this target owns
+e2e:
+	examples/blog-apis/e2e/run.sh $(LOOPS)
+
+e2e-down:
+	examples/blog-apis/e2e/run.sh down
 
 # examples/standalone-tags-api is its own Go module (own go.mod/go.sum,
 # Fase 2's proof of external importability) — go test ./... from the repo
