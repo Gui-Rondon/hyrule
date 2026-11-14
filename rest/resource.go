@@ -35,8 +35,15 @@ type Resource struct {
 	// ResourceTitle without trailing "s", as Eve does.
 	ItemTitle string
 
-	Store  Store
-	Schema Schema
+	// Store is the Mongo-shaped persistence seam. A resource that sets
+	// Adapter directly (a Postgres resource, via restpostgres) leaves
+	// this nil -- setDefaults only builds a mongoAdapter wrapping Store
+	// when Adapter is nil, never the reverse.
+	Store Store
+	// Adapter is the full backend seam (see Adapter's doc comment).
+	// Nil defaults to a mongoAdapter wrapping Store.
+	Adapter Adapter
+	Schema  Schema
 	// AllowUnknown accepts fields outside Schema (Eve's allow_unknown).
 	AllowUnknown bool
 
@@ -125,6 +132,12 @@ type Pagination struct {
 }
 
 func (r *Resource) setDefaults() {
+	if r.Adapter == nil {
+		if r.Store == nil {
+			panic("rest: Resource needs a Store or an Adapter")
+		}
+		r.Adapter = &mongoAdapter{store: r.Store, res: r}
+	}
 	if r.URL == "" {
 		r.URL = r.Name
 	}

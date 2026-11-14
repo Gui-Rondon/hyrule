@@ -75,7 +75,7 @@ type Issues map[string]any
 type validator struct {
 	schema       Schema
 	allowUnknown bool
-	store        Store
+	adapter      Adapter
 	custom       func(ctx context.Context, doc, original Doc, partial bool) (Issues, error)
 }
 
@@ -373,11 +373,11 @@ func (v validator) checkUnique(ctx context.Context, doc map[string]any, selfID a
 		if _, bad := failed[key]; !field.Unique || !ok || bad || value == nil {
 			continue
 		}
-		filter := bson.M{key: value}
-		if selfID != nil {
-			filter["_id"] = bson.M{"$ne": selfID}
+		filter, err := v.adapter.EqualsFilter(key, value, selfID)
+		if err != nil {
+			return nil, err
 		}
-		n, err := v.store.CountDocuments(ctx, filter)
+		n, err := v.adapter.CountDocuments(ctx, filter)
 		if err != nil {
 			return nil, err
 		}
