@@ -24,12 +24,22 @@ type fakeRetryAdapter struct {
 	forceConflicts int
 	updateCalls    int
 	retry          RetryOptions
+	// validatesMerged is ValidatesMergedDocument's return value --
+	// false by default (every existing retry test), matching Mongo's
+	// contract; set true only by the patch-merge-validation tests
+	// (rest/patchmerge_internal_test.go), which need MergePatch's real
+	// RFC 7396 null-deletes-the-key semantics below to produce
+	// anything for a post-merge check to catch.
+	validatesMerged bool
 }
 
-func (a *fakeRetryAdapter) IsNotFound(error) bool     { return false }
-func (a *fakeRetryAdapter) IsDuplicateKey(error) bool { return false }
-func (a *fakeRetryAdapter) IsClientError(error) bool  { return false }
-func (a *fakeRetryAdapter) IsTimeout(error) bool      { return false }
+func (a *fakeRetryAdapter) IsNotFound(error) bool         { return false }
+func (a *fakeRetryAdapter) IsDuplicateKey(error) bool     { return false }
+func (a *fakeRetryAdapter) IsClientError(error) bool      { return false }
+func (a *fakeRetryAdapter) IsTimeout(error) bool          { return false }
+func (a *fakeRetryAdapter) ClassifiesWriteTimeouts() bool { return false }
+
+func (a *fakeRetryAdapter) ValidatesMergedDocument() bool { return a.validatesMerged }
 
 func (a *fakeRetryAdapter) NewID() any                          { return "fake-id" }
 func (a *fakeRetryAdapter) IDString(id any) string              { return fmt.Sprint(id) }
@@ -87,9 +97,21 @@ func (a *fakeRetryAdapter) DeleteOne(context.Context, any) (int64, error) {
 	return 0, errors.New("fakeRetryAdapter: DeleteOne not implemented")
 }
 
+// MergePatch applies changes as an RFC 7396 merge, same as
+// postgresAdapter's real one (restpostgres/patch.go): a nil value
+// deletes the key, anything else overwrites it -- never a mere
+// maps.Copy, which would just store a literal nil and never delete
+// anything, the Mongo-only behavior this fake must not default to
+// once a test turns validatesMerged on.
 func (a *fakeRetryAdapter) MergePatch(original, changes Doc) (Doc, error) {
 	merged := maps.Clone(original)
-	maps.Copy(merged, changes)
+	for k, v := range changes {
+		if v == nil {
+			delete(merged, k)
+			continue
+		}
+		merged[k] = v
+	}
 	return merged, nil
 }
 func (a *fakeRetryAdapter) EqualsFilter(string, any, any) (any, error) { return nil, nil }

@@ -23,6 +23,24 @@ type ErrorClassifier interface {
 	IsClientError(err error) bool
 	// IsTimeout reports whether err means the operation ran out of time.
 	IsTimeout(err error) bool
+	// ClassifiesWriteTimeouts reports whether Service's writeError
+	// (section 12 of the Postgres portability plan) may run a write's
+	// backend error through IsTimeout at all, turning a true result
+	// into a 503 before returning it from the Transactor.WithTransaction
+	// closure it ran inside of. mongoAdapter returns false:
+	// platform/mongodb's Transactor.WithTransaction hands that very
+	// closure's return value straight to the driver's own
+	// sess.WithTransaction, which inspects the *original* error for a
+	// TransientTransactionError label to decide whether to silently
+	// retry the whole transaction -- replacing it with Abort(503, "")
+	// here, even only for a write IsTimeout would also recognize,
+	// would erase that label and turn an error the driver already
+	// retries transparently into an immediate, un-retried 503.
+	// postgresAdapter returns true: platform/postgres's Transactor has
+	// no such label-based retry (a plain BeginTx/fn/Commit/Rollback,
+	// confirmed by reading it), so nothing is lost by classifying
+	// 57014/40P01/40001 as 503 from inside the closure.
+	ClassifiesWriteTimeouts() bool
 }
 
 // IDCodec generates and parses the `_id` field's values.
@@ -155,6 +173,17 @@ type Adapter interface {
 	// Patch for Postgres (seção 10, deliberate divergence). The caller
 	// sets _updated/_etag on the result afterward.
 	MergePatch(original, changes Doc) (Doc, error)
+	// ValidatesMergedDocument reports whether patchOnce (section 9.4)
+	// must validate the whole post-merge document against the
+	// resource's Schema before writing it, in addition to the
+	// pre-merge validation of the client's own PATCH body that always
+	// runs. mongoAdapter returns false -- Mongo keeps today's exact
+	// behavior, validating only what the client sent. postgresAdapter
+	// returns true: RFC 7396's merge can delete a key the Schema marks
+	// Required (a Required+Nullable field's null never means "store
+	// null", it means "remove the key"), and only a check against the
+	// merged result catches that before the write.
+	ValidatesMergedDocument() bool
 	// EqualsFilter builds "field == value", optionally excluding one
 	// document by excludeID -- the friendly pre-check a Schema's
 	// unique validation runs before a write; the real uniqueness
