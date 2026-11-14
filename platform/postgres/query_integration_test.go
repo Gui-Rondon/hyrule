@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -221,4 +223,212 @@ func TestCompileFilterIntegrationNotAndOr(t *testing.T) {
 	// TRUE, including absent/non-numeric.
 	assertNames(t, namesMatching(t, pool, table, Query{"$not": Query{"views": Query{"$gt": 100}}}, schema), "b", "c", "d")
 	assertNames(t, namesMatching(t, pool, table, Query{"$or": []Query{{"views": Query{"$gt": 100}}, {"name": "c"}}}, schema), "a", "c")
+}
+
+func TestCompileFilterIntegrationNotOfAndOr(t *testing.T) {
+	// $not wrapping a composite ($and/$or), not just a single leaf --
+	// each leaf inside is already IS TRUE-normalized (never NULL), so
+	// NOT(...) of the whole composite is well-defined too.
+	pool := testPool(t)
+	table := "query_not_composite_test"
+	setupDocTable(t, pool, table)
+	insertDocs(t, pool, table,
+		`{"name": "a", "status": "published", "views": 150}`,
+		`{"name": "b", "status": "published", "views": 50}`,
+		`{"name": "c", "status": "draft", "views": 150}`,
+		`{"name": "d"}`,
+	)
+	schema := SchemaSpec{Fields: map[string]Kind{"views": KindInteger}}
+
+	// NOT(status=published AND views>100): everything except "a".
+	assertNames(t, namesMatching(t, pool, table, Query{"$not": Query{"$and": []Query{
+		{"status": "published"}, {"views": Query{"$gt": 100}},
+	}}}, schema), "b", "c", "d")
+
+	// NOT(NOT(status=published)): double negation round-trips back to
+	// the plain match -- "a" and "b" only.
+	assertNames(t, namesMatching(t, pool, table, Query{"$not": Query{"$not": Query{"status": "published"}}}, schema), "a", "b")
+}
+
+func TestCompileFilterIntegrationDateTimeComparisons(t *testing.T) {
+	// KindDateTime compares by real timestamptz instant, via
+	// hyrule_safe_timestamptz(doc->>field) -- never tested against real
+	// Postgres before this revision. EnsureFunctions is this package's
+	// own schema-setup step (platform/postgres/functions.go), a
+	// precondition for any KindDateTime filter, same as the table/index
+	// DDL setupDocTable already runs.
+	pool := testPool(t)
+	if err := EnsureFunctions(context.Background(), pool); err != nil {
+		t.Fatal(err)
+	}
+	table := "query_datetime_test"
+	setupDocTable(t, pool, table)
+	insertDocs(t, pool, table,
+		`{"name": "old", "published_at": "2020-01-01T00:00:00Z"}`,
+		`{"name": "mid", "published_at": "2023-06-15T12:00:00Z"}`,
+		`{"name": "new", "published_at": "2026-01-01T00:00:00Z"}`,
+		`{"name": "absent"}`,
+		`{"name": "nullish", "published_at": null}`,
+		`{"name": "garbage", "published_at": "not-a-date"}`,
+	)
+	schema := SchemaSpec{Fields: map[string]Kind{"published_at": KindDateTime}}
+
+	// Comparison is by real instant, via hyrule_safe_timestamptz --
+	// never by jsonb text. Confirmed against real Postgres: an earlier
+	// version of this test, before query.go's fix, used to_jsonb(...)
+	// text comparison instead, which silently returned wrong results
+	// for $eq (to_jsonb always renders "+00:00", never "Z", so a value
+	// stored with "Z" never textually matched even the exact same
+	// instant) and relied on luck for $gt/$gte/$lt/$lte boundaries.
+	assertNames(t, namesMatching(t, pool, table, Query{"published_at": Query{"$gt": "2021-01-01T00:00:00Z"}}, schema), "mid", "new")
+	assertNames(t, namesMatching(t, pool, table, Query{"published_at": Query{"$gte": "2023-06-15T12:00:00Z", "$lte": "2024-01-01T00:00:00Z"}}, schema), "mid")
+	assertNames(t, namesMatching(t, pool, table, Query{"published_at": Query{"$lt": "2021-01-01T00:00:00Z"}}, schema), "old")
+	// $eq now matches by instant: the exact same timestamp, written
+	// with the "Z" suffix clients actually use, matches correctly.
+	assertNames(t, namesMatching(t, pool, table, Query{"published_at": Query{"$eq": "2020-01-01T00:00:00Z"}}, schema), "old")
+	// absent/null/unparseable text never satisfy any comparison --
+	// hyrule_safe_timestamptz returns SQL NULL for all three, which IS
+	// TRUE always turns into FALSE, never a cross-type-ordering
+	// accident.
+	assertNames(t, namesMatching(t, pool, table, Query{"published_at": Query{"$gt": "1900-01-01T00:00:00Z"}}, schema), "mid", "new", "old")
+	assertNames(t, namesMatching(t, pool, table, Query{"published_at": Query{"$eq": nil}}, schema), "nullish")
+}
+
+func TestCompileFilterIntegrationNumberKindDecimal(t *testing.T) {
+	// KindNumber ("numeric" cast) with non-integer values -- only
+	// KindInteger was exercised against real Postgres before this
+	// revision.
+	pool := testPool(t)
+	table := "query_number_test"
+	setupDocTable(t, pool, table)
+	insertDocs(t, pool, table,
+		`{"name": "cheap", "price": 9.99}`,
+		`{"name": "mid", "price": 49.5}`,
+		`{"name": "pricey", "price": 199.0}`,
+	)
+	schema := SchemaSpec{Fields: map[string]Kind{"price": KindNumber}}
+
+	assertNames(t, namesMatching(t, pool, table, Query{"price": Query{"$gt": 10.0}}, schema), "mid", "pricey")
+	assertNames(t, namesMatching(t, pool, table, Query{"price": Query{"$eq": 49.5}}, schema), "mid")
+}
+
+func TestCompileFilterIntegrationBooleanKind(t *testing.T) {
+	pool := testPool(t)
+	table := "query_bool_test"
+	setupDocTable(t, pool, table)
+	insertDocs(t, pool, table,
+		`{"name": "a", "featured": true}`,
+		`{"name": "b", "featured": false}`,
+		`{"name": "c"}`,
+	)
+	schema := SchemaSpec{Fields: map[string]Kind{"featured": KindBoolean}}
+
+	assertNames(t, namesMatching(t, pool, table, Query{"featured": Query{"$eq": true}}, schema), "a")
+	assertNames(t, namesMatching(t, pool, table, Query{"featured": Query{"$ne": true}}, schema), "b", "c")
+}
+
+func TestCompileFilterIntegrationInNinWithNullAndAbsent(t *testing.T) {
+	// $in/$nin with an explicit null inside the list, against rows that
+	// are absent/null/a real value -- not covered before this revision
+	// (only a non-null, non-empty list was tested against real
+	// Postgres).
+	pool := testPool(t)
+	table := "query_in_null_test"
+	setupDocTable(t, pool, table)
+	insertDocs(t, pool, table,
+		`{"name": "absent"}`,
+		`{"name": "nullish", "status": null}`,
+		`{"name": "x", "status": "x"}`,
+		`{"name": "y", "status": "y"}`,
+	)
+
+	// $in: [null, "x"] -- IS NOT DISTINCT FROM matches both the
+	// explicit null and "x", but never an absent key (SQL NULL from the
+	// -> operator, which IS NOT DISTINCT FROM 'null'::jsonb is false).
+	assertNames(t, namesMatching(t, pool, table, Query{"status": Query{"$in": []any{nil, "x"}}}, SchemaSpec{}), "nullish", "x")
+	// $nin: [null, "x"] -- everything else, including "absent" (its SQL
+	// NULL doc->'status' IS NOT DISTINCT FROM neither list element).
+	assertNames(t, namesMatching(t, pool, table, Query{"status": Query{"$nin": []any{nil, "x"}}}, SchemaSpec{}), "absent", "y")
+}
+
+func TestCompileFilterIntegrationNestedPathNe(t *testing.T) {
+	// $ne on a nested path -- only $eq/$exists were covered before this
+	// revision.
+	pool := testPool(t)
+	table := "query_nested_ne_test"
+	setupDocTable(t, pool, table)
+	insertDocs(t, pool, table,
+		`{"name": "a", "meta": {"author": "link"}}`,
+		`{"name": "b", "meta": {"author": "zelda"}}`,
+		`{"name": "c"}`,
+		`{"name": "d", "meta": {"author": null}}`,
+	)
+
+	// IS DISTINCT FROM is never UNKNOWN: absent (no "meta" key at all,
+	// doc #> {meta,author} is SQL NULL) and explicit null both count as
+	// "distinct from link".
+	assertNames(t, namesMatching(t, pool, table, Query{"meta.author": Query{"$ne": "link"}}, SchemaSpec{}), "b", "c", "d")
+}
+
+// TestCompileFilterIntegrationExplainUsesIndex documents, rather than
+// strictly requires (per plan section 20's Fase 3 scope: "sem exigir
+// Index Scan em todo cenário"), the real query plan Postgres picks for
+// a selective $eq filter on a field covered by the section 5 sparse
+// unique index. Correctness (the right row comes back) is still
+// asserted unconditionally.
+func TestCompileFilterIntegrationExplainUsesIndex(t *testing.T) {
+	pool := testPool(t)
+	table := "query_explain_index_test"
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "CREATE TABLE "+table+" (id SERIAL PRIMARY KEY, doc jsonb NOT NULL)"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+table) })
+	// Section 5's sparse unique index: only rows with a "slug" key
+	// participate.
+	if _, err := pool.Exec(ctx, "CREATE UNIQUE INDEX ON "+table+" ((doc->'slug')) WHERE doc ? 'slug'"); err != nil {
+		t.Fatal(err)
+	}
+
+	const n = 5000
+	docs := make([]string, n)
+	for i := range docs {
+		docs[i] = fmt.Sprintf(`{"name": "row-%d", "slug": "slug-%d"}`, i, i)
+	}
+	insertDocs(t, pool, table, docs...)
+	if err := pool.QueryRow(ctx, "ANALYZE "+table).Scan(); err != nil && err.Error() != "no rows in result set" {
+		t.Fatal(err)
+	}
+
+	schema := SchemaSpec{}
+	where, args, err := CompileFilter(Query{"slug": "slug-2500"}, schema, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNames(t, namesMatching(t, pool, table, Query{"slug": "slug-2500"}, schema), "row-2500")
+
+	rows, err := pool.Query(ctx, "EXPLAIN (ANALYZE, BUFFERS) SELECT doc->>'name' FROM "+table+" WHERE "+where, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var plan strings.Builder
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatal(err)
+		}
+		plan.WriteString(line)
+		plan.WriteString("\n")
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("EXPLAIN (ANALYZE, BUFFERS) for %q on %d rows:\n%s", where, n, plan.String())
+	if !strings.Contains(plan.String(), "Index") {
+		t.Logf("note: planner did not pick an index-based plan for this run -- not asserted as a failure, per plan section 20")
+	}
 }

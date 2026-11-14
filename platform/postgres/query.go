@@ -305,6 +305,39 @@ func (c *compiler) compileTopField(field string, ops Query) (string, error) {
 
 var comparisonSQL = map[string]string{"$gt": ">", "$gte": ">=", "$lt": "<", "$lte": "<="}
 
+// compileDateTimeCompare builds a KindDateTime comparison ($eq/$ne/$gt/
+// $gte/$lt/$lte, never called for val == nil -- that stays on
+// jsonbLiteral's explicit-null path, unrelated to type casting) by
+// instant, never by jsonb text.
+//
+// jsonbLiteral's to_jsonb($N::timestamptz) would compare against
+// doc's stored jsonb *string* textually -- but Postgres always
+// renders that cast with a "+00:00" offset, never "Z" (confirmed:
+// to_jsonb('...Z'::timestamptz) produces "...+00:00"), so a document
+// stored with the "Z" suffix most clients (and Go's time.Time JSON
+// encoding) use would never textually equal it, even for the exact
+// same instant -- found by this revision's Fase 3 integration test,
+// not assumed. hyrule_safe_timestamptz (built in Fase 1, unused until
+// now) parses doc's stored text as a real timestamptz instead, so the
+// comparison is by instant; it also returns SQL NULL (never raises)
+// for an absent field, an explicit JSON null, or unparseable text --
+// which never satisfies any comparison once wrapped in IS TRUE, the
+// same "never matches" contract every other Kind already has.
+//
+// Precondition: the database the compiled SQL runs against must have
+// run postgres.EnsureFunctions at least once (schema setup, alongside
+// the CREATE TABLE/CREATE INDEX statements of plan sections 4/5) --
+// not something this compiler can do itself, since it never touches a
+// connection.
+func (c *compiler) compileDateTimeCompare(field, sqlOp string, val any) (string, error) {
+	if err := checkKindValue(val, KindDateTime); err != nil {
+		return "", err
+	}
+	ref := fmt.Sprintf("hyrule_safe_timestamptz(doc->>%s::text)", c.param(field))
+	lit := fmt.Sprintf("%s::timestamptz", c.param(val))
+	return fmt.Sprintf("(%s %s %s) IS TRUE", ref, sqlOp, lit), nil
+}
+
 // compileOp dispatches by operator. Each branch calls c.docRef(field)
 // (which consumes a bind parameter) itself, exactly where its result is
 // used -- never upfront -- so a branch that can return without
@@ -313,6 +346,9 @@ var comparisonSQL = map[string]string{"$gt": ">", "$gte": ">=", "$lt": "<", "$lt
 func (c *compiler) compileOp(field string, kind Kind, op string, val any) (string, error) {
 	switch op {
 	case "$eq":
+		if kind == KindDateTime && val != nil {
+			return c.compileDateTimeCompare(field, "=", val)
+		}
 		ref := c.docRef(field)
 		lit, err := c.jsonbLiteral(val, kind)
 		if err != nil {
@@ -320,6 +356,9 @@ func (c *compiler) compileOp(field string, kind Kind, op string, val any) (strin
 		}
 		return fmt.Sprintf("(%s = %s) IS TRUE", ref, lit), nil
 	case "$ne":
+		if kind == KindDateTime && val != nil {
+			return c.compileDateTimeCompare(field, "IS DISTINCT FROM", val)
+		}
 		ref := c.docRef(field)
 		lit, err := c.jsonbLiteral(val, kind)
 		if err != nil {
@@ -329,6 +368,9 @@ func (c *compiler) compileOp(field string, kind Kind, op string, val any) (strin
 	case "$gt", "$gte", "$lt", "$lte":
 		if val == nil {
 			return "", fmt.Errorf("postgres: %s does not accept null", op)
+		}
+		if kind == KindDateTime {
+			return c.compileDateTimeCompare(field, comparisonSQL[op], val)
 		}
 		ref := c.docRef(field)
 		lit, err := c.jsonbLiteral(val, kind)
