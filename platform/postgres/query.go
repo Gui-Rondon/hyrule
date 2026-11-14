@@ -305,30 +305,113 @@ func (c *compiler) compileTopField(field string, ops Query) (string, error) {
 
 var comparisonSQL = map[string]string{"$gt": ">", "$gte": ">=", "$lt": "<", "$lte": "<="}
 
+// dateTimeRef is field's stored value, read as a real timestamptz
+// instant -- never a jsonb text compare.
+//
+// jsonbLiteral's to_jsonb($N::timestamptz) would compare against
+// doc's stored jsonb *string* textually -- but Postgres always
+// renders that cast with a "+00:00" offset, never "Z" (confirmed:
+// to_jsonb('...Z'::timestamptz) produces "...+00:00"), so a document
+// stored with the "Z" suffix most clients (and Go's time.Time JSON
+// encoding) use would never textually equal it, even for the exact
+// same instant -- found by this revision's Fase 3 integration test,
+// not assumed. hyrule_safe_timestamptz (built in Fase 1, unused until
+// now) parses doc's stored text as a real timestamptz instead, so
+// every comparison built from dateTimeRef/dateTimeLiteral is by
+// instant; it also returns SQL NULL (never raises) for an absent
+// field, an explicit JSON null, or unparseable text -- which never
+// satisfies any comparison once wrapped in IS TRUE, the same "never
+// matches" contract every other Kind already has.
+//
+// Every KindDateTime-aware operator ($eq/$ne/$gt/$gte/$lt/$lte/$in/
+// $nin -- see compileOp/compileInNin) builds its SQL from this and
+// dateTimeLiteral, and only these two functions, so a future operator
+// needing the same treatment has exactly one pair of building blocks
+// to reuse, not a per-operator special case to repeat. $has/$hasSome/
+// $hasEvery on a KindDateTime *element* are not among them yet (an
+// array's jsonb containment operators don't have an instant-aware
+// equivalent here) -- they fail loudly instead, see compileHas.
+//
+// Precondition: the database the compiled SQL runs against must have
+// run postgres.EnsureFunctions at least once (schema setup, alongside
+// the CREATE TABLE/CREATE INDEX statements of plan sections 4/5) --
+// not something this compiler can do itself, since it never touches a
+// connection.
+func (c *compiler) dateTimeRef(field string) string {
+	return fmt.Sprintf("hyrule_safe_timestamptz(doc->>%s::text)", c.param(field))
+}
+
+// dateTimeLiteral is val, already a timestamptz-shaped SQL literal on
+// the same real-instant footing as dateTimeRef -- nil renders as a
+// typed SQL NULL (never the "null" jsonb literal jsonbLiteral uses),
+// consistent with dateTimeRef also never seeing a text "null" string.
+func (c *compiler) dateTimeLiteral(val any) (string, error) {
+	if val == nil {
+		return "NULL::timestamptz", nil
+	}
+	if err := checkKindValue(val, KindDateTime); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s::timestamptz", c.param(val)), nil
+}
+
+func (c *compiler) compileDateTimeCompare(field, sqlOp string, val any) (string, error) {
+	ref := c.dateTimeRef(field)
+	lit, err := c.dateTimeLiteral(val)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("(%s %s %s) IS TRUE", ref, sqlOp, lit), nil
+}
+
+// compileDateTimeInNin mirrors compileInNin's EXISTS/unnest shape, but
+// over a timestamptz[] array and dateTimeRef's instant-based
+// reference -- same reasoning as compileDateTimeCompare, for $in/$nin.
+func (c *compiler) compileDateTimeInNin(field, op string, list []any) (string, error) {
+	ref := c.dateTimeRef(field)
+	elems := make([]string, len(list))
+	for i, v := range list {
+		lit, err := c.dateTimeLiteral(v)
+		if err != nil {
+			return "", err
+		}
+		elems[i] = lit
+	}
+	arr := "ARRAY[" + strings.Join(elems, ", ") + "]::timestamptz[]"
+	exists := fmt.Sprintf("EXISTS (SELECT 1 FROM unnest(%s) AS item(value) WHERE %s IS NOT DISTINCT FROM item.value)", arr, ref)
+	if op == "$in" {
+		return "(" + exists + ") IS TRUE", nil
+	}
+	return "(NOT (" + exists + ")) IS TRUE", nil
+}
+
 // compileOp dispatches by operator. Each branch calls c.docRef(field)
 // (which consumes a bind parameter) itself, exactly where its result is
 // used -- never upfront -- so a branch that can return without
 // referencing doc at all ($in/$nin on an empty list) never leaves an
 // orphan argument with no matching placeholder in the output SQL.
+// eqSQL maps $eq/$ne to their infix SQL operator -- shared by the
+// jsonb path below and compileDateTimeCompare's instant path.
+var eqSQL = map[string]string{"$eq": "=", "$ne": "IS DISTINCT FROM"}
+
 func (c *compiler) compileOp(field string, kind Kind, op string, val any) (string, error) {
 	switch op {
-	case "$eq":
+	case "$eq", "$ne":
+		if kind == KindDateTime && val != nil {
+			return c.compileDateTimeCompare(field, eqSQL[op], val)
+		}
 		ref := c.docRef(field)
 		lit, err := c.jsonbLiteral(val, kind)
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("(%s = %s) IS TRUE", ref, lit), nil
-	case "$ne":
-		ref := c.docRef(field)
-		lit, err := c.jsonbLiteral(val, kind)
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("(%s IS DISTINCT FROM %s) IS TRUE", ref, lit), nil
+		return fmt.Sprintf("(%s %s %s) IS TRUE", ref, eqSQL[op], lit), nil
 	case "$gt", "$gte", "$lt", "$lte":
 		if val == nil {
 			return "", fmt.Errorf("postgres: %s does not accept null", op)
+		}
+		if kind == KindDateTime {
+			return c.compileDateTimeCompare(field, comparisonSQL[op], val)
 		}
 		ref := c.docRef(field)
 		lit, err := c.jsonbLiteral(val, kind)
@@ -389,6 +472,9 @@ func (c *compiler) compileInNin(field string, kind Kind, op string, val any) (st
 		}
 		return "TRUE", nil
 	}
+	if kind == KindDateTime {
+		return c.compileDateTimeInNin(field, op, list)
+	}
 	ref := c.docRef(field)
 	arr, err := c.jsonbArray(list, kind)
 	if err != nil {
@@ -401,8 +487,22 @@ func (c *compiler) compileInNin(field string, kind Kind, op string, val any) (st
 	return "(NOT (" + exists + ")) IS TRUE", nil
 }
 
+// dateTimeElementUnsupported is returned by compileHas/compileHasSome/
+// compileHasEvery for a KindDateTime element kind: jsonb containment
+// (@>/ANY over to_jsonb-cast elements) has the exact same text-vs-
+// instant mismatch dateTimeRef/dateTimeLiteral exist to avoid (see
+// their doc comment), and no instant-aware equivalent of @> is built
+// yet. Failing loudly here is deliberate -- the alternative is the
+// silent wrong-answer this whole fix exists to remove.
+func dateTimeElementUnsupported(op string) error {
+	return fmt.Errorf("postgres: %s on a KindDateTime element is not supported yet (jsonb containment compares text, not instant)", op)
+}
+
 // compileHas: doc[field] is an array containing exactly val.
 func (c *compiler) compileHas(field string, val any, kind Kind) (string, error) {
+	if kind == KindDateTime {
+		return "", dateTimeElementUnsupported("$has")
+	}
 	ref := c.docRef(field)
 	elem := "'null'::jsonb"
 	if val != nil {
@@ -415,6 +515,9 @@ func (c *compiler) compileHas(field string, val any, kind Kind) (string, error) 
 }
 
 func (c *compiler) compileHasSome(field string, kind Kind, val any) (string, error) {
+	if kind == KindDateTime {
+		return "", dateTimeElementUnsupported("$hasSome")
+	}
 	list, ok := val.([]any)
 	if !ok {
 		return "", fmt.Errorf("postgres: $hasSome expects a slice, got %T", val)
@@ -436,6 +539,9 @@ func (c *compiler) compileHasSome(field string, kind Kind, val any) (string, err
 // jsonbLiteral's to_jsonb(...) output nests fine as a jsonb_build_array
 // argument.
 func (c *compiler) compileHasEvery(field string, kind Kind, val any) (string, error) {
+	if kind == KindDateTime {
+		return "", dateTimeElementUnsupported("$hasEvery")
+	}
 	list, ok := val.([]any)
 	if !ok {
 		return "", fmt.Errorf("postgres: $hasEvery expects a slice, got %T", val)
