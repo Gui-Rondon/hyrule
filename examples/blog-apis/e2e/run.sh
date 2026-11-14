@@ -2,11 +2,14 @@
 # Functional/concurrency e2e checks (CRUD, hooks, outbox, auth, optimistic
 # concurrency) for the blog-apis example: a real JMeter instance (in
 # Docker) drives real containers of tags-api/authors-api/categories-api/
-# posts-api, talking to the same Mongo/Redis/Pub-Sub `make env-up` starts
-# for the framework's own tests, plus Elasticsearch (best effort) -- no
-# mocks anywhere in this path. Complements loadtest/ (read-only perf):
-# this plan asserts correctness, and its loop count doubles as a light
-# load knob.
+# posts-api/comments-api, talking to the same Mongo/Redis/Pub-Sub/Postgres
+# `make env-up` starts for the framework's own tests, plus Elasticsearch
+# (best effort) -- no mocks anywhere in this path. comments-api is the
+# Postgres path (restpostgres, not app.Main -- it has no Mongo config
+# file or /status, see examples/blog-apis/services/comments-api/main.go):
+# the other four stay Mongo-only, unchanged. Complements loadtest/
+# (read-only perf): this plan asserts correctness, and its loop count
+# doubles as a light load knob.
 #
 #   examples/blog-apis/e2e/run.sh [loops]
 #   examples/blog-apis/e2e/run.sh down
@@ -21,7 +24,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 here="$root/examples/blog-apis/e2e"
 net=hyrule-e2e
-services="tags-api authors-api categories-api posts-api"
+services="tags-api authors-api categories-api posts-api comments-api"
 
 teardown() {
 	# shellcheck disable=SC2086
@@ -54,7 +57,7 @@ docker network create "$net" >/dev/null 2>&1 || true
 # it (so this works whatever the checkout directory -- and so the
 # compose project name -- is called), then joined to $net under the
 # plain alias the e2e config files expect ("mongo", "redis"...).
-for entry in "docker-compose.yml:mongo" "docker-compose.yml:redis" "docker-compose.yml:pubsub" "examples/blog-apis/docker-compose.yml:elasticsearch"; do
+for entry in "docker-compose.yml:mongo" "docker-compose.yml:redis" "docker-compose.yml:pubsub" "docker-compose.yml:postgres" "examples/blog-apis/docker-compose.yml:elasticsearch"; do
 	file=${entry%%:*}
 	svc=${entry##*:}
 	cid=$(docker compose -f "$root/$file" ps -q "$svc" 2>/dev/null || true)
@@ -74,7 +77,7 @@ for svc in $services; do
 	docker build --build-arg SERVICE="$svc" -t "hyrule-e2e/${svc}:dev" "$root" >/dev/null
 done
 
-echo "==> starting e2e-{tags,authors,categories,posts}-api"
+echo "==> starting e2e-{tags,authors,categories,posts,comments}-api"
 # shellcheck disable=SC2086
 docker rm -f $(printf 'e2e-%s ' $services) >/dev/null 2>&1 || true
 
@@ -104,13 +107,24 @@ docker run -d --name e2e-posts-api --network "$net" \
 	-v "$here/.keys/legacy.pub:/keys/legacy.pub:ro" \
 	"hyrule-e2e/posts-api:dev" >/dev/null
 
-echo "==> waiting for the 4 services to answer /status"
+# No CONFIG_FILE/MONGO_*: comments-api bypasses app.Main entirely
+# (platform/postgres+restpostgres directly, see its main.go) -- its own
+# table/indexes (EnsureFunctions/EnsureIndexes) are created at startup
+# against the postgres alias joined to $net above.
+docker run -d --name e2e-comments-api --network "$net" \
+	-e PORT=8080 -e POSTGRES_CONNECTION_STRING="postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable" \
+	"hyrule-e2e/comments-api:dev" >/dev/null
+
+echo "==> waiting for the 5 services to answer"
 docker run --rm --network "$net" curlimages/curl:8.10.1 sh -c '
 	for i in $(seq 1 30); do
 		ok=1
 		for svc in e2e-tags-api e2e-authors-api e2e-categories-api e2e-posts-api; do
 			curl -sf "http://$svc:8080/status" >/dev/null || ok=0
 		done
+		# comments-api has no app.Main /status -- its home route (Eve
+		# _links document) is the equivalent readiness signal.
+		curl -sf "http://e2e-comments-api:8080/" >/dev/null || ok=0
 		[ "$ok" = 1 ] && exit 0
 		sleep 1
 	done
