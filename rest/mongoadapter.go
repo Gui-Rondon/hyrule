@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 
@@ -175,6 +176,7 @@ func setEtag(doc Doc) string {
 func (a *mongoAdapter) InsertMany(ctx context.Context, docs []Doc) error {
 	toInsert := make([]any, len(docs))
 	for i, doc := range docs {
+		bsonizeNumbers(doc)
 		setEtag(doc)
 		toInsert[i] = doc
 	}
@@ -187,6 +189,7 @@ func (a *mongoAdapter) InsertMany(ctx context.Context, docs []Doc) error {
 // soft Delete alike), and every key named by changes (Patch's applied
 // changes, or none for a plain soft delete).
 func (a *mongoAdapter) UpdateOne(ctx context.Context, lookup any, updated, changes Doc) (int64, error) {
+	bsonizeNumbers(updated)
 	set := bson.M{"_updated": updated["_updated"], "_etag": setEtag(updated)}
 	if a.res.SoftDelete {
 		set["_deleted"] = updated["_deleted"]
@@ -200,6 +203,7 @@ func (a *mongoAdapter) UpdateOne(ctx context.Context, lookup any, updated, chang
 // ReplaceOne sets replacement's _etag (setEtag, per Adapter.ReplaceOne's
 // contract) and forwards to store.
 func (a *mongoAdapter) ReplaceOne(ctx context.Context, lookup any, replacement Doc) (int64, error) {
+	bsonizeNumbers(replacement)
 	setEtag(replacement)
 	return a.store.ReplaceOne(ctx, asFilter(lookup), replacement)
 }
@@ -229,4 +233,54 @@ func (*mongoAdapter) EqualsFilter(field string, value any, excludeID any) (any, 
 		filter["_id"] = bson.M{"$ne": excludeID}
 	}
 	return filter, nil
+}
+
+// bsonizeNumbers walks doc in place and turns every remaining
+// json.Number leaf into the BSON-native numeric type the mongo driver
+// actually has a codec for: convert() (rest/schema.go) already turned
+// a declared TypeInteger field into int64 and left everything else
+// alone on purpose (an undeclared/AllowUnknown field never reaches
+// convert() at all; a declared TypeNumber field is deliberately left
+// as json.Number too, see rest/schema.go's checkType doc comment) --
+// so this is what actually reaches those two cases, right before the
+// write that would otherwise hand the driver a json.Number it has no
+// encoder for (it would be stored as a BSON string, silently wrong,
+// not an error). Called from InsertMany/UpdateOne/ReplaceOne, the only
+// three places a Doc reaches the driver -- never from DeleteOne, which
+// carries no document.
+func bsonizeNumbers(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, val := range t {
+			t[k] = bsonizeNumbers(val)
+		}
+		return t
+	case []any:
+		for i, val := range t {
+			t[i] = bsonizeNumbers(val)
+		}
+		return t
+	case json.Number:
+		return concreteNumber(t)
+	}
+	return v
+}
+
+// concreteNumber turns a json.Number into the concrete Go numeric type
+// every Adapter's filter/query methods actually expect (neither BSON
+// nor platform/postgres' compiler has a case for json.Number itself):
+// int64 when the literal text is an exact whole number, float64
+// otherwise. Used by bsonizeNumbers above, by mongotize's own
+// json.Number case (rest/query.go, a where= filter value), and by
+// checkUnique (rest/schema.go) before building a Unique TypeNumber
+// field's EqualsFilter -- convert() deliberately never touches
+// TypeNumber (rest/schema.go), so without this a declared TypeNumber
+// field marked Unique would still be a json.Number by the time
+// checkUnique reaches it.
+func concreteNumber(n json.Number) any {
+	if i, err := n.Int64(); err == nil {
+		return i
+	}
+	f, _ := n.Float64()
+	return f
 }

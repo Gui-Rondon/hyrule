@@ -22,7 +22,16 @@ const (
 	msgConflict         = "A conflict happened while processing the request. The resource might have been modified while the request was being processed."
 )
 
-// Doc is a document as stored in Mongo.
+// Doc is a stored document, from either backend. A business field's
+// concrete Go type for a number read back from storage depends on
+// which: Mongo's own driver decodes BSON straight into int64/float64;
+// Postgres' decodeDoc (restpostgres/crud.go) decodes the stored jsonb
+// with UseNumber() instead, into a json.Number, deliberately -- the
+// whole reason restpostgres/crud.go exists is so a value beyond what
+// float64 can hold exactly (Fase 0b of the Postgres portability plan)
+// comes back exact too. A hook written against one backend that reads
+// a numeric field with value.(float64) needs value.(json.Number) (or
+// both) to work against the other.
 type Doc = map[string]any
 
 // Render converts a stored document into Eve's JSON representation:

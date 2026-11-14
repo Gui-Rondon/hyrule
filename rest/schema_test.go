@@ -2,8 +2,11 @@ package rest
 
 import (
 	"context"
+	"encoding/json"
+	"math"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -183,5 +186,80 @@ func TestPatchDefaults(t *testing.T) {
 	want := map[string]any{"seo": map[string]any{"title": "t"}, "tags_list": []any{}}
 	if !reflect.DeepEqual(doc, want) {
 		t.Errorf("doc = %v, want %v", doc, want)
+	}
+}
+
+// TestParseExactInteger covers the matrix seção 10.2's revision of the
+// Postgres portability plan documents for a declared TypeInteger
+// field -- both the normal path (json.Number, readBody's exact
+// literal text) and the compatibility path (a plain float64 a Go
+// caller built a Doc with directly, never through JSON).
+func TestParseExactInteger(t *testing.T) {
+	cases := []struct {
+		name  string
+		value any
+		want  int64
+		ok    bool
+	}{
+		{"exact beyond 2^53", json.Number("9007199254740993"), 9007199254740993, true},
+		{"whole decimal accepted", json.Number("1.0"), 1, true},
+		{"whole decimal, multiple zeros", json.Number("1.00"), 1, true},
+		{"negative whole decimal", json.Number("-5.0"), -5, true},
+		{"non-zero fraction rejected", json.Number("1.5"), 0, false},
+		{"scientific notation rejected", json.Number("1e3"), 0, false},
+		{"scientific notation, negative exponent", json.Number("1e-3"), 0, false},
+		{"magnitude beyond int64", json.Number("99999999999999999999"), 0, false},
+		{"not a number", json.Number("bogus"), 0, false},
+		{"plain negative", json.Number("-5"), -5, true},
+		{"float64 compat, whole", float64(5), 5, true},
+		{"float64 compat, fraction rejected", 5.5, 0, false},
+		{"float64 compat, NaN rejected", math.NaN(), 0, false},
+		{"float64 compat, +Inf rejected", math.Inf(1), 0, false},
+		{"float64 compat, -Inf rejected", math.Inf(-1), 0, false},
+		{"float64 compat, exactly int64 min", float64(math.MinInt64), math.MinInt64, true},
+		{"float64 compat, at the +2^63 boundary, rejected", float64(1 << 63), 0, false},
+		{"wrong type", "5", 0, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, ok := parseExactInteger(c.value)
+			if ok != c.ok || (ok && got != c.want) {
+				t.Errorf("parseExactInteger(%v) = %d, %v; want %d, %v", c.value, got, ok, c.want, c.ok)
+			}
+		})
+	}
+}
+
+// TestCheckTypeNumberRejectsScientificNotation is seção 16's other
+// 🔴 decision for a declared TypeNumber field -- convert() leaves it
+// as json.Number (checkType's own doc comment). Mostly a format check
+// (TypeNumber was never promised int64 range, so losing precision
+// within float64's finite range is still accepted, seção 10.2), but
+// not purely one: a magnitude truly beyond float64's range (not just
+// beyond 2^53) is rejected too -- /code-review found that Float64()
+// returns +-Inf with a discarded error there, which used to reach
+// checkRules' Max (silently skipped, read as "not comparable") and
+// concreteNumber (silently stored as a BSON Infinity).
+func TestCheckTypeNumberRejectsScientificNotation(t *testing.T) {
+	cases := []struct {
+		name  string
+		value any
+		want  string // "" means valid
+	}{
+		{"scientific notation rejected", json.Number("1e3"), "must be of number type"},
+		{"large whole number accepted", json.Number("9007199254740993"), ""},
+		{"decimal accepted", json.Number("1.5"), ""},
+		{"beyond float64's finite range rejected", json.Number("1" + strings.Repeat("0", 400)), "must be of number type"},
+		{"NaN rejected", math.NaN(), "must be of number type"},
+		{"Inf rejected", math.Inf(1), "must be of number type"},
+		{"finite float64 accepted", 1.5, ""},
+	}
+	field := Field{Type: TypeNumber}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := checkType(field, c.value); got != c.want {
+				t.Errorf("checkType(%v) = %q, want %q", c.value, got, c.want)
+			}
+		})
 	}
 }
