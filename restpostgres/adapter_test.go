@@ -55,7 +55,7 @@ func setupResourceTable(t *testing.T, pool *pgxpool.Pool, table string) {
 func newTestAdapter(t *testing.T, pool *pgxpool.Pool, table string, fields map[string]postgres.Kind) *postgresAdapter {
 	setupResourceTable(t, pool, table)
 	a, err := NewAdapter(postgres.NewStore(pool, table), postgres.Transactor{Pool: pool}, Options{
-		Retry: DefaultRetryOptions(),
+		Retry: rest.DefaultRetryOptions(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -66,7 +66,7 @@ func newTestAdapter(t *testing.T, pool *pgxpool.Pool, table string, fields map[s
 
 func TestNewAdapterValidatesStorePool(t *testing.T) {
 	_, err := NewAdapter(postgres.Store{Table: "whatever"}, postgres.Transactor{}, Options{
-		Retry: DefaultRetryOptions(),
+		Retry: rest.DefaultRetryOptions(),
 	})
 	if err == nil {
 		t.Fatal("expected an error for a Store with a nil Pool")
@@ -76,7 +76,7 @@ func TestNewAdapterValidatesStorePool(t *testing.T) {
 func TestNewAdapterValidatesStoreTable(t *testing.T) {
 	pool := testPool(t)
 	_, err := NewAdapter(postgres.Store{Pool: pool}, postgres.Transactor{Pool: pool}, Options{
-		Retry: DefaultRetryOptions(),
+		Retry: rest.DefaultRetryOptions(),
 	})
 	if err == nil {
 		t.Fatal("expected an error for a Store with an empty Table")
@@ -86,42 +86,27 @@ func TestNewAdapterValidatesStoreTable(t *testing.T) {
 func TestNewAdapterValidatesRetryOptions(t *testing.T) {
 	pool := testPool(t)
 	_, err := NewAdapter(postgres.NewStore(pool, "whatever"), postgres.Transactor{Pool: pool}, Options{
-		Retry: RetryOptions{}, // zero value is invalid
+		Retry: rest.RetryOptions{}, // zero value is invalid
 	})
 	if err == nil {
 		t.Fatal("expected an error for a zero-value RetryOptions")
 	}
 }
 
-func TestRetryOptionsValidate(t *testing.T) {
-	ok := DefaultRetryOptions()
-	cases := []struct {
-		name string
-		opts RetryOptions
-		want bool
-	}{
-		{"default", ok, true},
-		{"negative MaxAttempts", RetryOptions{MaxAttempts: -1, BaseBackoff: ok.BaseBackoff, MaxBackoff: ok.MaxBackoff, MaxDuration: ok.MaxDuration}, false},
-		{"zero MaxAttempts is valid", RetryOptions{MaxAttempts: 0, BaseBackoff: ok.BaseBackoff, MaxBackoff: ok.MaxBackoff, MaxDuration: ok.MaxDuration}, true},
-		{"zero BaseBackoff", RetryOptions{MaxAttempts: 1, BaseBackoff: 0, MaxBackoff: ok.MaxBackoff, MaxDuration: ok.MaxDuration}, false},
-		{"MaxBackoff below BaseBackoff", RetryOptions{MaxAttempts: 1, BaseBackoff: ok.BaseBackoff, MaxBackoff: ok.BaseBackoff / 2, MaxDuration: ok.MaxDuration}, false},
-		{"zero MaxDuration", RetryOptions{MaxAttempts: 1, BaseBackoff: ok.BaseBackoff, MaxBackoff: ok.MaxBackoff, MaxDuration: 0}, false},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			err := c.opts.validate()
-			if (err == nil) != c.want {
-				t.Errorf("validate() error = %v, want ok=%v", err, c.want)
-			}
-		})
-	}
-}
+// RetryOptions.Validate's own rules (default/negative MaxAttempts/zero
+// BaseBackoff/MaxBackoff below BaseBackoff/zero MaxDuration) are
+// rest.RetryOptions's own test now (rest/retry_test.go) -- the type
+// moved there so rest.Service's patchOnce loop could read it back
+// through Adapter.RetryPolicy. This package only needs to know
+// NewAdapter actually calls Validate, which TestNewAdapterValidatesRetryOptions
+// above already confirms with the one case that matters here: a zero
+// value is rejected at registration.
 
 func TestNewAdapterValidatesSchema(t *testing.T) {
 	pool := testPool(t)
 	_, err := NewAdapter(postgres.NewStore(pool, "whatever"), postgres.Transactor{Pool: pool}, Options{
 		Schema: rest.Schema{"bad": rest.Field{Type: "nonsense"}},
-		Retry:  DefaultRetryOptions(),
+		Retry:  rest.DefaultRetryOptions(),
 	})
 	if err == nil {
 		t.Fatal("expected an error for an unsupported field type")

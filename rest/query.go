@@ -24,11 +24,17 @@ const DateFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
 // that default must add it to Resource.QueryDenylist.
 var DefaultQueryDenylist = []string{"$where", "$function", "$accumulator"}
 
-// ListQuery is the parsed form of Eve's query string.
+// ListQuery is the parsed form of Eve's query string. Filter/Sort/
+// Projection are whatever the resource's own Adapter.ParseWhere/
+// ParseSort/ParseProjection produced -- bson.M/bson.D/bson.M for a
+// Mongo resource (mongoAdapter delegates to the package-level
+// parseWhere/ParseSort/parseProjection below, unchanged), a
+// backend-specific type for any other one (e.g. restpostgres's
+// postgres.Query/[]SortTerm/Projection).
 type ListQuery struct {
-	Filter     bson.M
-	Sort       bson.D
-	Projection bson.M
+	Filter     any
+	Sort       any
+	Projection any
 	Page       int
 	MaxResults int
 	// ShowDeleted lists soft deleted documents too: Eve checks the presence
@@ -56,11 +62,86 @@ func (e ErrDeniedOperator) Error() string {
 // page uses its absolute value and an invalid page is ignored. With
 // pagination disabled the default is 0 (no limit), there is no cap and page
 // is not read.
+//
+// where/sort/projection are decoded with Mongo's own rules (parseWhere/
+// ParseSort/parseProjection below) regardless of the eventual resource's
+// backend -- fine for this function's own callers (itemBody's link-building
+// echo, and direct use in tests), which only ever read the raw query string
+// back (queryString) or pagination, never Filter/Sort/Projection's parsed
+// value. A resource's own collection GET goes through parseListQueryFor
+// instead, which asks the resource's Adapter to parse them, so a Postgres
+// resource's where= is decoded as a postgres.Query, never forced through
+// Mongo's rules.
 func ParseListQuery(args url.Values, p Pagination, denylist []string) (*ListQuery, error) {
-	return parseListQuery(args, p, denylist, false)
+	q, err := parsePageAndEcho(args, p)
+	if err != nil {
+		return nil, err
+	}
+	if v := args.Get("where"); v != "" {
+		filter, err := parseWhere(v, denylist, false)
+		if err != nil {
+			return nil, err
+		}
+		q.Filter, q.rawWhere = filter, v
+	}
+	if v := args.Get("sort"); v != "" {
+		sort, err := ParseSort(v)
+		if err != nil {
+			return nil, err
+		}
+		q.Sort, q.rawSort = sort, v
+	}
+	if v := args.Get("projection"); v != "" {
+		p, err := parseProjection(v)
+		if err != nil {
+			return nil, err
+		}
+		q.Projection = p
+	}
+	return q, nil
 }
 
-func parseListQuery(args url.Values, p Pagination, denylist []string, idsAsString bool) (*ListQuery, error) {
+// parseListQueryFor is ParseListQuery, except where/sort/projection are
+// decoded through res.Adapter.ParseWhere/ParseSort/ParseProjection --
+// Mongo's own rules for a Mongo resource (mongoAdapter delegates to the
+// exact same parseWhere/ParseSort/parseProjection ParseListQuery itself
+// calls), a backend-specific decode for any other one. Used by a
+// resource's own collection GET (writeList), where the parsed value
+// actually reaches Service.List's Adapter.Find/CombineFilter/CombineSort/
+// CombineProjection calls, not just the echoed raw string.
+func parseListQueryFor(args url.Values, res *Resource) (*ListQuery, error) {
+	q, err := parsePageAndEcho(args, res.Pagination)
+	if err != nil {
+		return nil, err
+	}
+	if v := args.Get("where"); v != "" {
+		filter, err := res.Adapter.ParseWhere(v, res)
+		if err != nil {
+			return nil, err
+		}
+		q.Filter, q.rawWhere = filter, v
+	}
+	if v := args.Get("sort"); v != "" {
+		sort, err := res.Adapter.ParseSort(v)
+		if err != nil {
+			return nil, err
+		}
+		q.Sort, q.rawSort = sort, v
+	}
+	if v := args.Get("projection"); v != "" {
+		p, err := res.Adapter.ParseProjection(v)
+		if err != nil {
+			return nil, err
+		}
+		q.Projection = p
+	}
+	return q, nil
+}
+
+// parsePageAndEcho is the backend-agnostic half ParseListQuery and
+// parseListQueryFor share: show_deleted, max_results, page, and other's
+// echoed query parameters.
+func parsePageAndEcho(args url.Values, p Pagination) (*ListQuery, error) {
 	def := p.Default
 	if p.Disabled {
 		def = 0
@@ -83,28 +164,6 @@ func parseListQuery(args url.Values, p Pagination, denylist []string, idsAsStrin
 				q.Page = 1
 			}
 		}
-	}
-
-	if v := args.Get("where"); v != "" {
-		filter, err := parseWhere(v, denylist, idsAsString)
-		if err != nil {
-			return nil, err
-		}
-		q.Filter, q.rawWhere = filter, v
-	}
-	if v := args.Get("sort"); v != "" {
-		sort, err := ParseSort(v)
-		if err != nil {
-			return nil, err
-		}
-		q.Sort, q.rawSort = sort, v
-	}
-	if v := args.Get("projection"); v != "" {
-		p, err := parseProjection(v)
-		if err != nil {
-			return nil, err
-		}
-		q.Projection = p
 	}
 
 	for k, vs := range args {

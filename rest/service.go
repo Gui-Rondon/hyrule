@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -20,6 +21,12 @@ type Service struct {
 	tx           Transactor
 	validator    validator
 	queryTimeout time.Duration
+	// retry is res.Adapter.RetryPolicy(), read once at construction --
+	// patchOnce's retry loop (section 9 of the Postgres portability
+	// plan) uses it for a PATCH whose If-Match is the wildcard "*".
+	// Mongo's adapter returns the zero RetryOptions, so this stays
+	// inert (MaxAttempts 0) for every resource that doesn't opt in.
+	retry RetryOptions
 	// dryRun skips the post-write hooks: the transaction was rolled back
 	dryRun bool
 }
@@ -40,8 +47,9 @@ func NewService(res *Resource, tx Transactor) *Service {
 		tx = NoTransaction{}
 	}
 	return &Service{
-		res: res,
-		tx:  tx,
+		res:   res,
+		tx:    tx,
+		retry: res.Adapter.RetryPolicy(),
 		validator: validator{
 			schema:       res.Schema,
 			allowUnknown: res.AllowUnknown,
@@ -62,15 +70,20 @@ func (s *Service) WithTransaction(ctx context.Context, fn func(ctx context.Conte
 }
 
 // CheckEtag is Eve's If-Match check for custom endpoints: 428 without it, 412
-// when it differs from the stored etag.
+// when it differs from the stored etag. ifMatch is the raw header value (one
+// line's worth; use ParseIfMatch directly for several repeated headers, or
+// for the wildcard "*" to be recognized as matching any current etag).
 func (s *Service) CheckEtag(original Doc, ifMatch string) error {
-	return s.checkEtag(original, WriteOptions{IfMatch: ifMatch})
+	match, _ := ParseIfMatch([]string{ifMatch})
+	return s.checkEtag(original, WriteOptions{IfMatch: match})
 }
 
 // WriteOptions control the concurrency and validation checks of a write.
 type WriteOptions struct {
-	// IfMatch is the etag sent by the client.
-	IfMatch string
+	// IfMatch is the client's parsed If-Match precondition. A zero
+	// IfMatch (IsZero true) is "no header sent" -- the same as an empty
+	// string before this field's type changed from string to IfMatch.
+	IfMatch IfMatch
 	// SkipConcurrency disables the If-Match check, as Eve's *_internal
 	// functions do by default.
 	SkipConcurrency bool
@@ -272,7 +285,59 @@ func (s *Service) Insert(ctx context.Context, docs []Doc, opts WriteOptions) ([]
 
 // Patch updates some fields (Eve's patch). Nested documents are merged, as
 // Eve's MERGE_NESTED_DOCUMENTS does. It returns the updated document.
+//
+// A plain If-Match (one or more concrete entity-tags, or none at all) runs
+// patchOnce exactly once, same as before this method gained a retry loop:
+// a version conflict there is the usual 412, whether or not the resource's
+// Adapter.RetryPolicy ever configures retrying. The loop only engages for
+// the wildcard "If-Match: *" on a resource whose RetryPolicy has
+// MaxAttempts > 0 (restpostgres's postgresAdapter, when its Options.Retry
+// was given one; mongoAdapter never does) -- section 9.7 of the Postgres
+// portability plan: retry an optimistic-concurrency conflict instead of
+// answering the first one with 412, since the client already said it
+// doesn't care which version it's patching.
 func (s *Service) Patch(ctx context.Context, lookup any, changes Doc, opts WriteOptions) (Doc, error) {
+	if !opts.IfMatch.Any || s.retry.MaxAttempts == 0 {
+		return s.patchOnce(ctx, lookup, changes, opts) // no retryCtx, no loop -- a conflict here is 412, never 503
+	}
+
+	retryCtx, cancel := context.WithTimeout(ctx, s.retry.MaxDuration)
+	defer cancel()
+
+	for attempt := 0; attempt <= s.retry.MaxAttempts; attempt++ {
+		if attempt > 0 {
+			d := backoffWithJitter(attempt, s.retry.BaseBackoff, s.retry.MaxBackoff)
+			select {
+			case <-time.After(d):
+			case <-retryCtx.Done():
+				return nil, classifyContextErr(ctx, retryCtx, retryCtx.Err())
+			}
+		}
+		updated, err := s.patchOnce(retryCtx, lookup, changes, opts)
+		if err == nil {
+			return updated, nil
+		}
+		if _, ok := errors.AsType[*PreconditionFailedError](err); ok {
+			continue // the only reason to retry: a version conflict under If-Match: *
+		}
+		return nil, classifyContextErr(ctx, retryCtx, err)
+	}
+
+	// MaxAttempts ran out -- but it may have tied with the context
+	// expiring too; check explicitly before blaming "ran out of
+	// attempts" (section 9.7/9.8).
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	if retryCtx.Err() != nil {
+		return nil, abortMaxDurationExhausted()
+	}
+	return nil, abortMaxAttemptsExhausted()
+}
+
+// patchOnce is Patch's single-attempt body, reused by both the no-retry
+// path and every iteration of its retry loop.
+func (s *Service) patchOnce(ctx context.Context, lookup any, changes Doc, opts WriteOptions) (Doc, error) {
 	original, err := s.prepareWrite(ctx, lookup, changes, true, opts)
 	if err != nil {
 		return nil, err
@@ -481,28 +546,39 @@ func (s *Service) checkEtag(original Doc, opts WriteOptions) error {
 	if opts.SkipConcurrency {
 		return nil
 	}
-	if opts.IfMatch == "" {
+	if opts.IfMatch.IsZero() {
 		return ErrPreconditionRequired
 	}
-	if etag := trimEtag(opts.IfMatch); etag != etagOf(original) && !s.compatibleEtag(original, etag) {
+	candidates := append([]string{etagOf(original)}, s.compatibleEtags(original)...)
+	if !opts.IfMatch.StrongMatchesAny(candidates...) {
 		return &PreconditionFailedError{Current: original}
 	}
 	return nil
 }
 
-// compatibleEtag tells whether etag is one of the CompatibleEtags of the
-// document.
-func (s *Service) compatibleEtag(original Doc, etag string) bool {
+// compatibleEtags lists the older etags the document's CompatibleEtags
+// field carries (writes that did not touch what the client edits put
+// them there) -- nil when the resource has no such field.
+func (s *Service) compatibleEtags(original Doc) []string {
 	if s.res.CompatibleEtags == "" {
-		return false
+		return nil
 	}
-	switch list := original[s.res.CompatibleEtags].(type) {
+	var list []any
+	switch v := original[s.res.CompatibleEtags].(type) {
 	case bson.A:
-		return slices.Contains(list, any(etag))
+		list = v
 	case []any:
-		return slices.Contains(list, any(etag))
+		list = v
+	default:
+		return nil
 	}
-	return false
+	out := make([]string, 0, len(list))
+	for _, v := range list {
+		if s, ok := v.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // writeLookup conditions the write on the etag read, as Eve 2.x's
@@ -522,7 +598,11 @@ func (s *Service) checkMatched(ctx context.Context, matched int64, original Doc)
 	if matched > 0 {
 		return nil
 	}
-	current, err := s.Find(ctx, bson.M{"_id": original["_id"]})
+	idFilter, err := s.res.Adapter.IDFilter(original["_id"])
+	if err != nil {
+		return err
+	}
+	current, err := s.Find(ctx, idFilter)
 	if err != nil {
 		return err
 	}

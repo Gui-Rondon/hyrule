@@ -1,23 +1,24 @@
 package rest
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // IfMatch is a parsed If-Match precondition (RFC 7232 §3.1): either the
 // wildcard "*" (any current representation satisfies it) or a list of
 // entity-tags, compared with the strong comparison function the RFC
 // requires for If-Match — a weak entity-tag in the list can never match.
 //
-// Fase 0 of the Postgres portability work (ADR-0002): this type and
-// ParseIfMatch exist so a future backend-agnostic Service can express
-// "match any" (If-Match: *, with retry — see the Postgres plan's CAS
-// retry loop) without re-parsing the header at every call site. Nothing
-// in this package constructs or consumes an IfMatch yet — rest/http.go
-// still carries the header as the bare string it always has
-// (WriteOptions.IfMatch); wiring this in is later work, together with
-// the rest of the HTTP/Service integration.
+// WriteOptions.IfMatch carries this type (Fase 4b): http.go's update/
+// delete handlers build it from the request's If-Match header(s) via
+// ParseIfMatch, and Service.checkEtag/patchOnce's retry loop (section 9
+// of the Postgres portability plan) consume it -- Any is what lets a
+// PATCH under "If-Match: *" retry an optimistic-concurrency conflict
+// instead of always answering the first one with 412.
 type IfMatch struct {
 	// Any is true for the wildcard "*".
-	Any bool
+	Any  bool
 	tags []etag
 }
 
@@ -46,6 +47,15 @@ func (m IfMatch) StrongMatches(current string) bool {
 		}
 	}
 	return false
+}
+
+// StrongMatchesAny is StrongMatches tried against several candidates
+// in turn -- the stored etag plus, for a resource with CompatibleEtags,
+// the older etags a write replaced -- true when any one of them
+// satisfies m (or m is the wildcard, which never even looks at
+// candidates).
+func (m IfMatch) StrongMatchesAny(candidates ...string) bool {
+	return m.Any || slices.ContainsFunc(candidates, m.StrongMatches)
 }
 
 // ParseIfMatch parses the value(s) of one or more If-Match header lines,
@@ -100,23 +110,36 @@ func splitEtagList(v string) []string {
 }
 
 // parseEntityTag parses one list element as an entity-tag: an optional
-// "W/" weak marker followed by a DQUOTE-delimited run of etagc.
+// "W/" weak marker followed by a DQUOTE-delimited run of etagc (RFC
+// 7232 §2.3), the form a spec-compliant client echoes back from this
+// server's own ETag responses (http.go always quotes them).
+//
+// A bare token with no surrounding DQUOTE is also accepted, as a
+// strong (unweak) tag equal to the token itself -- not RFC 7232
+// (DQUOTE is required there), but this project's own test suite and
+// some of its custom endpoints have long sent If-Match back unquoted
+// (e.g. testkit's created.String("_etag") passed straight into
+// Client.Do), relying on the old string-based checkEtag's lenient
+// trimEtag; rejecting that outright, now that If-Match is parsed
+// properly, would be a real behavior regression, not a stricter
+// correctness fix. Every etagc byte must still be valid either way --
+// a literal DQUOTE in the middle of an otherwise bare token is still
+// malformed and skipped.
 func parseEntityTag(s string) (etag, bool) {
 	weak := false
 	if after, ok := strings.CutPrefix(s, "W/"); ok {
 		weak = true
 		s = after
 	}
-	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
-		return etag{}, false
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		s = s[1 : len(s)-1]
 	}
-	inner := s[1 : len(s)-1]
-	for i := 0; i < len(inner); i++ {
-		if !isEtagc(inner[i]) {
+	for i := 0; i < len(s); i++ {
+		if !isEtagc(s[i]) {
 			return etag{}, false
 		}
 	}
-	return etag{value: inner, weak: weak}, true
+	return etag{value: s, weak: weak}, true
 }
 
 // isEtagc reports whether b is a valid etagc (RFC 7232 §2.3): VCHAR

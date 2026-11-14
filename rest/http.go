@@ -325,11 +325,19 @@ func (h *handler) serveItem(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// itemLookup maps the URL value to a filter: an ObjectID, or the additional
-// lookup, which Eve registers for reads only.
-func (h *handler) itemLookup(value string) (bson.M, []string) {
+// itemLookup maps the URL value to a filter: an id (through the
+// resource's own Adapter, so a Postgres item route works exactly like
+// a Mongo one), or the additional lookup, which Eve registers for
+// reads only and stays Mongo-typed (AdditionalLookup.Filter/Field are
+// bson.M -- an opt-in advanced feature, out of scope for this cut,
+// same as WriteList/WriteListFallback below).
+func (h *handler) itemLookup(value string) (any, []string) {
 	if id, ok := h.res().Adapter.LookupByID(value); ok {
-		return bson.M{"_id": id}, h.res().ItemMethods
+		filter, err := h.res().Adapter.IDFilter(id)
+		if err != nil {
+			return nil, nil
+		}
+		return filter, h.res().ItemMethods
 	}
 	if al := h.res().AdditionalLookup; al != nil && al.Pattern.MatchString(value) {
 		if al.Filter != nil {
@@ -366,7 +374,7 @@ func (s *Service) WriteListFallback(w http.ResponseWriter, r *http.Request, look
 // a page has items; the last one answers anyway.
 func (s *Service) writeList(w http.ResponseWriter, r *http.Request, lookup bson.M, base string, fallbacks ...bson.M) {
 	res := s.res
-	parsed, err := parseListQuery(r.URL.Query(), res.Pagination, res.QueryDenylist, res.QueryObjectIDAsString)
+	parsed, err := parseListQueryFor(r.URL.Query(), res)
 	if err != nil {
 		WriteError(w, r, Abort(http.StatusBadRequest, ""))
 		return
@@ -377,8 +385,13 @@ func (s *Service) writeList(w http.ResponseWriter, r *http.Request, lookup bson.
 		lq := *parsed
 		q = &lq
 		if len(lookup) > 0 {
-			if len(q.Filter) > 0 {
-				q.Filter = bson.M{"$and": bson.A{q.Filter, lookup}}
+			// WriteList/WriteListFallback's own lookup is always a
+			// Mongo bson.M (both are Mongo-only custom-route helpers,
+			// unchanged by this cut -- see their doc comments); only
+			// combine it with q.Filter when it's the same bson.M shape
+			// a Mongo resource's own ParseWhere would have produced.
+			if mf, ok := q.Filter.(bson.M); ok && len(mf) > 0 {
+				q.Filter = bson.M{"$and": bson.A{mf, lookup}}
 			} else {
 				q.Filter = lookup
 			}
@@ -399,7 +412,7 @@ func (s *Service) writeList(w http.ResponseWriter, r *http.Request, lookup bson.
 		}
 		item := Render(withEpochDates(doc)).(map[string]any)
 		item["_etag"] = etagOf(doc)
-		item["_links"] = itemLinks(item["_links"], link(res.ItemTitle, base+"/"+idString(doc["_id"])))
+		item["_links"] = itemLinks(item["_links"], link(res.ItemTitle, base+"/"+res.Adapter.IDString(doc["_id"])))
 		items = append(items, item)
 	}
 	// Eve sends the count of the whole query and the newest _updated of the page
@@ -465,7 +478,7 @@ func (s *Service) unpaginatedLinks(q *ListQuery, count int, base string) map[str
 	}
 }
 
-func (h *handler) getItem(w http.ResponseWriter, r *http.Request, lookup bson.M) {
+func (h *handler) getItem(w http.ResponseWriter, r *http.Request, lookup any) {
 	base := h.res().URL
 	if al := h.res().AdditionalLookup; al != nil && al.PathLinks && !objectIDRe.MatchString(r.PathValue("lookup")) {
 		base = strings.Trim(r.URL.Path, "/")
@@ -484,12 +497,12 @@ func (s *Service) WriteFound(w http.ResponseWriter, r *http.Request, lookup bson
 	s.writeFound(w, r, lookup, strings.Trim(r.URL.Path, "/"))
 }
 
-func (s *Service) writeFound(w http.ResponseWriter, r *http.Request, lookup bson.M, base string) {
+func (s *Service) writeFound(w http.ResponseWriter, r *http.Request, lookup any, base string) {
 	// getitem parses the projection of the request; its pre_event fires
 	// on_pre_<method>, so the OnPreGet hooks only run on a GET
 	q := &ListQuery{}
 	if v := r.URL.Query().Get("projection"); v != "" {
-		p, err := parseProjection(v)
+		p, err := s.res.Adapter.ParseProjection(v)
 		if err != nil {
 			WriteError(w, r, err)
 			return
@@ -528,7 +541,7 @@ func (s *Service) writeFound(w http.ResponseWriter, r *http.Request, lookup bson
 		// self link and ("ERR",) as _status
 		body := Render(withEpochDates(doc)).(map[string]any)
 		body["_etag"] = etag
-		body["_links"] = map[string]any{"self": link(s.res.ItemTitle, base+"/"+idString(doc["_id"]))}
+		body["_links"] = map[string]any{"self": link(s.res.ItemTitle, base+"/"+s.res.Adapter.IDString(doc["_id"]))}
 		body["_status"] = []any{"ERR"}
 		body["_error"] = map[string]any{"code": http.StatusNotFound, "message": "The requested URL was not found on this server."}
 		WriteJSON(w, http.StatusNotFound, body)
@@ -577,8 +590,18 @@ func (h *handler) post(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusCreated, map[string]any{"_status": "OK", "_items": items})
 }
 
-func (h *handler) update(w http.ResponseWriter, r *http.Request, lookup bson.M, replace bool) {
-	opts := WriteOptions{IfMatch: r.Header.Get("If-Match")}
+// mergePatchContentType is RFC 7396 §A's required media type for a PATCH
+// request; a resource opts into enforcing it via
+// Resource.RequireMergePatchContentType.
+const mergePatchContentType = "application/merge-patch+json"
+
+func (h *handler) update(w http.ResponseWriter, r *http.Request, lookup any, replace bool) {
+	match, _ := ParseIfMatch(r.Header.Values("If-Match"))
+	opts := WriteOptions{IfMatch: match}
+	if !replace && h.res().RequireMergePatchContentType && mediaType(r) != mergePatchContentType {
+		WriteError(w, r, Abort(http.StatusUnsupportedMediaType, ""))
+		return
+	}
 	// Eve answers 404 and 428/412 before reading the body
 	original, err := h.svc.Find(r.Context(), lookup)
 	if err == nil {
@@ -607,8 +630,9 @@ func (h *handler) update(w http.ResponseWriter, r *http.Request, lookup bson.M, 
 	WriteJSON(w, http.StatusOK, h.svc.WriteResult(doc))
 }
 
-func (h *handler) delete(w http.ResponseWriter, r *http.Request, lookup bson.M) {
-	if err := h.svc.Delete(r.Context(), lookup, WriteOptions{IfMatch: r.Header.Get("If-Match")}); err != nil {
+func (h *handler) delete(w http.ResponseWriter, r *http.Request, lookup any) {
+	match, _ := ParseIfMatch(r.Header.Values("If-Match"))
+	if err := h.svc.Delete(r.Context(), lookup, WriteOptions{IfMatch: match}); err != nil {
 		WriteError(w, r, err)
 		return
 	}
@@ -639,7 +663,7 @@ func (s *Service) ItemBody(doc Doc) map[string]any {
 // "?max_results=0"). base is the resource URL, or the request path of a
 // custom route.
 func (s *Service) itemBody(doc Doc, args url.Values, base string) map[string]any {
-	self := base + "/" + idString(doc["_id"])
+	self := base + "/" + s.res.Adapter.IDString(doc["_id"])
 	collection := base
 	q, err := ParseListQuery(args, s.res.Pagination, nil)
 	if err == nil {
@@ -681,7 +705,7 @@ func itemLinks(stored any, self map[string]any) map[string]any {
 // the auto_fields, with _deleted for soft delete.
 func (s *Service) WriteResult(doc Doc) map[string]any {
 	out := map[string]any{
-		"_id":      idString(doc["_id"]),
+		"_id":      s.res.Adapter.IDString(doc["_id"]),
 		"_created": Render(doc["_created"]),
 		"_updated": Render(doc["_updated"]),
 		"_etag":    doc["_etag"],
@@ -695,7 +719,7 @@ func (s *Service) WriteResult(doc Doc) map[string]any {
 }
 
 func (s *Service) selfLink(id any) map[string]any {
-	return link(s.res.ItemTitle, s.res.URL+"/"+idString(id))
+	return link(s.res.ItemTitle, s.res.URL+"/"+s.res.Adapter.IDString(id))
 }
 
 // WriteJSON writes body as JSON.

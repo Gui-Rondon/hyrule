@@ -3,7 +3,6 @@ package restpostgres
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -21,56 +20,12 @@ type Options struct {
 	// never has a _deleted field in its Doc, same as Mongo's.
 	SoftDelete bool
 	// Retry configures how a PATCH under If-Match: * retries an
-	// optimistic-concurrency conflict -- a rest.Service-level concern
-	// (Fase 4's patchOnce loop), stored here only so it's validated
-	// once, at registration, rather than on every request.
-	Retry RetryOptions
-}
-
-// RetryOptions bounds the retry loop a PATCH under If-Match: * runs on
-// an optimistic-concurrency conflict. There is no zero-value default:
-// a RetryOptions{} is invalid (every duration field must be positive)
-// -- start from DefaultRetryOptions() and override only what differs.
-type RetryOptions struct {
-	// MaxAttempts is retries BEYOND the initial attempt; 0 is valid
-	// ("disabled" -- a single attempt, a conflict there is a plain
-	// 412, never a 503); negative is an error.
-	MaxAttempts int
-	// BaseBackoff is the ceiling for the first retry's jitter; must be > 0.
-	BaseBackoff time.Duration
-	// MaxBackoff is the ceiling later retries saturate to; must be >= BaseBackoff.
-	MaxBackoff time.Duration
-	// MaxDuration bounds the retry loop's total wall-clock budget
-	// (only meaningful once MaxAttempts > 0); must be > 0.
-	MaxDuration time.Duration
-}
-
-// DefaultRetryOptions is the only recognized starting point for a
-// RetryOptions value -- disable retrying by overriding just MaxAttempts
-// to 0 from this, rather than building a RetryOptions{} from scratch.
-func DefaultRetryOptions() RetryOptions {
-	return RetryOptions{
-		MaxAttempts: 5,
-		BaseBackoff: 10 * time.Millisecond,
-		MaxBackoff:  200 * time.Millisecond,
-		MaxDuration: 2 * time.Second,
-	}
-}
-
-func (r RetryOptions) validate() error {
-	if r.MaxAttempts < 0 {
-		return errors.New("RetryOptions.MaxAttempts must be >= 0")
-	}
-	if r.BaseBackoff <= 0 {
-		return errors.New("RetryOptions.BaseBackoff must be > 0")
-	}
-	if r.MaxBackoff < r.BaseBackoff {
-		return errors.New("RetryOptions.MaxBackoff must be >= BaseBackoff")
-	}
-	if r.MaxDuration <= 0 {
-		return errors.New("RetryOptions.MaxDuration must be > 0")
-	}
-	return nil
+	// optimistic-concurrency conflict -- rest.Service's patchOnce loop
+	// reads it back through RetryPolicy, so it's validated once, here
+	// at registration, rather than on every request. rest.RetryOptions{}
+	// (the zero value) is invalid -- start from rest.DefaultRetryOptions()
+	// and override only what differs.
+	Retry rest.RetryOptions
 }
 
 // postgresAdapter implements rest.Adapter in full (Fase 4b's first
@@ -80,16 +35,11 @@ func (r RetryOptions) validate() error {
 // store's table to have the shape restpostgres/adapter_test.go's
 // setupResourceTable creates: id uuid primary key, doc jsonb,
 // created_at/updated_at timestamptz, version bigint, deleted boolean.
-//
-// Not yet usable end-to-end over HTTP, though: rest/http.go and
-// ListQuery (rest/query.go) are still bson.M/bson.D-typed and never
-// call through Resource.Adapter for query parsing -- see query.go's
-// doc comment for exactly what's deferred and why.
 type postgresAdapter struct {
 	store  postgres.Store
 	tx     postgres.Transactor
 	schema postgres.SchemaSpec
-	retry  RetryOptions
+	retry  rest.RetryOptions
 	// table is store.Table, sanitized once here -- store.Table never
 	// changes for the adapter's lifetime, so every CRUD method reuses
 	// this instead of re-sanitizing the same identifier on every call.
@@ -98,6 +48,11 @@ type postgresAdapter struct {
 }
 
 var _ rest.Adapter = (*postgresAdapter)(nil)
+
+// RetryPolicy returns the RetryOptions NewAdapter validated at
+// registration -- rest.Service's patchOnce loop reads it from here
+// instead of the caller duplicating it onto rest.Resource too.
+func (a *postgresAdapter) RetryPolicy() rest.RetryOptions { return a.retry }
 
 // NewAdapter validates opts and builds an adapter over store's table.
 // Errors here are a registration-time failure (the resource never
@@ -113,7 +68,7 @@ func NewAdapter(store postgres.Store, tx postgres.Transactor, opts Options) (*po
 	if err != nil {
 		return nil, fmt.Errorf("restpostgres: %w", err)
 	}
-	if err := opts.Retry.validate(); err != nil {
+	if err := opts.Retry.Validate(); err != nil {
 		return nil, fmt.Errorf("restpostgres: %w", err)
 	}
 	return &postgresAdapter{

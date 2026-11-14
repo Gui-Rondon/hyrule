@@ -92,16 +92,39 @@ func TestParseIfMatchEmptyListElementsTolerated(t *testing.T) {
 	}
 }
 
+func TestParseIfMatchBareUnquotedTagMatches(t *testing.T) {
+	// Not RFC 7232 (DQUOTE is required there), but this server's own
+	// ETag responses are always quoted and some callers (testkit,
+	// custom endpoints) have long sent If-Match back unquoted anyway --
+	// a bare token is accepted as a strong tag equal to itself, the
+	// same compatibility trimEtag's string-based comparison used to
+	// give for free before If-Match was parsed into this type.
+	m, ok := rest.ParseIfMatch([]string{"abc123"})
+	if !ok {
+		t.Fatal("want ok=true")
+	}
+	if !m.StrongMatches("abc123") {
+		t.Error("want the bare token to strong-match its own value")
+	}
+	if m.StrongMatches("other") {
+		t.Error("must not match a different etag")
+	}
+}
+
 func TestParseIfMatchMalformedElementSkipped(t *testing.T) {
-	m, ok := rest.ParseIfMatch([]string{`not-a-valid-tag, "b"`})
+	// A literal space is not a valid etagc byte (RFC 7232 §2.3), so an
+	// element containing one is still malformed and skipped even under
+	// the lenient bare-token fallback (see
+	// TestParseIfMatchBareUnquotedTagMatches, which has none).
+	m, ok := rest.ParseIfMatch([]string{`not a valid tag, "b"`})
 	if !ok {
 		t.Fatal("want ok=true: the valid tag still counts")
 	}
 	if !m.StrongMatches("b") {
 		t.Error("want the well-formed tag to still be parsed")
 	}
-	if m.StrongMatches("not-a-valid-tag") {
-		t.Error("an unquoted element must never match")
+	if m.StrongMatches(`not a valid tag`) {
+		t.Error("a malformed element must never match")
 	}
 }
 

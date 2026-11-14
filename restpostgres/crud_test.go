@@ -63,7 +63,7 @@ func TestSoftDeleteExposesDeletedField(t *testing.T) {
 	setupResourceTable(t, pool, table)
 	a, err := NewAdapter(postgres.NewStore(pool, table), postgres.Transactor{Pool: pool}, Options{
 		SoftDelete: true,
-		Retry:      DefaultRetryOptions(),
+		Retry:      rest.DefaultRetryOptions(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -460,14 +460,14 @@ func TestDeleteOneNoMatch(t *testing.T) {
 	}
 }
 
-func TestLookupWhereRejectsBadInput(t *testing.T) {
+func TestCompileFilterRejectsBadLookup(t *testing.T) {
 	a := &postgresAdapter{}
 	cases := []any{
-		"not a uuid or postgresLookup",
+		"not a uuid, postgresLookup, or any other known filter shape",
 		postgresLookup{ID: "not a uuid.UUID", Version: 1},
 	}
 	for i, lookup := range cases {
-		if _, _, err := a.lookupWhere(lookup, 0); err == nil {
+		if _, _, err := a.compileFilter(lookup, 0); err == nil {
 			t.Errorf("case %d: expected an error for lookup %#v", i, lookup)
 		}
 	}

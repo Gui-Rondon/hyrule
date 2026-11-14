@@ -70,6 +70,25 @@ type QueryAdapter interface {
 	// the document read before the write (original) -- always from
 	// original, never from a client's match/SkipConcurrency.
 	WriteLookup(original Doc) (any, error)
+
+	// IDFilter builds a filter selecting the single document whose _id
+	// equals id (an IDCodec.NewID/LookupByID value) -- combinable with
+	// CombineFilter exactly like a client's ParseWhere result, so an
+	// item route (GET/PATCH/PUT/DELETE /<url>/<id>) can reach the right
+	// document through the same CombineFilter/datasource-filter/soft-
+	// delete path a collection query already does, instead of a
+	// Mongo-only bson.M{"_id": id} literal hardcoded at the call site
+	// (http.go's itemLookup, service.go's checkMatched, before this
+	// method existed).
+	IDFilter(id any) (any, error)
+
+	// RetryPolicy returns the RetryOptions this adapter was configured
+	// with -- the budget Service's patchOnce retry loop uses for a PATCH
+	// whose If-Match is the wildcard "*" (section 9.7). mongoAdapter
+	// returns the zero RetryOptions: Mongo keeps today's behavior
+	// exactly, a single attempt, so a version conflict under
+	// If-Match: * is still a plain 412, never a 503.
+	RetryPolicy() RetryOptions
 }
 
 // Adapter is the full backend seam Service writes through -- the
@@ -78,13 +97,9 @@ type QueryAdapter interface {
 // (Fase 0), as three separate, independently testable interfaces;
 // Adapter embeds all three and adds the CRUD/merge/uniqueness methods
 // a Resource needs to never touch Store directly. mongoAdapter (this
-// package, Fase 4a) implements it in full. restpostgres's
-// postgresAdapter (Fase 2) implements only the CRUD/IDCodec/
-// ErrorClassifier/MergePatch/EqualsFilter methods so far -- its
-// QueryAdapter half (ParseWhere/ParseSort/ParseProjection/
-// CombineFilter/CombineSort/CombineProjection) is Fase 4b, not written
-// yet; there is no `var _ Adapter = (*postgresAdapter)(nil)` assertion
-// in restpostgres until it is.
+// package, Fase 4a) and restpostgres's postgresAdapter (Fase 2-4b)
+// both implement it in full, each with its own
+// `var _ Adapter = (*...)(nil)` assertion.
 //
 // Fase 0/2's history, not repeated here to reopen it: Store stays
 // bson.M/bson.D-typed (rest/store.go) -- Adapter does not replace it,
