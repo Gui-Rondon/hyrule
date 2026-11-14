@@ -1,0 +1,5 @@
+{
+  "auth": {"enable": false},
+  "pubsub": {"project_id": "local-dev"},
+  "redis": {"host": "redis", "port": "6379"}
+}

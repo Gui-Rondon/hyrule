@@ -1,0 +1,6 @@
+{
+  "auth": {"enable": false},
+  "pubsub": {"project_id": "local-dev"},
+  "redis": {"host": "redis", "port": "6379"},
+  "elasticsearch": {"hosts": ["http://elasticsearch:9200"], "index": "tags"}
+}

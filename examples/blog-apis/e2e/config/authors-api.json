@@ -1,0 +1,5 @@
+{
+  "auth": {"enable": true, "public_key_file": "/keys/legacy.pub"},
+  "pubsub": {"project_id": "local-dev"},
+  "redis": {"host": "redis", "port": "6379"}
+}
