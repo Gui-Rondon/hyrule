@@ -1,5 +1,7 @@
 package rest
 
+import "context"
+
 // ErrorClassifier tells Service what kind of failure a Store operation
 // returned, so the HTTP status it picks does not depend on checking a
 // backend-specific error value (mongo.ErrNoDocuments, mongo.IsTimeout...)
@@ -68,4 +70,79 @@ type QueryAdapter interface {
 	// the document read before the write (original) -- always from
 	// original, never from a client's match/SkipConcurrency.
 	WriteLookup(original Doc) (any, error)
+}
+
+// Adapter is the full backend seam Service writes through -- the
+// unified interface ADR-0002/this plan's section 3 describes.
+// QueryAdapter/IDCodec/ErrorClassifier (above) were extracted first
+// (Fase 0), as three separate, independently testable interfaces;
+// Adapter embeds all three and adds the CRUD/merge/uniqueness methods
+// a Resource needs to never touch Store directly. mongoAdapter (this
+// package, Fase 4a) implements it in full. restpostgres's
+// postgresAdapter (Fase 2) implements only the CRUD/IDCodec/
+// ErrorClassifier/MergePatch/EqualsFilter methods so far -- its
+// QueryAdapter half (ParseWhere/ParseSort/ParseProjection/
+// CombineFilter/CombineSort/CombineProjection) is Fase 4b, not written
+// yet; there is no `var _ Adapter = (*postgresAdapter)(nil)` assertion
+// in restpostgres until it is.
+//
+// Fase 0/2's history, not repeated here to reopen it: Store stays
+// bson.M/bson.D-typed (rest/store.go) -- Adapter does not replace it,
+// it sits in front of it. A Resource with Adapter set never calls
+// Store at all (Resource.setDefaults only builds a mongoAdapter
+// wrapping Store when Adapter is nil); a Postgres Resource sets
+// Adapter directly and leaves Store nil.
+type Adapter interface {
+	QueryAdapter
+	IDCodec
+	ErrorClassifier
+
+	// Find lists documents; filter/sort/projection are whatever
+	// CombineFilter/CombineSort/CombineProjection returned. limit <= 0
+	// means no skip/limit is applied. Parameter order intentionally
+	// matches plan section 3's pseudocode, not Store.Find's (filter,
+	// skip, limit, sort, projection) -- mongoAdapter.Find is the one
+	// place that transposes between the two; a second implementation
+	// should double check it against this doc comment, not Store's.
+	Find(ctx context.Context, filter, sort, projection any, skip, limit int64) ([]Doc, error)
+	CountDocuments(ctx context.Context, filter any) (int64, error)
+	// FindOne reads one document; lookup is whatever CombineFilter (or
+	// WriteLookup, for a write's own re-read) returned.
+	FindOne(ctx context.Context, lookup, projection any) (Doc, error)
+	// InsertMany writes docs, computing and setting each one's _etag in
+	// place -- _id/_created/_updated are already set by Service.Insert,
+	// before the OnInsert hooks ran; _etag is adapter-specific (a
+	// content hash for Mongo, "1" for a fresh Postgres row) and is set
+	// here, after the hooks, immediately before the write.
+	InsertMany(ctx context.Context, docs []Doc) error
+	// UpdateOne writes updated's business fields changed (changes
+	// names which keys) at lookup, and sets updated's final _etag/
+	// _updated in place before returning -- a fresh value the
+	// implementation is itself responsible for, computed however its
+	// backend actually determines it: a content hash set right before
+	// the write for a backend with no way to read a value back (Mongo;
+	// mongoAdapter.setEtag), or the value a RETURNING clause confirmed
+	// the write actually produced, for a backend that has one
+	// (Postgres's version counter). Either way, the caller never
+	// computes or sets _etag/_updated itself. matched == 0 without an
+	// error is not a failure: the caller (Service's checkMatched)
+	// decides 404 vs 412 by re-reading.
+	UpdateOne(ctx context.Context, lookup any, updated, changes Doc) (matched int64, err error)
+	// ReplaceOne overwrites the whole document at lookup, setting
+	// replacement's final _etag/_updated in place, same contract as
+	// UpdateOne.
+	ReplaceOne(ctx context.Context, lookup any, replacement Doc) (matched int64, err error)
+	DeleteOne(ctx context.Context, lookup any) (deleted int64, err error)
+
+	// MergePatch applies changes to original's business fields only
+	// (original's meta fields pass through untouched) -- Eve's
+	// MERGE_NESTED_DOCUMENTS deep merge for Mongo, RFC 7396 JSON Merge
+	// Patch for Postgres (seção 10, deliberate divergence). The caller
+	// sets _updated/_etag on the result afterward.
+	MergePatch(original, changes Doc) (Doc, error)
+	// EqualsFilter builds "field == value", optionally excluding one
+	// document by excludeID -- the friendly pre-check a Schema's
+	// unique validation runs before a write; the real uniqueness
+	// guarantee is the backend's own unique index.
+	EqualsFilter(field string, value any, excludeID any) (any, error)
 }

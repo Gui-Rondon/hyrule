@@ -7,15 +7,21 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// TestMongoAdapterQueryAdapter exercises defaultAdapter's QueryAdapter
-// methods directly (Fase 0 of the Postgres portability work): since no
-// call site in rest/service.go or rest/http.go routes through the
-// adapter for these yet (they call the shared combineFilter/
-// combineProjection/combineSort/writeLookup/parseWhere functions
-// directly), this is the only coverage of mongoAdapter's own
-// implementation of the interface.
+// TestMongoAdapterQueryAdapter exercises mongoAdapter's QueryAdapter
+// methods directly, against the free combineFilter/combineProjection/
+// combineSort/writeLookup/parseWhere functions they wrap -- Service
+// (Fase 4a) now calls these same methods through s.res.Adapter for
+// every request, but this direct test stays as the most precise place
+// to pin the adapter's own behavior down to the function it forwards
+// to, independent of Service's own plumbing (covered by
+// service_test.go).
 func TestMongoAdapterQueryAdapter(t *testing.T) {
+	// A bare mongoAdapter{}: every method exercised here takes res (or
+	// no state at all) explicitly, so it never needs the store/res
+	// fields setDefaults would otherwise wire up.
+	adapter := &mongoAdapter{}
 	res := &Resource{
+		Adapter:    adapter,
 		SoftDelete: true,
 		Datasource: Datasource{
 			Filter:      bson.M{"kind": "article"},
@@ -26,7 +32,7 @@ func TestMongoAdapterQueryAdapter(t *testing.T) {
 	res.setDefaults()
 
 	t.Run("ParseWhere", func(t *testing.T) {
-		got, err := defaultAdapter.ParseWhere(`{"_id":"6ada449701ecde6e488b8ac9"}`, res)
+		got, err := adapter.ParseWhere(`{"_id":"6ada449701ecde6e488b8ac9"}`, res)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -44,9 +50,9 @@ func TestMongoAdapterQueryAdapter(t *testing.T) {
 	})
 
 	t.Run("ParseWhere honors QueryObjectIDAsString", func(t *testing.T) {
-		strRes := &Resource{QueryObjectIDAsString: true}
+		strRes := &Resource{Adapter: adapter, QueryObjectIDAsString: true}
 		strRes.setDefaults()
-		got, err := defaultAdapter.ParseWhere(`{"_id":"6ada449701ecde6e488b8ac9"}`, strRes)
+		got, err := adapter.ParseWhere(`{"_id":"6ada449701ecde6e488b8ac9"}`, strRes)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,7 +62,7 @@ func TestMongoAdapterQueryAdapter(t *testing.T) {
 	})
 
 	t.Run("ParseSort", func(t *testing.T) {
-		got, err := defaultAdapter.ParseSort("-name,slug")
+		got, err := adapter.ParseSort("-name,slug")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -67,7 +73,7 @@ func TestMongoAdapterQueryAdapter(t *testing.T) {
 	})
 
 	t.Run("ParseProjection", func(t *testing.T) {
-		got, err := defaultAdapter.ParseProjection(`{"name":1}`)
+		got, err := adapter.ParseProjection(`{"name":1}`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -77,7 +83,7 @@ func TestMongoAdapterQueryAdapter(t *testing.T) {
 	})
 
 	t.Run("CombineFilter", func(t *testing.T) {
-		got, err := defaultAdapter.CombineFilter(res, bson.M{"slug": "go"}, false)
+		got, err := adapter.CombineFilter(res, bson.M{"slug": "go"}, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,7 +93,7 @@ func TestMongoAdapterQueryAdapter(t *testing.T) {
 		}
 		// a clientFilter that isn't a bson.M (e.g. nil, or some other
 		// shape) must not panic -- treated as if nothing was sent.
-		got, err = defaultAdapter.CombineFilter(res, nil, false)
+		got, err = adapter.CombineFilter(res, nil, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -97,19 +103,19 @@ func TestMongoAdapterQueryAdapter(t *testing.T) {
 	})
 
 	t.Run("CombineSort falls back to DefaultSort", func(t *testing.T) {
-		got := defaultAdapter.CombineSort(res, nil)
+		got := adapter.CombineSort(res, nil)
 		if !reflect.DeepEqual(got, res.Datasource.DefaultSort) {
 			t.Errorf("CombineSort(nil) = %#v, want DefaultSort", got)
 		}
 		clientSort := bson.D{{Key: "slug", Value: -1}}
-		got = defaultAdapter.CombineSort(res, clientSort)
+		got = adapter.CombineSort(res, clientSort)
 		if !reflect.DeepEqual(got, clientSort) {
 			t.Errorf("CombineSort(clientSort) = %#v, want the client's own sort", got)
 		}
 	})
 
 	t.Run("CombineProjection", func(t *testing.T) {
-		got, err := defaultAdapter.CombineProjection(res, bson.M{"name": 1})
+		got, err := adapter.CombineProjection(res, bson.M{"name": 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -121,7 +127,7 @@ func TestMongoAdapterQueryAdapter(t *testing.T) {
 
 	t.Run("WriteLookup", func(t *testing.T) {
 		original := Doc{"_id": "x", "_etag": "3"}
-		got, err := defaultAdapter.WriteLookup(original)
+		got, err := adapter.WriteLookup(original)
 		if err != nil {
 			t.Fatal(err)
 		}
