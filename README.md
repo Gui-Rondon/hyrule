@@ -9,14 +9,16 @@
 A Go framework for scaffolding microservices fast, and testing their
 flows just as fast: describe a resource (schema, methods, lookups) in a
 YAML file — no Go at all — and get a running REST API with full CRUD,
-validation, ETags, pagination and a transactional outbox, on Mongo
-(Postgres support in progress). A resource with its own logic stays a
-small Go binary. Either way, `testkit` gives each test an isolated
-database and an HTTP client, and dry run lets a whole service run
-against real traffic with every write rolled back — so you can exercise
-a service's actual flows without standing up the real stack or faking
-your way through it. Under the hood it keeps the HTTP contract of Eve
-(Python) (`rest`), which is where the project migrated from.
+validation, ETags, pagination and a transactional outbox, on Mongo (the
+YAML path stays Mongo-only for now). A resource with its own logic
+stays a small Go binary, on Mongo or Postgres (`restpostgres`, see the
+Adapter reference below). Either way, `testkit` gives each test an
+isolated database and an HTTP client, and dry run lets a whole
+service run against real traffic with every write rolled back — so
+you can exercise a service's actual flows without standing up the
+real stack or faking your way through it. Under the hood it keeps the
+HTTP contract of Eve (Python) (`rest`), which is where the project
+migrated from.
 
 📖 **Full documentation: https://gui-rondon.github.io/hyrule/** — a
 guided [Learn](https://gui-rondon.github.io/hyrule/docs/learn/intro)
@@ -106,16 +108,18 @@ The full docs are at **https://gui-rondon.github.io/hyrule/**:
 | [Reference → Testkit](https://gui-rondon.github.io/hyrule/docs/reference/testkit) | testing a resource (isolated Mongo, HTTP client, tokens) |
 | [Reference → Architecture](https://gui-rondon.github.io/hyrule/docs/reference/architecture) | the `services → behaviors → rest → platform` layering, and why it exists |
 | [Reference → Querying](https://gui-rondon.github.io/hyrule/docs/reference/querying) | the `where=`/`sort`/`projection` query language and how it's parsed |
-| [Reference → Postgres backend](https://gui-rondon.github.io/hyrule/docs/reference/postgres-rfc) | the open design questions for a second, non-Mongo backend |
+| [Reference → Adapter](https://gui-rondon.github.io/hyrule/docs/reference/adapter) | `rest.Adapter`, the seam a Postgres-backed resource (`restpostgres`) registers instead of `Store` |
+| [Reference → Postgres backend (historical)](https://gui-rondon.github.io/hyrule/docs/reference/postgres-rfc) | the original design record for the Postgres backend, superseded by the Adapter reference above |
 
 ## Layout
 
     app/                           shared bootstrap (app.Main / app.Build)
     behaviors/                     reusable hooks: searchsync (ES), audit, events (outbox on write)
-    rest/                          the HTTP contract: Service (rules, no HTTP) + API (HTTP) + Store (storage interface)
+    rest/                          the HTTP contract: Service (rules, no HTTP) + API (HTTP) + Adapter (storage seam, Store for Mongo)
+    restpostgres/                  rest.Adapter over platform/postgres — the Postgres-backed resource path
     outbox/                        transactional outbox, the Pub/Sub relay and the conditional primitive
-    declarative/                   loads a Resource/Schema from YAML (cmd/hyrule-serve)
-    platform/                      config, mongodb, auth, search, health, server, pubsub, redis
+    declarative/                   loads a Resource/Schema from YAML (cmd/hyrule-serve), Mongo only today
+    platform/                      config, mongodb, postgres, auth, search, health, server, pubsub, redis
     testkit/                       per-test isolated Mongo, ES recorder, tokens
     internal/domain/               the one package that stays internal (slug generation)
     cmd/hyrule-serve/              generic binary: registers the resources of a YAML, no domain Go

@@ -99,13 +99,16 @@ the right index is the whole optimization story for a Mongo-backed
 resource.
 
 This is Mongo-shaped end to end (the index directions above, `ttl=`, the
-`indices.conf` format itself) and won't carry over to Postgres as-is:
+`indices.conf` format itself) and doesn't carry over to Postgres as-is:
 Postgres' default index is a btree, with `gin` for `jsonb`/array/full-text
 columns, `gist` for geometric/range types and `brin` for large,
 naturally-ordered tables; there's no native `ttl` (it needs a cron job or
 trigger), and `EXPLAIN ANALYZE` gives a real query plan where Mongo's
-`where=` gives none. See [Postgres backend](postgres-rfc.md) for where
-that's headed.
+`where=` gives none. `platform/postgres.EnsureIndexes`/`IndexSpec` is the
+Postgres equivalent — its own format, deliberately narrower (no TTL/
+text/hashed/2dsphere), called explicitly by whoever sets up a resource's
+table, same precedent as `EnsureFunctions` (see
+[`adapter.md`](adapter.md#building-a-postgres-backed-resource)).
 
 ## Places that still go straight to Mongo, on purpose
 

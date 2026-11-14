@@ -41,8 +41,8 @@ func (a *postgresAdapter) hydrate(id uuid.UUID, fields map[string]any, createdAt
 }
 
 // requiredMeta reads doc[key] as T, for InsertMany's meta fields
-// (_id/_created/_updated) -- Service.Insert is expected to have set
-// them before hooks run (postgres-rfc.md §6); i names which element of
+// (_id/_created/_updated) -- rest.Service.Insert is expected to have
+// set them before the OnInsert hooks run; i names which element of
 // the batch failed, for a clear error.
 func requiredMeta[T any](doc rest.Doc, key string, i int) (T, error) {
 	v, ok := doc[key].(T)

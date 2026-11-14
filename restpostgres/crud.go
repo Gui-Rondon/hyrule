@@ -239,8 +239,8 @@ func (a *postgresAdapter) FindOne(ctx context.Context, lookup, projection any) (
 
 // InsertMany inserts docs in one statement (atomic by construction --
 // all rows or none). Each doc must already carry _id/_created/_updated
-// (Service.Insert sets these before hooks run, per postgres-rfc.md §6)
-// -- InsertMany reads them, never recomputes them, and sets _etag to
+// (rest.Service.Insert sets these before the OnInsert hooks run) --
+// InsertMany reads them, never recomputes them, and sets _etag to
 // "1" (the only metadata it defines itself): every new document starts
 // at version 1. No RETURNING is needed -- Go already knows, with
 // certainty, the values it just sent as literal parameters.

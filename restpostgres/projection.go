@@ -8,11 +8,10 @@ import (
 
 // Projection selects which fields Find/FindOne keep in the returned
 // Doc. An empty/nil Projection keeps every field. Postgres always
-// hydrates the full Doc from the row before applying this -- read
-// hooks (a future consumer, not wired in Fase 2) see the complete
-// document, exactly as a Mongo resource's do today; this is a
-// deliberate portability rule (postgres-rfc.md's cross-backend hook
-// contract), not an optimization left for later.
+// hydrates the full Doc from the row before applying this -- a read
+// hook sees the complete document, exactly as a Mongo resource's do
+// today; this is a deliberate cross-backend portability rule, not an
+// optimization left for later.
 type Projection map[string]bool
 
 // toProjection normalizes Find/FindOne's projection parameter: nil

@@ -9,9 +9,10 @@ testing their flows just as fast. You describe a **resource** — its
 fields, its validation rules, which HTTP methods it answers to — and
 hyrule gives you a working API: CRUD, request validation, ETags for
 optimistic concurrency, pagination, and a transactional outbox for
-emitting events exactly once per write. Backed by MongoDB today
-(Postgres support in progress — see the
-[Postgres backend](/docs/reference/postgres-rfc) page).
+emitting events exactly once per write. This guided path (and the
+transactional outbox) stays MongoDB today — a resource with its own
+Go code can run on Postgres instead, see the
+[Adapter](/docs/reference/adapter) reference page.
 
 Speed doesn't stop at scaffolding: `testkit` gives every test an
 isolated database and an HTTP client with no service to stand up, and

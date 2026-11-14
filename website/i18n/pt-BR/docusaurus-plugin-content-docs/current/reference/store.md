@@ -97,13 +97,17 @@ declarar o índice certo é toda a história de otimização de um recurso em
 Mongo.
 
 Isso é Mongo-shaped do início ao fim (as direções de índice acima, o
-`ttl=`, o próprio formato de `indices.conf`) e não vai valer como está
-pro Postgres: o índice padrão do Postgres é btree, com `gin` pra colunas
+`ttl=`, o próprio formato de `indices.conf`) e não vale como está pro
+Postgres: o índice padrão do Postgres é btree, com `gin` pra colunas
 `jsonb`/array/full-text, `gist` pra tipos geométricos/de intervalo e
 `brin` pra tabelas grandes e naturalmente ordenadas; não há `ttl` nativo
 (precisa de cron ou trigger), e `EXPLAIN ANALYZE` dá um plano de query de
-verdade onde o `where=` do Mongo não dá nenhum. Ver
-[backend Postgres](postgres-rfc.md) pra onde isso está indo.
+verdade onde o `where=` do Mongo não dá nenhum.
+`platform/postgres.EnsureIndexes`/`IndexSpec` é o equivalente pro
+Postgres — formato próprio, deliberadamente mais estreito (sem TTL/
+text/hashed/2dsphere), chamado explicitamente por quem configura a
+tabela de uma resource, mesmo precedente do `EnsureFunctions` (ver
+[`adapter.md`](adapter.md#construindo-uma-resource-sobre-postgres)).
 
 ## Pontos que ainda usam Mongo direto, de propósito
 

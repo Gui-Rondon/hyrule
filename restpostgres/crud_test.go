@@ -509,8 +509,8 @@ func TestDeleteOneRejectsBadLookup(t *testing.T) {
 	}
 }
 
-// TestVersionOverflowIsInternalNeverClientOrDuplicate locks in
-// postgres-rfc.md §7: version is bigint precisely so this is an
+// TestVersionOverflowIsInternalNeverClientOrDuplicate locks in why
+// version is bigint, not integer: an overflow this far out is an
 // internal failure (22003), never a silent wraparound, and it must
 // never be classified as IsDuplicateKey/IsClientError/IsTimeout.
 func TestVersionOverflowIsInternalNeverMisclassified(t *testing.T) {

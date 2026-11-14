@@ -1,9 +1,16 @@
-// Package postgres is a scaffold: a Store-shaped type that proves the
-// pattern platform/mongodb.Store already follows (its own types,
-// not an implementation of rest.Store) works for a second backend. See
-// the "Adding a Postgres backend" design notes
-// (website/docs/reference/postgres-rfc.md) for what's still open —
-// most notably, no resource is wired to this yet.
+// Package postgres is the Postgres counterpart to platform/mongodb:
+// Store here follows the same pattern platform/mongodb.Store does
+// (its own types, not an implementation of rest.Store), but stays
+// deliberately narrow -- an equality-only Filter over flat columns
+// (see Filter's own doc comment below). It is not, itself, what a
+// Postgres-backed resource is built on: CompileFilter (query.go) is
+// the real DSL compiler over a jsonb document column, and
+// restpostgres.NewAdapter (website/docs/reference/adapter.md) is what
+// a service actually registers to a rest.Resource -- see
+// examples/blog-apis/services/comments-api for a resource served end
+// to end over HTTP through that path. "Adding a Postgres backend"
+// (website/docs/reference/postgres-rfc.md) is the original design
+// record, kept for history, not a description of current behavior.
 package postgres
 
 import (
@@ -42,7 +49,10 @@ func (s Store) Querier(ctx context.Context) Querier {
 }
 
 // Store wraps a *pgxpool.Pool and one table. Unlike mongodb.Store, this
-// does not implement rest.Store — see postgres-rfc.md's point 1.
+// does not implement rest.Store, on purpose -- see
+// website/docs/reference/adapter.md for what a Postgres-backed
+// resource registers instead (restpostgres.NewAdapter, built on top
+// of this Store, never a direct implementation of rest.Store itself).
 type Store struct {
 	Pool  *pgxpool.Pool
 	Table string
@@ -51,9 +61,14 @@ type Store struct {
 // NewStore wraps pool for table.
 func NewStore(pool *pgxpool.Pool, table string) Store { return Store{Pool: pool, Table: table} }
 
-// Filter is equality only — column: value, ANDed together. No Mongo-style
-// operators; a richer filter language is explicitly not decided yet
-// (postgres-rfc.md's point 1).
+// Filter is equality only — column: value, ANDed together. No
+// Mongo-style operators here, on purpose: this Filter is for a flat-
+// column table (Store's own CRUD methods), not the jsonb resource
+// document a Postgres-backed rest.Resource actually stores. That
+// richer filter language exists as Query/CompileFilter (query.go)
+// instead of an extension of this type -- restpostgres builds its own
+// SQL against doc directly (Store.Pool/Table/Querier), it never
+// widens Filter to reach it.
 type Filter map[string]any
 
 // SortField is one ORDER BY term.

@@ -66,8 +66,8 @@ func TestIsTimeout(t *testing.T) {
 }
 
 // TestBigintOverflowIsNeverClassifiedAsClientOrDuplicate locks in
-// postgres-rfc.md §7: a version overflow (22003) is an internal
-// failure, never IsDuplicateKey/IsClientError/IsTimeout.
+// that a version overflow (22003) is an internal failure, never
+// IsDuplicateKey/IsClientError/IsTimeout.
 func TestBigintOverflowIsNeverMisclassified(t *testing.T) {
 	a := &postgresAdapter{}
 	err := &pgconn.PgError{Code: "22003"}
