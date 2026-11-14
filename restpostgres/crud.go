@@ -48,6 +48,14 @@ type equalsFilter struct {
 // write-then-reread, or a direct id for a test/custom caller) -- two
 // shapes that used to be split across this function and the now
 // removed, narrower lookupWhere.
+// idEquals renders "id = $N::uuid" matching the physical id column
+// against id, starting placeholders at startAt -- the one id-equality
+// predicate compileFilter's combinedFilter.id and bare uuid.UUID cases
+// both need, kept in one place so they can never drift apart.
+func idEquals(id uuid.UUID, startAt int) (string, []any) {
+	return fmt.Sprintf("id = $%d::uuid", startAt+1), []any{id.String()}
+}
+
 func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any, error) {
 	switch f := filter.(type) {
 	case nil:
@@ -71,7 +79,7 @@ func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any,
 		var args []any
 		var err error
 		if f.id != nil {
-			where, args = fmt.Sprintf("id = $%d::uuid", startAt+1), []any{f.id.String()}
+			where, args = idEquals(*f.id, startAt)
 		} else if where, args, err = postgres.CompileFilter(f.query, a.schema, startAt); err != nil {
 			return "", nil, err
 		}
@@ -84,7 +92,8 @@ func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any,
 		// boolean, never client input).
 		return fmt.Sprintf("(%s) AND deleted = false", where), args, nil
 	case uuid.UUID:
-		return fmt.Sprintf("id = $%d::uuid", startAt+1), []any{f.String()}, nil
+		where, args := idEquals(f, startAt)
+		return where, args, nil
 	case postgresLookup:
 		id, ok := f.ID.(uuid.UUID)
 		if !ok {

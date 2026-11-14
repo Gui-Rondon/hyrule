@@ -111,6 +111,22 @@ func TestParseIfMatchBareUnquotedTagMatches(t *testing.T) {
 	}
 }
 
+func TestParseIfMatchBareWeakTagNeverStrongMatches(t *testing.T) {
+	// A bare token is lenient (TestParseIfMatchBareUnquotedTagMatches),
+	// but "W/" still marks it weak -- RFC 7232 §3.1 requires strong
+	// comparison for If-Match, so this must never match, even its own
+	// value. Unlike the lenient-bare-token case, no known caller in
+	// this project sends a bare weak tag; this is the deliberately
+	// correct behavior, not a widened compatibility allowance.
+	m, ok := rest.ParseIfMatch([]string{"W/abc123"})
+	if !ok {
+		t.Fatal("want ok=true: a weak tag is still a present condition")
+	}
+	if m.StrongMatches("abc123") {
+		t.Error("a bare weak entity-tag must never strong-match, even its own value")
+	}
+}
+
 func TestParseIfMatchMalformedElementSkipped(t *testing.T) {
 	// A literal space is not a valid etagc byte (RFC 7232 §2.3), so an
 	// element containing one is still malformed and skipped even under

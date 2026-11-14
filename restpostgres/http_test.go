@@ -76,11 +76,21 @@ func TestHTTPCRUDEndToEnd(t *testing.T) {
 	if got.Status != http.StatusOK || got.Map()["name"] != "a" {
 		t.Fatalf("GET item = %d %v", got.Status, got.Map())
 	}
+	// Last-Modified comes from doc["_updated"], a plain time.Time on
+	// Postgres (restpostgres/doc.go's hydrate) -- confirms http.go's
+	// Last-Modified/If-Modified-Since logic no longer assumes
+	// Mongo's bson.DateTime (rest/render.go's asTime).
+	if got.Header.Get("Last-Modified") == "" {
+		t.Error("GET item: Last-Modified header missing")
+	}
 
 	list := c.Do("GET", "/http_crud_test", nil)
 	items, _ := list.Map()["_items"].([]any)
 	if list.Status != http.StatusOK || len(items) != 1 {
 		t.Fatalf("GET list = %d %v", list.Status, list.Map())
+	}
+	if list.Header.Get("Last-Modified") == "" {
+		t.Error("GET list: Last-Modified header missing")
 	}
 
 	filtered := c.Do("GET", `/http_crud_test?where={"name":{"$eq":"a"}}`, nil)

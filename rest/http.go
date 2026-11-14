@@ -288,7 +288,7 @@ func (h *handler) serveItem(w http.ResponseWriter, r *http.Request) {
 	if effectiveMethod(r) == http.MethodGet {
 		h.cacheHeaders(w)
 	}
-	lookup, methods := h.itemLookup(r.PathValue("lookup"))
+	lookup, methods := h.itemLookup(r.Context(), r.PathValue("lookup"))
 	if lookup == nil {
 		WriteError(w, r, ErrNotFound)
 		return
@@ -331,10 +331,16 @@ func (h *handler) serveItem(w http.ResponseWriter, r *http.Request) {
 // reads only and stays Mongo-typed (AdditionalLookup.Filter/Field are
 // bson.M -- an opt-in advanced feature, out of scope for this cut,
 // same as WriteList/WriteListFallback below).
-func (h *handler) itemLookup(value string) (any, []string) {
+func (h *handler) itemLookup(ctx context.Context, value string) (any, []string) {
 	if id, ok := h.res().Adapter.LookupByID(value); ok {
 		filter, err := h.res().Adapter.IDFilter(id)
 		if err != nil {
+			// LookupByID already said value looks like a valid id for
+			// this adapter -- IDFilter rejecting that same value is an
+			// internal inconsistency, not a client mistake, so it's
+			// logged rather than silently reported as the same 404 a
+			// client's own typo would get.
+			slog.ErrorContext(ctx, "itemLookup: Adapter.IDFilter", "error", err)
 			return nil, nil
 		}
 		return filter, h.res().ItemMethods
@@ -387,13 +393,25 @@ func (s *Service) writeList(w http.ResponseWriter, r *http.Request, lookup bson.
 		if len(lookup) > 0 {
 			// WriteList/WriteListFallback's own lookup is always a
 			// Mongo bson.M (both are Mongo-only custom-route helpers,
-			// unchanged by this cut -- see their doc comments); only
-			// combine it with q.Filter when it's the same bson.M shape
-			// a Mongo resource's own ParseWhere would have produced.
-			if mf, ok := q.Filter.(bson.M); ok && len(mf) > 0 {
-				q.Filter = bson.M{"$and": bson.A{mf, lookup}}
-			} else {
+			// unchanged by this cut -- see their doc comments). q.Filter
+			// is either absent (nil, no where= sent), the same bson.M
+			// shape a Mongo resource's own ParseWhere produces, or --
+			// only reachable by calling one of these two Mongo-only
+			// helpers on a non-Mongo resource, a caller mistake this
+			// reports rather than silently drops -- some other type
+			// these helpers have no way to combine with lookup.
+			switch f := q.Filter.(type) {
+			case nil:
 				q.Filter = lookup
+			case bson.M:
+				if len(f) > 0 {
+					q.Filter = bson.M{"$and": bson.A{f, lookup}}
+				} else {
+					q.Filter = lookup
+				}
+			default:
+				WriteError(w, r, Abort(http.StatusBadRequest, "this route's lookup only combines with a where= filter the resource's own Adapter parsed as bson.M"))
+				return
 			}
 		}
 		if result, err = s.List(r.Context(), q); err != nil {
@@ -407,8 +425,8 @@ func (s *Service) writeList(w http.ResponseWriter, r *http.Request, lookup bson.
 	items := make([]any, 0, len(result.Docs))
 	var lastModified time.Time
 	for _, doc := range result.Docs {
-		if updated, ok := doc["_updated"].(bson.DateTime); ok && updated.Time().After(lastModified) {
-			lastModified = updated.Time()
+		if updated, ok := asTime(doc["_updated"]); ok && updated.After(lastModified) {
+			lastModified = updated
 		}
 		item := Render(withEpochDates(doc)).(map[string]any)
 		item["_etag"] = etagOf(doc)
@@ -529,12 +547,12 @@ func (s *Service) writeFound(w http.ResponseWriter, r *http.Request, lookup any,
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	if updated, ok := withEpochDates(doc)["_updated"].(bson.DateTime); ok {
-		if ims, err := http.ParseTime(r.Header.Get("If-Modified-Since")); err == nil && !updated.Time().After(ims) {
+	if updated, ok := asTime(withEpochDates(doc)["_updated"]); ok {
+		if ims, err := http.ParseTime(r.Header.Get("If-Modified-Since")); err == nil && !updated.After(ims) {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
-		w.Header().Set("Last-Modified", updated.Time().UTC().Format(DateFormat))
+		w.Header().Set("Last-Modified", updated.UTC().Format(DateFormat))
 	}
 	if s.res.SoftDelete && doc["_deleted"] == true {
 		// getitem: a soft deleted document answers 404 with its content, the
@@ -598,17 +616,20 @@ const mergePatchContentType = "application/merge-patch+json"
 func (h *handler) update(w http.ResponseWriter, r *http.Request, lookup any, replace bool) {
 	match, _ := ParseIfMatch(r.Header.Values("If-Match"))
 	opts := WriteOptions{IfMatch: match}
-	if !replace && h.res().RequireMergePatchContentType && mediaType(r) != mergePatchContentType {
-		WriteError(w, r, Abort(http.StatusUnsupportedMediaType, ""))
-		return
-	}
-	// Eve answers 404 and 428/412 before reading the body
+	// Eve answers 404 and 428/412 before reading the body (and before
+	// this capability's 415, same ordering: a nonexistent item or a
+	// stale/missing If-Match is reported on its own status, regardless
+	// of what Content-Type the client happened to send).
 	original, err := h.svc.Find(r.Context(), lookup)
 	if err == nil {
 		err = h.svc.checkEtag(original, opts)
 	}
 	if err != nil {
 		WriteError(w, r, err)
+		return
+	}
+	if !replace && h.res().RequireMergePatchContentType && mediaType(r) != mergePatchContentType {
+		WriteError(w, r, Abort(http.StatusUnsupportedMediaType, ""))
 		return
 	}
 	docs, _, err := readBody(r, false)
@@ -647,8 +668,8 @@ func (s *Service) WriteItem(w http.ResponseWriter, r *http.Request, doc Doc) {
 		writeCache(w, s.res.CacheControl, s.res.CacheExpires)
 	}
 	w.Header().Set("ETag", `"`+etagOf(doc)+`"`)
-	if updated, ok := withEpochDates(doc)["_updated"].(bson.DateTime); ok {
-		w.Header().Set("Last-Modified", updated.Time().UTC().Format(DateFormat))
+	if updated, ok := asTime(withEpochDates(doc)["_updated"]); ok {
+		w.Header().Set("Last-Modified", updated.UTC().Format(DateFormat))
 	}
 	WriteJSON(w, http.StatusOK, s.ItemBody(doc))
 }

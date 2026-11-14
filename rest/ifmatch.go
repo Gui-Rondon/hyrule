@@ -125,6 +125,15 @@ func splitEtagList(v string) []string {
 // correctness fix. Every etagc byte must still be valid either way --
 // a literal DQUOTE in the middle of an otherwise bare token is still
 // malformed and skipped.
+//
+// A bare token with the "W/" prefix is still weak, and so still never
+// strong-matches (StrongMatches) -- unlike the old trimEtag, which
+// stripped "W/" and compared the rest as plain strings with no concept
+// of weak at all. No known caller sends a bare weak tag, so this isn't
+// the same kind of compatibility concern the plain bare-token case
+// above is; TestParseIfMatchBareWeakTagNeverStrongMatches pins it down
+// as the deliberately correct (RFC 7232 §3.1) behavior, not an
+// untested side effect.
 func parseEntityTag(s string) (etag, bool) {
 	weak := false
 	if after, ok := strings.CutPrefix(s, "W/"); ok {
