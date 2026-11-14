@@ -17,10 +17,10 @@ const (
 	KindObject
 )
 
-// sqlCast is the Postgres type a filter parameter is cast to before
+// SQLCast is the Postgres type a filter parameter is cast to before
 // to_jsonb() wraps it, so e.g. a KindInteger field compares against a
 // jsonb number, never a jsonb string holding the same digits.
-func (k Kind) sqlCast() string {
+func (k Kind) SQLCast() string {
 	switch k {
 	case KindInteger:
 		return "int8"
@@ -51,20 +51,23 @@ type SchemaSpec struct {
 	ElementKinds map[string]Kind
 }
 
-// kind reports field's declared Kind, or KindString for a field with no
-// entry -- the cast-agnostic default, consistent with a client being
-// able to filter/sort by an AllowUnknown field the schema never declared.
-func (s SchemaSpec) kind(field string) Kind {
+// FieldKind reports field's declared Kind, or KindString for a field
+// with no entry -- the cast-agnostic default, consistent with a client
+// being able to filter/sort by an AllowUnknown field the schema never
+// declared. Exported for restpostgres (and any other package building
+// SQL alongside the DSL compiler, e.g. for ORDER BY) to pick the same
+// cast CompileFilter would for a given field.
+func (s SchemaSpec) FieldKind(field string) Kind {
 	if k, ok := s.Fields[field]; ok {
 		return k
 	}
 	return KindString
 }
 
-// elementKind reports the declared Kind of field's array elements, or
+// ElementKind reports the declared Kind of field's array elements, or
 // KindString for a field with no entry -- same cast-agnostic default as
-// kind.
-func (s SchemaSpec) elementKind(field string) Kind {
+// FieldKind.
+func (s SchemaSpec) ElementKind(field string) Kind {
 	if k, ok := s.ElementKinds[field]; ok {
 		return k
 	}

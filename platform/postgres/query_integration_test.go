@@ -172,7 +172,7 @@ func TestCompileFilterIntegrationHasFamilyUsesElementKindNotFieldKind(t *testing
 	// A KindArray field's search value must cast using
 	// SchemaSpec.ElementKinds, not Fields[field] (KindArray itself) --
 	// before the fix, $has/$hasSome/$hasEvery always cast the search
-	// value as text (KindArray/KindObject fall through sqlCast's
+	// value as text (KindArray/KindObject fall through SQLCast's
 	// default), so a numeric element search silently matched nothing.
 	pool := testPool(t)
 	table := "query_has_element_kind_test"

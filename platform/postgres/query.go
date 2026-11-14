@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Query is the neutral, JSON-shaped filter CompileFilter compiles to
@@ -90,7 +91,7 @@ func (c *compiler) param(v any) string {
 }
 
 // checkKindValue rejects a Go value whose type pgx cannot bind to
-// kind.sqlCast()'s target Postgres type -- e.g. a plain Go int against
+// kind.SQLCast()'s target Postgres type -- e.g. a plain Go int against
 // KindString's "text" cast, which pgx fails to encode only once the
 // query actually runs, with a cryptic "cannot find encode plan"
 // message. Caught here instead, as a clear compile-time error: the
@@ -99,8 +100,23 @@ func (c *compiler) param(v any) string {
 func checkKindValue(val any, kind Kind) error {
 	ok := true
 	switch kind {
-	case KindString, KindDateTime:
+	case KindString:
 		_, ok = val.(string)
+	case KindDateTime:
+		// A format check, not just a Go-type check: restpostgres's
+		// IsClientError can stay unconditionally false only while every
+		// client input is validated in Go before any SQL runs -- a
+		// string that isn't parseable fails right here, with a clear
+		// error, instead of reaching Postgres as a malformed
+		// ::timestamptz cast (22007, misclassified as an internal
+		// error). RFC3339 matches hyrule_safe_timestamptz's own format.
+		s, isStr := val.(string)
+		if isStr {
+			_, err := time.Parse(time.RFC3339, s)
+			ok = err == nil
+		} else {
+			ok = false
+		}
 	case KindInteger:
 		switch val.(type) {
 		case int, int32, int64:
@@ -134,7 +150,7 @@ func (c *compiler) jsonbLiteral(val any, kind Kind) (string, error) {
 	if err := checkKindValue(val, kind); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("to_jsonb(%s::%s)", c.param(val), kind.sqlCast()), nil
+	return fmt.Sprintf("to_jsonb(%s::%s)", c.param(val), kind.SQLCast()), nil
 }
 
 // docRef is the jsonb value at field, directly under doc.
@@ -261,7 +277,7 @@ func (c *compiler) compileNestedField(path []string, ops Query) (string, error) 
 }
 
 func (c *compiler) compileTopField(field string, ops Query) (string, error) {
-	kind := c.schema.kind(field)
+	kind := c.schema.FieldKind(field)
 	keys := make([]string, 0, len(ops))
 	for k := range ops {
 		keys = append(keys, k)
@@ -333,11 +349,11 @@ func (c *compiler) compileOp(field string, kind Kind, op string, val any) (strin
 		}
 		return fmt.Sprintf("(NOT (doc ? %s::text)) IS TRUE", ptr), nil
 	case "$has":
-		return c.compileHas(field, val, c.schema.elementKind(field))
+		return c.compileHas(field, val, c.schema.ElementKind(field))
 	case "$hasSome":
-		return c.compileHasSome(field, c.schema.elementKind(field), val)
+		return c.compileHasSome(field, c.schema.ElementKind(field), val)
 	case "$hasEvery":
-		return c.compileHasEvery(field, c.schema.elementKind(field), val)
+		return c.compileHasEvery(field, c.schema.ElementKind(field), val)
 	default:
 		return "", fmt.Errorf("postgres: unsupported operator %q on field %q", op, field)
 	}
@@ -393,7 +409,7 @@ func (c *compiler) compileHas(field string, val any, kind Kind) (string, error) 
 		if err := checkKindValue(val, kind); err != nil {
 			return "", err
 		}
-		elem = fmt.Sprintf("%s::%s", c.param(val), kind.sqlCast())
+		elem = fmt.Sprintf("%s::%s", c.param(val), kind.SQLCast())
 	}
 	return fmt.Sprintf("(CASE WHEN jsonb_typeof(%s) = 'array' THEN %s @> jsonb_build_array(%s) ELSE FALSE END)", ref, ref, elem), nil
 }
