@@ -89,17 +89,21 @@ func (*mongoAdapter) ParseProjection(raw string) (any, error) {
 	return parseProjection(raw)
 }
 
-// asFilter/asSort/asProjection recover the Mongo-native type Adapter's
-// any-typed parameters carry, in every method below that takes one --
-// a nil/wrong-type value (an empty filter, no sort, no projection)
-// comes through as the Mongo driver's own default, exactly as before
-// this extraction. Every caller in this package only ever passes a
-// value this same adapter's own CombineFilter/CombineSort/
-// CombineProjection/WriteLookup produced, so there is no wrong-type
-// value to recover from in practice.
-func asFilter(v any) bson.M     { f, _ := v.(bson.M); return f }
-func asSort(v any) bson.D       { s, _ := v.(bson.D); return s }
-func asProjection(v any) bson.M { p, _ := v.(bson.M); return p }
+// as recovers the Mongo-native type Adapter's any-typed parameters
+// carry. A nil/wrong-type value (an empty filter, no sort, no
+// projection) comes through as T's zero value -- the Mongo driver's
+// own default, exactly as before this extraction. Every caller in
+// this package only ever passes a value this same adapter's own
+// CombineFilter/CombineSort/CombineProjection/WriteLookup produced, so
+// there is no wrong-type value to recover from in practice.
+func as[T any](v any) T { t, _ := v.(T); return t }
+
+// asFilter/asSort/asProjection name as's instantiations at each call
+// site's actual meaning, since bson.M alone (filter and projection
+// share it) wouldn't say which.
+func asFilter(v any) bson.M     { return as[bson.M](v) }
+func asSort(v any) bson.D       { return as[bson.D](v) }
+func asProjection(v any) bson.M { return as[bson.M](v) }
 
 // CombineFilter is combineFilter (rest/service.go), typed for the Adapter
 // interface: clientFilter is asserted to bson.M, nil for any other (or

@@ -99,7 +99,11 @@ type Adapter interface {
 
 	// Find lists documents; filter/sort/projection are whatever
 	// CombineFilter/CombineSort/CombineProjection returned. limit <= 0
-	// means no skip/limit is applied.
+	// means no skip/limit is applied. Parameter order intentionally
+	// matches plan section 3's pseudocode, not Store.Find's (filter,
+	// skip, limit, sort, projection) -- mongoAdapter.Find is the one
+	// place that transposes between the two; a second implementation
+	// should double check it against this doc comment, not Store's.
 	Find(ctx context.Context, filter, sort, projection any, skip, limit int64) ([]Doc, error)
 	CountDocuments(ctx context.Context, filter any) (int64, error)
 	// FindOne reads one document; lookup is whatever CombineFilter (or
@@ -112,14 +116,20 @@ type Adapter interface {
 	// here, after the hooks, immediately before the write.
 	InsertMany(ctx context.Context, docs []Doc) error
 	// UpdateOne writes updated's business fields changed (changes
-	// names which keys) at lookup, and sets updated's _etag/_updated in
-	// place from what the write actually confirmed -- never from a
-	// value computed before the call. matched == 0 without an error is
-	// not a failure: the caller (Service's checkMatched) decides
-	// 404 vs 412 by re-reading.
+	// names which keys) at lookup, and sets updated's final _etag/
+	// _updated in place before returning -- a fresh value the
+	// implementation is itself responsible for, computed however its
+	// backend actually determines it: a content hash set right before
+	// the write for a backend with no way to read a value back (Mongo;
+	// mongoAdapter.setEtag), or the value a RETURNING clause confirmed
+	// the write actually produced, for a backend that has one
+	// (Postgres's version counter). Either way, the caller never
+	// computes or sets _etag/_updated itself. matched == 0 without an
+	// error is not a failure: the caller (Service's checkMatched)
+	// decides 404 vs 412 by re-reading.
 	UpdateOne(ctx context.Context, lookup any, updated, changes Doc) (matched int64, err error)
 	// ReplaceOne overwrites the whole document at lookup, setting
-	// replacement's _etag/_updated in place, same contract as
+	// replacement's final _etag/_updated in place, same contract as
 	// UpdateOne.
 	ReplaceOne(ctx context.Context, lookup any, replacement Doc) (matched int64, err error)
 	DeleteOne(ctx context.Context, lookup any) (deleted int64, err error)
