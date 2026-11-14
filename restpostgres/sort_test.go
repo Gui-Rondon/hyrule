@@ -76,3 +76,24 @@ func TestOrderByClauseMultipleTerms(t *testing.T) {
 		t.Fatalf("args = %v", args)
 	}
 }
+
+func TestOrderByClauseNestedPath(t *testing.T) {
+	a := &postgresAdapter{}
+	clause, args := a.orderByClause([]SortTerm{{Field: "meta.author", Desc: true}}, 0)
+	if want := " ORDER BY doc #>> $1::text[] DESC"; clause != want {
+		t.Fatalf("orderByClause(meta.author) = %q, want %q", clause, want)
+	}
+	if len(args) != 1 || !reflect.DeepEqual(args[0], []string{"meta", "author"}) {
+		t.Fatalf("args = %v", args)
+	}
+}
+
+func TestToSortTermsRejectsWrongType(t *testing.T) {
+	if _, err := toSortTerms("not a []SortTerm"); err == nil {
+		t.Fatal("expected an error for a sort value that isn't a []SortTerm")
+	}
+	terms, err := toSortTerms(nil)
+	if err != nil || terms != nil {
+		t.Fatalf("toSortTerms(nil) = %v, %v, want nil, nil", terms, err)
+	}
+}

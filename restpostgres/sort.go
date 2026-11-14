@@ -14,6 +14,22 @@ type SortTerm struct {
 	Desc  bool
 }
 
+// toSortTerms normalizes Find's sort parameter: nil means no sort
+// (empty result, not an error); any non-nil value must be a
+// []SortTerm. A wrong type errors loudly here instead of silently
+// sorting as if sort had never been given -- the same failure
+// discipline compileFilter/lookupWhere already apply to filter/lookup.
+func toSortTerms(sort any) ([]SortTerm, error) {
+	if sort == nil {
+		return nil, nil
+	}
+	terms, ok := sort.([]SortTerm)
+	if !ok {
+		return nil, fmt.Errorf("restpostgres: sort must be a []SortTerm, got %T", sort)
+	}
+	return terms, nil
+}
+
 // metaColumn maps a Doc meta field to its physical column, or reports
 // ok=false for a jsonb doc field.
 func metaColumn(field string) (column string, ok bool) {
@@ -36,7 +52,9 @@ func metaColumn(field string) (column string, ok bool) {
 // for no sort), with placeholder numbers starting after startAt
 // existing arguments. A jsonb doc field is bound as a parameter (doc
 // ->>$N), never concatenated into the SQL text, and cast using the
-// field's declared Kind.
+// field's declared Kind. A dotted field ("a.b") addresses a nested
+// path, sorted as text -- the same restriction CompileFilter's
+// compileNestedField has (nested paths never use a declared Kind).
 func (a *postgresAdapter) orderByClause(sort []SortTerm, startAt int) (string, []any) {
 	if len(sort) == 0 {
 		return "", nil
@@ -46,9 +64,14 @@ func (a *postgresAdapter) orderByClause(sort []SortTerm, startAt int) (string, [
 	n := startAt
 	for i, s := range sort {
 		var expr string
-		if column, ok := metaColumn(s.Field); ok {
+		switch column, isMeta := metaColumn(s.Field); {
+		case isMeta:
 			expr = column
-		} else {
+		case strings.Contains(s.Field, "."):
+			n++
+			args = append(args, strings.Split(s.Field, "."))
+			expr = fmt.Sprintf("doc #>> $%d::text[]", n)
+		default:
 			n++
 			args = append(args, s.Field)
 			expr = fmt.Sprintf("(doc->>$%d)::%s", n, a.schema.FieldKind(s.Field).SQLCast())

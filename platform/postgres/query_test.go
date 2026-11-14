@@ -413,6 +413,8 @@ func TestCheckKindValue(t *testing.T) {
 		{1, KindString, false},
 		{"2024-01-02T00:00:00Z", KindDateTime, true},
 		{1, KindDateTime, false},
+		{"not-a-date", KindDateTime, false},
+		{"2024-01-02 00:00:00", KindDateTime, false}, // a real date, but not RFC3339 (no "T", no offset)
 		{1, KindNumber, true},
 		{1.5, KindNumber, true},
 		{"1.5", KindNumber, false},

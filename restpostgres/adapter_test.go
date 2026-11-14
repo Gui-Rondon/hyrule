@@ -64,6 +64,25 @@ func newTestAdapter(t *testing.T, pool *pgxpool.Pool, table string, fields map[s
 	return a
 }
 
+func TestNewAdapterValidatesStorePool(t *testing.T) {
+	_, err := NewAdapter(postgres.Store{Table: "whatever"}, postgres.Transactor{}, Options{
+		Retry: DefaultRetryOptions(),
+	})
+	if err == nil {
+		t.Fatal("expected an error for a Store with a nil Pool")
+	}
+}
+
+func TestNewAdapterValidatesStoreTable(t *testing.T) {
+	pool := testPool(t)
+	_, err := NewAdapter(postgres.Store{Pool: pool}, postgres.Transactor{Pool: pool}, Options{
+		Retry: DefaultRetryOptions(),
+	})
+	if err == nil {
+		t.Fatal("expected an error for a Store with an empty Table")
+	}
+}
+
 func TestNewAdapterValidatesRetryOptions(t *testing.T) {
 	pool := testPool(t)
 	_, err := NewAdapter(postgres.NewStore(pool, "whatever"), postgres.Transactor{Pool: pool}, Options{

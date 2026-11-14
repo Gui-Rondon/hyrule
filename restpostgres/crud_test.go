@@ -52,8 +52,33 @@ func TestInsertManyAndFindOne(t *testing.T) {
 	if _, ok := got["_id"].(uuid.UUID); !ok {
 		t.Fatalf("got[_id] = %T, want uuid.UUID", got["_id"])
 	}
-	if got["_deleted"] != false {
-		t.Fatalf("got[_deleted] = %v, want false", got["_deleted"])
+	if _, ok := got["_deleted"]; ok {
+		t.Fatalf("got[_deleted] = %v, want absent (this adapter has SoftDelete off)", got["_deleted"])
+	}
+}
+
+func TestSoftDeleteExposesDeletedField(t *testing.T) {
+	pool := testPool(t)
+	table := "crud_softdelete_test"
+	setupResourceTable(t, pool, table)
+	a, err := NewAdapter(postgres.NewStore(pool, table), postgres.Transactor{Pool: pool}, Options{
+		SoftDelete: true,
+		Retry:      DefaultRetryOptions(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	doc := newDoc(a, map[string]any{"name": "a"})
+	if err := a.InsertMany(ctx, []rest.Doc{doc}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.FindOne(ctx, doc["_id"], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted, ok := got["_deleted"].(bool); !ok || deleted {
+		t.Fatalf("got[_deleted] = %#v, want false (present, SoftDelete is on)", got["_deleted"])
 	}
 }
 
@@ -202,6 +227,58 @@ func TestFindAppliesProjection(t *testing.T) {
 	}
 	if _, ok := docs[0]["_id"]; !ok {
 		t.Fatal("projection must always keep meta fields")
+	}
+}
+
+func TestFindRejectsWrongSortType(t *testing.T) {
+	pool := testPool(t)
+	a := newTestAdapter(t, pool, "crud_find_badsort_test", nil)
+	if _, err := a.Find(context.Background(), nil, "not a []SortTerm", nil, 0, 0); err == nil {
+		t.Fatal("expected an error for a sort value that isn't a []SortTerm")
+	}
+}
+
+func TestFindRejectsWrongProjectionType(t *testing.T) {
+	pool := testPool(t)
+	a := newTestAdapter(t, pool, "crud_find_badprojection_test", nil)
+	if _, err := a.Find(context.Background(), nil, nil, "not a Projection", 0, 0); err == nil {
+		t.Fatal("expected an error for a projection value that isn't a Projection")
+	}
+}
+
+func TestFindOneRejectsWrongProjectionType(t *testing.T) {
+	pool := testPool(t)
+	a := newTestAdapter(t, pool, "crud_findone_badprojection_test", nil)
+	ctx := context.Background()
+	doc := newDoc(a, map[string]any{"name": "a"})
+	if err := a.InsertMany(ctx, []rest.Doc{doc}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.FindOne(ctx, doc["_id"], "not a Projection"); err == nil {
+		t.Fatal("expected an error for a projection value that isn't a Projection")
+	}
+}
+
+func TestFindSortsByNestedPath(t *testing.T) {
+	pool := testPool(t)
+	a := newTestAdapter(t, pool, "crud_find_nestedsort_test", nil)
+	ctx := context.Background()
+	for _, name := range []string{"link", "zelda", "ganon"} {
+		doc := newDoc(a, map[string]any{"meta": map[string]any{"author": name}})
+		if err := a.InsertMany(ctx, []rest.Doc{doc}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	docs, err := a.Find(ctx, nil, []SortTerm{{Field: "meta.author"}}, nil, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 3 {
+		t.Fatalf("docs = %d, want 3", len(docs))
+	}
+	authorAt := func(i int) any { return docs[i]["meta"].(map[string]any)["author"] }
+	if authorAt(0) != "ganon" || authorAt(1) != "link" || authorAt(2) != "zelda" {
+		t.Fatalf("order = %v, %v, %v, want ganon, link, zelda (alphabetical)", authorAt(0), authorAt(1), authorAt(2))
 	}
 }
 

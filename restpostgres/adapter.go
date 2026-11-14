@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Gui-Rondon/hyrule/platform/postgres"
 	"github.com/Gui-Rondon/hyrule/rest"
 )
@@ -14,6 +16,10 @@ type Options struct {
 	// Schema validates the Resource -- ToSchemaSpec converts it to the
 	// neutral SchemaSpec the DSL compiler needs.
 	Schema rest.Schema
+	// SoftDelete marks documents with _deleted instead of removing
+	// them -- mirrors rest.Resource.SoftDelete. A resource without it
+	// never has a _deleted field in its Doc, same as Mongo's.
+	SoftDelete bool
 	// Retry configures how a PATCH under If-Match: * retries an
 	// optimistic-concurrency conflict -- a rest.Service-level concern
 	// (Fase 4's patchOnce loop), stored here only so it's validated
@@ -79,6 +85,11 @@ type postgresAdapter struct {
 	tx     postgres.Transactor
 	schema postgres.SchemaSpec
 	retry  RetryOptions
+	// table is store.Table, sanitized once here -- store.Table never
+	// changes for the adapter's lifetime, so every CRUD method reuses
+	// this instead of re-sanitizing the same identifier on every call.
+	table      string
+	softDelete bool
 }
 
 var (
@@ -90,6 +101,12 @@ var (
 // Errors here are a registration-time failure (the resource never
 // starts), never a per-request one.
 func NewAdapter(store postgres.Store, tx postgres.Transactor, opts Options) (*postgresAdapter, error) {
+	if store.Pool == nil {
+		return nil, errors.New("restpostgres: store.Pool must not be nil")
+	}
+	if store.Table == "" {
+		return nil, errors.New("restpostgres: store.Table must not be empty")
+	}
 	schemaSpec, err := ToSchemaSpec(opts.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("restpostgres: %w", err)
@@ -97,5 +114,12 @@ func NewAdapter(store postgres.Store, tx postgres.Transactor, opts Options) (*po
 	if err := opts.Retry.validate(); err != nil {
 		return nil, fmt.Errorf("restpostgres: %w", err)
 	}
-	return &postgresAdapter{store: store, tx: tx, schema: schemaSpec, retry: opts.Retry}, nil
+	return &postgresAdapter{
+		store:      store,
+		tx:         tx,
+		schema:     schemaSpec,
+		retry:      opts.Retry,
+		table:      pgx.Identifier{store.Table}.Sanitize(),
+		softDelete: opts.SoftDelete,
+	}, nil
 }

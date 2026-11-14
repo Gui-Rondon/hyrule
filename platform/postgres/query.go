@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Query is the neutral, JSON-shaped filter CompileFilter compiles to
@@ -99,8 +100,23 @@ func (c *compiler) param(v any) string {
 func checkKindValue(val any, kind Kind) error {
 	ok := true
 	switch kind {
-	case KindString, KindDateTime:
+	case KindString:
 		_, ok = val.(string)
+	case KindDateTime:
+		// A format check, not just a Go-type check: restpostgres's
+		// IsClientError can stay unconditionally false only while every
+		// client input is validated in Go before any SQL runs -- a
+		// string that isn't parseable fails right here, with a clear
+		// error, instead of reaching Postgres as a malformed
+		// ::timestamptz cast (22007, misclassified as an internal
+		// error). RFC3339 matches hyrule_safe_timestamptz's own format.
+		s, isStr := val.(string)
+		if isStr {
+			_, err := time.Parse(time.RFC3339, s)
+			ok = err == nil
+		} else {
+			ok = false
+		}
 	case KindInteger:
 		switch val.(type) {
 		case int, int32, int64:

@@ -33,8 +33,6 @@ type equalsFilter struct {
 	excludeID *uuid.UUID
 }
 
-func (a *postgresAdapter) table() string { return pgx.Identifier{a.store.Table}.Sanitize() }
-
 // compileFilter renders filter as a boolean SQL expression, starting
 // placeholders at startAt (as postgres.CompileFilter's own startAt
 // does). filter is nil (matches every row), a postgres.Query, or an
@@ -93,7 +91,7 @@ func (a *postgresAdapter) scanDoc(row pgx.Rows) (rest.Doc, error) {
 	if err != nil {
 		return nil, fmt.Errorf("restpostgres: stored id %q is not a valid uuid: %w", idText, err)
 	}
-	return hydrate(id, fields, createdAt, updatedAt, version, deleted), nil
+	return a.hydrate(id, fields, createdAt, updatedAt, version, deleted), nil
 }
 
 // Find lists documents matching filter; limit <= 0 means no
@@ -106,11 +104,18 @@ func (a *postgresAdapter) Find(ctx context.Context, filter, sort, projection any
 	if err != nil {
 		return nil, err
 	}
-	sortTerms, _ := sort.([]SortTerm)
+	sortTerms, err := toSortTerms(sort)
+	if err != nil {
+		return nil, err
+	}
+	proj, err := toProjection(projection)
+	if err != nil {
+		return nil, err
+	}
 	orderBy, sortArgs := a.orderByClause(sortTerms, len(args))
 	args = append(args, sortArgs...)
 
-	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s%s", selectColumns, a.table(), where, orderBy)
+	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s%s", selectColumns, a.table, where, orderBy)
 	if limit > 0 {
 		q += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, skip)
 	}
@@ -120,7 +125,6 @@ func (a *postgresAdapter) Find(ctx context.Context, filter, sort, projection any
 	}
 	defer rows.Close()
 
-	proj, _ := projection.(Projection)
 	var docs []rest.Doc
 	for rows.Next() {
 		doc, err := a.scanDoc(rows)
@@ -141,7 +145,7 @@ func (a *postgresAdapter) CountDocuments(ctx context.Context, filter any) (int64
 	if err != nil {
 		return 0, err
 	}
-	q := fmt.Sprintf("SELECT count(*) FROM %s WHERE %s", a.table(), where)
+	q := fmt.Sprintf("SELECT count(*) FROM %s WHERE %s", a.table, where)
 	var n int64
 	if err := a.store.Querier(ctx).QueryRow(ctx, q, args...).Scan(&n); err != nil {
 		return 0, err
@@ -155,7 +159,11 @@ func (a *postgresAdapter) FindOne(ctx context.Context, lookup, projection any) (
 	if err != nil {
 		return nil, err
 	}
-	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s LIMIT 1", selectColumns, a.table(), where)
+	proj, err := toProjection(projection)
+	if err != nil {
+		return nil, err
+	}
+	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s LIMIT 1", selectColumns, a.table, where)
 	rows, err := a.store.Querier(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -171,7 +179,6 @@ func (a *postgresAdapter) FindOne(ctx context.Context, lookup, projection any) (
 	if err != nil {
 		return nil, err
 	}
-	proj, _ := projection.(Projection)
 	return applyProjection(doc, proj), nil
 }
 
@@ -189,17 +196,17 @@ func (a *postgresAdapter) InsertMany(ctx context.Context, docs []rest.Doc) error
 	values := make([]string, len(docs))
 	args := make([]any, 0, len(docs)*4)
 	for i, doc := range docs {
-		id, ok := doc["_id"].(uuid.UUID)
-		if !ok {
-			return fmt.Errorf("restpostgres: InsertMany: docs[%d][\"_id\"] must be a uuid.UUID, got %T", i, doc["_id"])
+		id, err := requiredMeta[uuid.UUID](doc, "_id", i)
+		if err != nil {
+			return err
 		}
-		createdAt, ok := doc["_created"].(time.Time)
-		if !ok {
-			return fmt.Errorf("restpostgres: InsertMany: docs[%d][\"_created\"] must be a time.Time, got %T", i, doc["_created"])
+		createdAt, err := requiredMeta[time.Time](doc, "_created", i)
+		if err != nil {
+			return err
 		}
-		updatedAt, ok := doc["_updated"].(time.Time)
-		if !ok {
-			return fmt.Errorf("restpostgres: InsertMany: docs[%d][\"_updated\"] must be a time.Time, got %T", i, doc["_updated"])
+		updatedAt, err := requiredMeta[time.Time](doc, "_updated", i)
+		if err != nil {
+			return err
 		}
 		fieldsJSON, err := json.Marshal(businessFieldsOnly(doc))
 		if err != nil {
@@ -210,7 +217,7 @@ func (a *postgresAdapter) InsertMany(ctx context.Context, docs []rest.Doc) error
 		args = append(args, id.String(), fieldsJSON, createdAt, updatedAt)
 		doc["_etag"] = "1"
 	}
-	q := fmt.Sprintf("INSERT INTO %s (id, doc, created_at, updated_at, version) VALUES %s", a.table(), strings.Join(values, ", "))
+	q := fmt.Sprintf("INSERT INTO %s (id, doc, created_at, updated_at, version) VALUES %s", a.table, strings.Join(values, ", "))
 	_, err := a.store.Querier(ctx).Exec(ctx, q, args...)
 	return err
 }
@@ -234,7 +241,7 @@ func (a *postgresAdapter) UpdateOne(ctx context.Context, lookup any, updated, ch
 		return 0, fmt.Errorf("restpostgres: UpdateOne: %w", err)
 	}
 	args := append([]any{fieldsJSON}, whereArgs...)
-	q := fmt.Sprintf("UPDATE %s SET doc = $1::jsonb, version = version + 1, updated_at = now() WHERE %s RETURNING version, updated_at", a.table(), where)
+	q := fmt.Sprintf("UPDATE %s SET doc = $1::jsonb, version = version + 1, updated_at = now() WHERE %s RETURNING version, updated_at", a.table, where)
 	var version int64
 	var updatedAt time.Time
 	if err := a.store.Querier(ctx).QueryRow(ctx, q, args...).Scan(&version, &updatedAt); err != nil {
@@ -262,7 +269,7 @@ func (a *postgresAdapter) DeleteOne(ctx context.Context, lookup any) (int64, err
 	if err != nil {
 		return 0, err
 	}
-	q := fmt.Sprintf("DELETE FROM %s WHERE %s", a.table(), where)
+	q := fmt.Sprintf("DELETE FROM %s WHERE %s", a.table, where)
 	tag, err := a.store.Querier(ctx).Exec(ctx, q, args...)
 	if err != nil {
 		return 0, err

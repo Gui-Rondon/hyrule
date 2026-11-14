@@ -44,3 +44,13 @@ func TestApplyProjectionMissingFieldIsSkipped(t *testing.T) {
 		t.Fatalf("got = %#v, a field absent from doc must not appear", got)
 	}
 }
+
+func TestToProjectionRejectsWrongType(t *testing.T) {
+	if _, err := toProjection("not a Projection"); err == nil {
+		t.Fatal("expected an error for a projection value that isn't a Projection")
+	}
+	proj, err := toProjection(nil)
+	if err != nil || proj != nil {
+		t.Fatalf("toProjection(nil) = %v, %v, want nil, nil", proj, err)
+	}
+}
