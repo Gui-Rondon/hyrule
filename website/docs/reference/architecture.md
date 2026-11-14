@@ -9,9 +9,9 @@ services (or a YAML, via cmd/hyrule-serve)
     ↓
 behaviors   (audit, searchsync, events — reusable hooks)
     ↓
-rest   (Resource, Schema, Service, API, Store — the HTTP contract)
+rest   (Resource, Schema, Service, API, Adapter — the HTTP contract)
     ↓
-platform    (mongodb, postgres (scaffold), config, auth, search, pubsub, redis, health, server)
+platform    (mongodb, postgres, config, auth, search, pubsub, redis, health, server)
 ```
 
 Each layer only knows the one below it. `platform` never imports
@@ -23,6 +23,15 @@ only use `bson`/stdlib types, not `rest`-owned structs; see
 `rest` — would create a structural dependency from a low-level
 module to a high-level one even without a real import cycle, and would
 confuse any future reader.
+
+One exception, by design: `restpostgres` is the single package
+allowed to import both `rest` and `platform/postgres` — it's the
+bridge, not a new layer, implementing `rest.Adapter`
+(see [`adapter.md`](adapter.md)) the same way `mongoAdapter` does
+inside `rest` itself for `platform/mongodb`. A `Resource` picks one of
+the two by setting `Adapter` (`restpostgres.NewAdapter(...)`) or
+`Store` (`platform/mongodb.NewStore(...)`, which `rest` wraps in a
+`mongoAdapter` automatically) — never both.
 
 A `behaviors/*` package (e.g. `events`, which wires `outbox` into
 `rest.Hooks`) can depend on both `rest` and `platform` — that's
@@ -37,12 +46,16 @@ exactly what it's there for, to be the glue between the two.
   stay as is (if the new database's transaction doesn't cover the
   outbox the way Mongo's does) — see [`outbox.md`](outbox.md).
 - **Storage portability is the interface, not the query language.**
-  `rest.Store` decouples the concrete client; filters stay `bson.M`
-  and the errors `rest` checks directly stay in the shape the
-  Mongo driver returns. A real second backend (`platform/postgres`
-  today has only a scaffold, no resource wired to it yet) needs more than
-  a new `Store` implementation — see [`store.md`](store.md) and the
-  [Postgres backend](postgres-rfc.md) page for what's still open.
+  `rest.Store` stayed exactly `bson.M`/`bson.D`-typed, Mongo-shaped,
+  never generified (ADR-0002) — a real second backend needed a
+  different seam in front of it, not a new `Store` implementation:
+  `rest.Adapter` (see [`adapter.md`](adapter.md)), with `restpostgres`
+  implementing it over `platform/postgres` for the first real
+  Postgres-backed resource (`examples/blog-apis/services/comments-api`).
+  Each backend still keeps its own query language and error semantics
+  — `where=`/`sort=` stay `bson.M`/`bson.D` for Mongo and a
+  `postgres.Query` compiled by `platform/postgres` for Postgres, never
+  a shared filter AST.
 - **YAML covers data, not code.** `declarative` expresses
   everything that's already plain data in `rest.Schema`/
   `Field`/`Resource`; `Field.Check`, `Resource.Validate`,

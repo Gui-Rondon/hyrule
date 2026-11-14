@@ -35,14 +35,19 @@ building the wrapper by hand.
 
 `platform/postgres.Store` follows the same `NewStore`-wraps-a-
 client, `Find`/`FindOne`/... shape, for a relational database — it just
-isn't an implementation of the interface above (see
-[Postgres backend](postgres-rfc.md) for why), so nothing here wires it
-to a `rest.Resource` yet:
+isn't an implementation of the interface above, on purpose (see
+[Postgres backend](postgres-rfc.md) for why):
 
 ```go
 store := postgres.NewStore(pool, "tags")
 docs, err := store.Find(ctx, postgres.Filter{"status": "draft"}, 0, 10, nil, nil)
 ```
+
+This `Store` is lower-level than what a Postgres-backed `Resource`
+actually registers, though: `restpostgres.NewAdapter` wraps it (plus
+a `Transactor` and a `Schema`) into a `rest.Adapter` — see
+[`adapter.md`](adapter.md) for the seam `Resource.Adapter` is, and why
+a Postgres resource sets that instead of `Store`.
 
 ## What this decouples — and what it doesn't
 
@@ -60,11 +65,13 @@ In practice that means:
   interface.
 - Moving from Mongo to another database takes more than implementing
   `Store`: the queries (`bson.M`) and the errors checked in
-  `rest/service.go` (`queryError`, `duplicateKey`) still
-  assume Mongo. `platform/postgres` has a first scaffold (its
-  own `Store`-shaped type, not an implementation of this interface —
-  see [Postgres backend](postgres-rfc.md) for why and for what's still
-  open), but no resource is wired to it yet.
+  `rest/service.go` assumed Mongo until `rest.Adapter` (see
+  [`adapter.md`](adapter.md)) gave each backend its own
+  implementation of that instead. `platform/postgres.Store` (its own
+  `Store`-shaped type, not an implementation of this interface — see
+  [Postgres backend](postgres-rfc.md) for why) stays the low-level
+  piece `restpostgres.postgresAdapter` is built on, not something a
+  `Resource` ever sees directly.
 
 ## Query performance today
 

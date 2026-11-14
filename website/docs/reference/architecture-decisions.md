@@ -65,11 +65,14 @@ without importing anything under `internal/`.
 
 ## ADR-0002 — Portability of the `rest.Store` contract
 
-**Status:** Accepted — implementation deferred
+**Status:** Accepted, then revised (see Revisão below) — the generics
+rework stays deferred, exactly as decided; a different seam (`Adapter`)
+is what actually shipped.
 
-**Implemented in:** not applicable; the decision itself is to defer the
-generics rework (see Decision below). `rest.Store` is unchanged in
-PR #6, as decided.
+**Implemented in:** not applicable at the time this ADR was written
+(the decision was to defer the generics rework, see Decision below);
+`rest.Store` was unchanged in PR #6, as decided. See Revisão for what
+was implemented instead, starting PR #10.
 
 **Context.** `rest.Store`'s methods are typed in `bson.M`/`bson.D`, and
 `rest.Service`'s error translation checks Mongo driver types directly
@@ -115,6 +118,61 @@ needs both `rest`'s HTTP machinery and a non-Mongo store.
 **Validation criteria.** No documentation describes a Postgres resource
 going through `rest.Store`.
 
+### Revision — 2026-11, Fase 8 of the Postgres portability plan
+
+**What changed.** A real Postgres resource turned out to be needed
+before the generics gap got revisited on its own — this ADR's own
+revisit trigger ("the first real resource that needs both `rest`'s
+HTTP machinery and a non-Mongo store"). None of the three original
+alternatives was followed as written: not the generics rework
+(`Store[F, U any]`), not bypassing `rest` entirely (the original
+recommendation), not a second, independent HTTP path (rejected from
+the start). What actually got built, approved explicitly by the user
+("I agree that this design — a shared core via Adapter — is the right
+path") before Fase 0 started: a fourth option, a new interface seam —
+`rest.Adapter` (`rest/adapter.go`) — that `rest.Service` started using
+instead of `rest.Store` directly.
+
+**Why not generics.** `Adapter` doesn't parameterize `Store` by type —
+it's a common interface each backend implements its own way
+(`mongoAdapter` in `rest/mongoadapter.go`, `restpostgres`'s
+`postgresAdapter`), covering exactly the surface `rest.Service` needs:
+parsing/combining `where`/`sort`/`projection` (`QueryAdapter`), id
+generation/parsing (`IDCodec`), error classification
+(`ErrorClassifier`), and CRUD/merge-patch/uniqueness. The first three
+were extracted out of `rest/service.go`/`query.go`/`http.go` back in
+Fase 0 (zero Mongo behavior change, confirmed by a full regression
+run) as separate, independently testable interfaces; Fase 4a unified
+them into one `Adapter`, together with the write methods.
+**`rest.Store` stays exactly what this ADR decided** — still
+`bson.M`/`bson.D`-typed, still only implemented by
+`platform/mongodb.Store` — because `Adapter` sits in front of it, not
+in its place: a `Resource` with `Adapter` set never touches `Store`
+at all (`Resource.setDefaults`, `rest/resource.go`, only builds a
+`mongoAdapter` wrapping `Store` when `Adapter` is `nil` — the default
+path for a Mongo resource that never had to change anything).
+
+**What this enabled.** `restpostgres.NewAdapter` (a new package, the
+only one importing `rest` and `platform/postgres` together, section 2
+of the portability plan) implements `Adapter` in full over a `jsonb`
+table plus relational metadata columns — see
+[`adapter.md`](adapter.md) for the full contract and
+[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis/services/comments-api)
+for the first real resource served end to end over HTTP through this
+path (Fase 7). The `platform/postgres` scaffold this ADR already
+named keeps existing, still never importing `rest`, exactly as
+decided — `restpostgres` is the only bridge between the two, never
+the other way around.
+
+**Consequence for the documentation.** The original sentence ("the
+bypass path stays the supported way to use `postgres.Store`") is no
+longer true — out of date by this ADR itself, not silently ignored.
+[`store.md`](store.md) and [`postgres-rfc.md`](postgres-rfc.md) were
+updated to point at [`adapter.md`](adapter.md) as the current path;
+`postgres-rfc.md` itself becomes a historical record of the original
+design (most of its "Decided" points held up; the ones marked "open"
+were resolved during the actual build, not revisited here).
+
 ## ADR-0003 — Outbox and Postgres
 
 **Status:** Accepted — implementation deferred
@@ -155,6 +213,15 @@ generic version before ADR-0002 unblocks it.
 
 **Validation criteria.** No documentation or ADR claims a working
 Postgres outbox until a resource actually uses one.
+
+**Note — 2026-11, Fase 8 of the Postgres portability plan.** This
+ADR's own blocking condition is met: ADR-0002 was revisited (see its
+Revision) and a real Postgres-backed resource exists
+(`examples/blog-apis/services/comments-api`). The Postgres outbox
+counterpart itself was never built, though — `comments-api` doesn't
+use outbox, by design (it's the minimal CRUD proof Fase 7 needed, not
+a vehicle for new, unapproved scope). Status stays deferred; this
+only updates why.
 
 ## ADR-0004 — Initial scope of the CLI / Platform
 

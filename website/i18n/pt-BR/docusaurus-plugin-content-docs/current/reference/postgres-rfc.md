@@ -4,15 +4,22 @@ sidebar_position: 9
 
 # Adicionando um backend Postgres
 
-Esta página é um documento de design, não uma referência de feature: ela
-registra as decisões abertas para um segundo backend, além do Mongo, e
-uma recomendação pra cada uma — não algo já construído. Hoje existe um
-esqueleto (`platform/postgres`: um tipo no formato de `Store`,
-com seu próprio tipo de filtro, provado que compila e segue o mesmo
-padrão de `platform/mongodb`) e nada ligado a `rest` ainda.
-Trate cada "recomendado" abaixo como ponto de partida pra discussão, não
-como decisão já tomada; os dois pontos marcados como abertos estão
-explicitamente não decididos.
+**Status: implementado.** Esta página fica como o registro histórico
+do desenho, não como referência de feature — a maioria das decisões
+"Decided" abaixo se confirmou; os dois pontos marcados como abertos
+(§2, como uma resource usaria isso; §5, o formato dos dados) foram
+resolvidos durante a construção real, não aqui. Pro formato atual de
+verdade — `rest.Adapter`, `restpostgres.postgresAdapter`, como uma
+resource Postgres é de fato registrada — ver [`adapter.md`](adapter.md)
+e a revisão do ADR-0002 em
+[`architecture-decisions.md`](architecture-decisions.md).
+
+Abaixo, como foi escrito originalmente: registra as decisões abertas
+para um segundo backend, além do Mongo, e uma recomendação pra cada
+uma — não algo já construído na época. Existia um esqueleto
+(`platform/postgres`: um tipo no formato de `Store`, com seu próprio
+tipo de filtro, provado que compila e segue o mesmo padrão de
+`platform/mongodb`) e nada ligado a `rest` ainda.
 
 ## Por que isso existe
 
@@ -45,6 +52,11 @@ recurso em Postgres define sua própria convenção de filtro, no seu
 próprio tempo — não uma tradução de operadores Mongo pra SQL.
 
 ## 2. Como um recurso de fato usaria isso — aberto
+
+**Resolvido, como nenhuma das opções abaixo:** `rest.Adapter`, um
+seam na frente de `Store`, não uma parametrização dele — ver
+[`adapter.md`](adapter.md). Mantido aqui como foi escrito, pro
+registro.
 
 Esta é a pergunta que a separação de interface do ponto 1 não responde:
 `rest.Resource.Store` é tipado na interface `Store` Mongo-shaped hoje,
@@ -99,6 +111,12 @@ mais índices parciais e de expressão, que não têm equivalente no Mongo.
 Sem `ttl` nativo — Postgres precisa de cron job ou trigger pra expiração.
 
 ## 5. Forma dos dados — aberto, sem recomendação ainda
+
+**Resolvido como a opção jsonb abaixo**, mais as colunas relacionais
+de metadado (`id`/`created_at`/`updated_at`/`version`/`deleted`) —
+ver [`adapter.md`](adapter.md#construindo-uma-resource-sobre-postgres)
+pro formato real da tabela. Mantido aqui como foi escrito, pro
+registro.
 
 Mongo guarda documentos sem schema; `rest.Doc` é `map[string]any` em
 todo `rest`/`declarative`. Postgres é relacional, e há dois caminhos
@@ -242,7 +260,11 @@ preocupação de deploy (PgBouncer/PgCat, ou vários `pgxpool.Pool`
 separados por papel), não algo que o driver ou este `Store` devam
 assumir.
 
-## O que existe hoje
+## O que existia na época deste RFC
+
+Histórico — ver [`adapter.md`](adapter.md) pro que de fato é
+registrado numa `Resource` hoje (`restpostgres.NewAdapter`, não esse
+`Store` direto) e o exemplo real usando isso.
 
 - `platform/postgres.Store`: o método-set acima, sobre
   `pgxpool.Pool`, com um filtro só de igualdade (`map[string]any` lido

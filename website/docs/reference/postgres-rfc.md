@@ -4,15 +4,21 @@ sidebar_position: 9
 
 # Adding a Postgres backend
 
-This page is a design document, not a feature reference: it records the
-open questions for a second, non-Mongo backend, and a recommendation for
-each — not something already built. Today there is a scaffold
+**Status: implemented.** This page is kept as the historical design
+record, not a feature reference — most of what's marked "Decided"
+below held up; the two points marked open (§2, how a resource would
+use it; §5, shape of the data) were resolved during the actual build,
+not here. For the real, current shape — `rest.Adapter`,
+`restpostgres.postgresAdapter`, how a Postgres-backed resource is
+actually registered — see [`adapter.md`](adapter.md) and ADR-0002's
+revision in [`architecture-decisions.md`](architecture-decisions.md).
+
+Below, as originally written: it records the open questions for a
+second, non-Mongo backend, and a recommendation for each — not
+something already built at the time. There was a scaffold
 (`platform/postgres`: a `Store`-shaped type with its own filter
 type, proven to compile and follow the same pattern as
-`platform/mongodb`) and nothing wired to `rest` yet. Treat
-every "recommended" below as a starting position for discussion, not a
-decision already made; the two points marked open are explicitly not
-decided.
+`platform/mongodb`) and nothing wired to `rest` yet.
 
 ## Why this exists
 
@@ -43,6 +49,10 @@ as-is; a Postgres-backed resource defines its own filtering convention,
 on its own schedule — not a translation of Mongo operators into SQL.
 
 ## 2. How a resource would actually use it — open
+
+**Resolved, as neither option below:** `rest.Adapter`, a seam in
+front of `Store`, not a parameterization of it — see
+[`adapter.md`](adapter.md). Kept here as written, for the record.
 
 This is the question the interface split above doesn't answer:
 `rest.Resource.Store` is typed to the Mongo-shaped `Store` interface
@@ -95,6 +105,11 @@ equivalent at all. No native `ttl` — Postgres needs a cron job or trigger
 for expiry.
 
 ## 5. Shape of the data — open, no recommendation yet
+
+**Resolved as the jsonb option below**, plus the relational metadata
+columns (`id`/`created_at`/`updated_at`/`version`/`deleted`) — see
+[`adapter.md`](adapter.md#building-a-postgres-backed-resource) for the
+real table shape. Kept here as written, for the record.
 
 Mongo stores schemaless documents; `rest.Doc` is `map[string]any`
 everywhere in `rest`/`declarative`. Postgres is relational, and there
@@ -233,7 +248,11 @@ connection routing across replicas — that's a deployment concern
 (PgBouncer/PgCat, or several `pgxpool.Pool`s keyed by role), not
 something the driver or this `Store` should take on.
 
-## What exists today
+## What existed at the time of this RFC
+
+Historical — see [`adapter.md`](adapter.md) for what's actually
+registered to a `Resource` today (`restpostgres.NewAdapter`, not this
+`Store` directly) and the real example using it.
 
 - `platform/postgres.Store`: the method set above, backed by
   `pgxpool.Pool`, with an equality-only filter (`map[string]any` read as
