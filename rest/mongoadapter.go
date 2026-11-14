@@ -53,6 +53,17 @@ func (*mongoAdapter) IsTimeout(err error) bool {
 	return mongo.IsTimeout(err) || errors.Is(err, context.DeadlineExceeded)
 }
 
+// ClassifiesWriteTimeouts is always false -- see the doc comment on
+// rest.ErrorClassifier's own ClassifiesWriteTimeouts for why:
+// platform/mongodb's Transactor hands a write's own closure return
+// value straight to the driver's session.WithTransaction, which
+// retries the whole transaction on a transient error by inspecting
+// that very value's TransientTransactionError label -- replacing it
+// with a 503 Abort here, even only for a write IsTimeout would also
+// recognize, would erase that label and turn a transparently-retried
+// write into an immediate, un-retried 503.
+func (*mongoAdapter) ClassifiesWriteTimeouts() bool { return false }
+
 func (*mongoAdapter) NewID() any { return bson.NewObjectID() }
 
 func (*mongoAdapter) IDString(id any) string { return idString(id) }
@@ -203,6 +214,11 @@ func (a *mongoAdapter) DeleteOne(ctx context.Context, lookup any) (int64, error)
 func (*mongoAdapter) MergePatch(original, changes Doc) (Doc, error) {
 	return deepMerge(maps.Clone(original), changes), nil
 }
+
+// ValidatesMergedDocument is always false: Mongo's PATCH validates only
+// the client's own body (deepMerge stores a literal null, never deletes
+// a key), so a post-merge check would never have anything new to catch.
+func (*mongoAdapter) ValidatesMergedDocument() bool { return false }
 
 // EqualsFilter builds "field == value", optionally excluding one
 // document by excludeID -- the same filter Schema's checkUnique

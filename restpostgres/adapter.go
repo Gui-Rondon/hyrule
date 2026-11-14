@@ -54,6 +54,13 @@ var _ rest.Adapter = (*postgresAdapter)(nil)
 // instead of the caller duplicating it onto rest.Resource too.
 func (a *postgresAdapter) RetryPolicy() rest.RetryOptions { return a.retry }
 
+// ValidatesMergedDocument is always true: RFC 7396's merge (MergePatch,
+// patch.go) can delete a key the Schema marks Required -- a null in the
+// PATCH body means "remove this key", never "store null" -- so
+// rest.Service's patchOnce validates the merged result against the full
+// Schema before writing it, not just the client's own PATCH body.
+func (a *postgresAdapter) ValidatesMergedDocument() bool { return true }
+
 // NewAdapter validates opts and builds an adapter over store's table.
 // Errors here are a registration-time failure (the resource never
 // starts), never a per-request one.

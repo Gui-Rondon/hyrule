@@ -50,6 +50,16 @@ func TestIsTimeout(t *testing.T) {
 	if !a.IsTimeout(&pgconn.PgError{Code: "57014"}) {
 		t.Error("IsTimeout(57014) = false, want true")
 	}
+	// Deadlock/serialization failure (section 12 of the Postgres
+	// portability plan): Postgres aborting the transaction over a
+	// conflict with a concurrent one, not a statement that ran too
+	// long -- still mapped to the same 503 a real timeout gets.
+	if !a.IsTimeout(&pgconn.PgError{Code: "40P01"}) {
+		t.Error("IsTimeout(40P01, deadlock detected) = false, want true")
+	}
+	if !a.IsTimeout(&pgconn.PgError{Code: "40001"}) {
+		t.Error("IsTimeout(40001, serialization failure) = false, want true")
+	}
 	if a.IsTimeout(errors.New("boom")) {
 		t.Error("IsTimeout(plain error) = true, want false")
 	}

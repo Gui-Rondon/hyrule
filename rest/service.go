@@ -269,7 +269,7 @@ func (s *Service) Insert(ctx context.Context, docs []Doc, opts WriteOptions) ([]
 			}
 		}
 		err := s.res.Adapter.InsertMany(ctx, stored)
-		return s.duplicateKey(err, 409)
+		return s.writeError(err, 409)
 	})
 	if err != nil {
 		return nil, err
@@ -362,6 +362,46 @@ func (s *Service) patchOnce(ctx context.Context, lookup any, changes Doc, opts W
 			updated["_deleted"] = false
 		}
 
+		// Adapter.ValidatesMergedDocument (section 9.4 of the Postgres
+		// portability plan): only for an adapter that opts in (Postgres)
+		// -- RFC 7396's merge can delete a key the Schema marks Required,
+		// which the pre-merge validation in prepareWrite above (the
+		// client's own PATCH body, before any merge) never sees, since
+		// Nullable only means a Required field's *stored value* may be
+		// null, never that its key may be absent, and RFC 7396 has no
+		// way to set a value to null without deleting the key.
+		//
+		// Deliberately narrow: only checks which Required keys are
+		// present in updated, nothing else. An earlier version of this
+		// check ran the full validateDict (type/format) pass over the
+		// whole merged document, found by /code-review to be the wrong
+		// depth: updated's values are in storage/converted
+		// representation (a touched TypeInteger/TypeObjectID/
+		// TypeDatetime field is already an int64/bson.ObjectID/
+		// time.Time, from convert() in prepareWrite's pre-merge pass; an
+		// untouched one read back from Postgres is whatever hydrate's
+		// json.Unmarshal of jsonb produced, e.g. an RFC 3339 string for
+		// a date, never Eve's wire format) -- checkType expects raw
+		// client JSON, so it rejected a field that was never actually
+		// wrong, on every single PATCH that merely had a non-string
+		// field already set. Presence alone needs none of that: it
+		// never inspects a value's type, so it never cares which
+		// representation updated[key] happens to be in, and also never
+		// treats a hook-added field the Schema doesn't declare (e.g.
+		// behaviors/audit's _updated_user) as "unknown field" -- it
+		// only ever looks at the Schema's own Required keys.
+		if !opts.SkipValidation && s.res.Adapter.ValidatesMergedDocument() {
+			missing := Issues{}
+			for key, field := range s.res.Schema {
+				if _, ok := updated[key]; !ok && field.Required && field.Default == nil {
+					missing[key] = "required field"
+				}
+			}
+			if len(missing) > 0 {
+				return &ValidationError{Issues: missing}
+			}
+		}
+
 		writeLookup, err := s.res.Adapter.WriteLookup(original)
 		if err != nil {
 			return err
@@ -373,7 +413,7 @@ func (s *Service) patchOnce(ctx context.Context, lookup any, changes Doc, opts W
 		// here.
 		matched, err := s.res.Adapter.UpdateOne(ctx, writeLookup, updated, applied)
 		if err != nil {
-			return s.duplicateKey(err, 400)
+			return s.writeError(err, 400)
 		}
 		return s.checkMatched(ctx, matched, original)
 	})
@@ -426,7 +466,7 @@ func (s *Service) Replace(ctx context.Context, lookup any, doc Doc, opts WriteOp
 		// stored["_updated"]) from what the write actually confirmed.
 		matched, err := s.res.Adapter.ReplaceOne(ctx, writeLookup, stored)
 		if err != nil {
-			return s.duplicateKey(err, 400)
+			return s.writeError(err, 400)
 		}
 		return s.checkMatched(ctx, matched, original)
 	})
@@ -463,7 +503,7 @@ func (s *Service) Delete(ctx context.Context, lookup any, opts WriteOptions) err
 		if !s.res.SoftDelete {
 			deletedCount, err := s.res.Adapter.DeleteOne(ctx, writeLookup)
 			if err != nil {
-				return err
+				return s.timeoutError(err)
 			}
 			return s.checkMatched(ctx, deletedCount, original)
 		}
@@ -475,7 +515,7 @@ func (s *Service) Delete(ctx context.Context, lookup any, opts WriteOptions) err
 		// deleted itself (_deleted/_updated/_etag).
 		matched, err := s.res.Adapter.UpdateOne(ctx, writeLookup, deleted, Doc{})
 		if err != nil {
-			return err
+			return s.timeoutError(err)
 		}
 		return s.checkMatched(ctx, matched, original)
 	})
@@ -784,13 +824,52 @@ func truthyValue(v any) bool {
 	return false
 }
 
-// duplicateKey turns a unique index violation into Eve's status for
-// pymongo's DuplicateKeyError: 409 on insert, 400 on update and replace.
-// Classified by the resource's own Adapter, so a Postgres resource's
-// 23505 is recognized too, not just Mongo's.
-func (s *Service) duplicateKey(err error, status int) error {
+// writeError classifies a write's backend error into Eve's HTTP status: a
+// unique index violation becomes duplicateStatus (409 on insert, 400 on
+// update/replace, pymongo's DuplicateKeyError contract), classified by the
+// resource's own Adapter so a Postgres resource's 23505 is recognized too,
+// not just Mongo's. Anything else falls through to timeoutError.
+func (s *Service) writeError(err error, duplicateStatus int) error {
 	if s.res.Adapter.IsDuplicateKey(err) {
-		return Abort(status, "")
+		return Abort(duplicateStatus, "")
+	}
+	return s.timeoutError(err)
+}
+
+// timeoutError turns a write's backend error into 503 when the resource's
+// own Adapter opts in (ClassifiesWriteTimeouts) and recognizes it as a
+// timeout -- section 12 of the Postgres portability plan: a Postgres
+// resource's 57014 (statement timeout), 40P01 (deadlock) or 40001
+// (serialization failure) are classified this way (postgresAdapter.
+// IsTimeout), none of them a 500. mongoAdapter's ClassifiesWriteTimeouts
+// is false (see its own doc comment, rest/adapter.go): this must never run
+// for Mongo, or it would erase the TransientTransactionError label
+// platform/mongodb's Transactor relies on to retry a write transparently.
+// writeError calls this for its own non-duplicate-key case; Delete calls
+// it directly, since a delete can never produce a duplicate-key error.
+//
+// A bare context.DeadlineExceeded/Canceled is excluded even when the
+// Adapter's own IsTimeout would also say true for it (postgresAdapter's
+// IsTimeout falls back to exactly this for an error it doesn't
+// recognize by its own pgconn-specific signal): it means the caller's
+// own context ended, not that the backend reported a failure.
+// Resource.DryRun's write cut (DryRunTimeout) deliberately produces
+// exactly this from inside a write's own hooks or adapter call, and
+// rest/dryrun_test.go's TestDryRunTimeout already pins that case to a
+// plain 500 ("as any write error") -- a contract this plan never asked
+// to change. A genuine backend timeout/conflict (a real pgconn.PgError
+// 57014/40P01/40001) is unaffected, since it neither wraps nor equals a
+// context error.
+func (s *Service) timeoutError(err error) error {
+	if err == nil || !s.res.Adapter.ClassifiesWriteTimeouts() {
+		return err
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return err
+	}
+	if s.res.Adapter.IsTimeout(err) {
+		slog.Warn("write timed out", "error", err)
+		return Abort(http.StatusServiceUnavailable, "")
 	}
 	return err
 }

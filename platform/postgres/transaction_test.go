@@ -1,8 +1,11 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 )
@@ -144,5 +147,70 @@ func TestWithTransactionStoreOnAnotherPoolIgnoresForeignTx(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("count = %d, want 1 (the insert ran outside pool1's transaction and must have committed on its own)", n)
+	}
+}
+
+// TestWithTransactionCommitFailureIsReturnedAndRollbackIsAQuietNoop
+// covers section 13's "ambiguous" case -- a failure *during* COMMIT
+// itself, never observed against a real Postgres before this test. A
+// DEFERRABLE INITIALLY DEFERRED constraint trigger that always raises
+// is the one deterministic way to force the failure to surface at
+// COMMIT, not at an earlier statement, with a real server rather than
+// a mock.
+func TestWithTransactionCommitFailureIsReturnedAndRollbackIsAQuietNoop(t *testing.T) {
+	pool := testPool(t)
+	table := "tx_commit_failure_test"
+	setupTable(t, pool, table, `CREATE TABLE `+table+` (name TEXT NOT NULL)`)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+		CREATE OR REPLACE FUNCTION `+table+`_reject() RETURNS trigger AS $$
+		BEGIN
+			RAISE EXCEPTION 'forced commit-time failure';
+		END;
+		$$ LANGUAGE plpgsql`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		CREATE CONSTRAINT TRIGGER `+table+`_reject_trigger
+		AFTER INSERT ON `+table+`
+		DEFERRABLE INITIALLY DEFERRED
+		FOR EACH ROW EXECUTE FUNCTION `+table+`_reject()`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DROP FUNCTION IF EXISTS "+table+"_reject() CASCADE")
+	})
+
+	store := NewStore(pool, table)
+	tx := Transactor{Pool: pool}
+
+	var logBuf bytes.Buffer
+	prevLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prevLogger) })
+
+	err := tx.WithTransaction(ctx, func(ctx context.Context) error {
+		return store.InsertMany(ctx, []map[string]any{{"name": "a"}})
+	})
+	if err == nil {
+		t.Fatal("WithTransaction = nil error, want the deferred trigger's commit-time failure")
+	}
+	if !strings.Contains(err.Error(), "forced commit-time failure") {
+		t.Errorf("err = %v, want it to carry the trigger's own message", err)
+	}
+	// The deferred cleanup Rollback (transaction.go) must receive
+	// pgx.ErrTxClosed -- the failed COMMIT already ended the
+	// transaction server-side -- and transaction.go already tolerates
+	// exactly that error without logging it as a failure.
+	if strings.Contains(logBuf.String(), "rollback failed") {
+		t.Errorf("log = %q, must not log a rollback failure for the cleanup Rollback after a failed Commit", logBuf.String())
+	}
+
+	n, err := store.CountDocuments(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("count after a failed commit = %d, want 0 (the server must have aborted the whole transaction)", n)
 	}
 }
