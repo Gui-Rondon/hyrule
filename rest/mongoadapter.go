@@ -124,6 +124,18 @@ func (*mongoAdapter) WriteLookup(original Doc) (any, error) {
 	return writeLookup(original), nil
 }
 
+// IDFilter is {"_id": id}, the same shape CombineFilter's asFilter
+// already asserts for any other Mongo filter.
+func (*mongoAdapter) IDFilter(id any) (any, error) {
+	return bson.M{"_id": id}, nil
+}
+
+// RetryPolicy is the zero RetryOptions: Mongo never retries a PATCH
+// under If-Match: * today, and this adapter doesn't change that.
+func (*mongoAdapter) RetryPolicy() RetryOptions {
+	return RetryOptions{}
+}
+
 func (a *mongoAdapter) Find(ctx context.Context, filter, sort, projection any, skip, limit int64) ([]Doc, error) {
 	return a.store.Find(ctx, asFilter(filter), skip, limit, asSort(sort), asProjection(projection))
 }

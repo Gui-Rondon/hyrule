@@ -35,15 +35,35 @@ type equalsFilter struct {
 
 // compileFilter renders filter as a boolean SQL expression, starting
 // placeholders at startAt (as postgres.CompileFilter's own startAt
-// does). filter is nil (matches every row), a postgres.Query, an
-// equalsFilter (EqualsFilter's result), or a combinedFilter
-// (CombineFilter's result, query.go).
+// does). filter is whatever this adapter's own methods produced:
+// nil/postgres.Query/map[string]any (matches every row, or a direct
+// jsonb condition -- CombineFilter also accepts these, so a caller
+// that bypasses it works too), an equalsFilter (EqualsFilter's
+// result), a combinedFilter (CombineFilter's result, query.go), a
+// bare uuid.UUID (a plain "by id" lookup, no version check), or a
+// postgresLookup (WriteLookup's result, a CAS condition). rest.Adapter's
+// FindOne/UpdateOne/ReplaceOne/DeleteOne all funnel through this one
+// function, since each can be called equally with a CombineFilter
+// result (Service's read path) or a WriteLookup result (Service's own
+// write-then-reread, or a direct id for a test/custom caller) -- two
+// shapes that used to be split across this function and the now
+// removed, narrower lookupWhere.
+// idEquals renders "id = $N::uuid" matching the physical id column
+// against id, starting placeholders at startAt -- the one id-equality
+// predicate compileFilter's combinedFilter.id and bare uuid.UUID cases
+// both need, kept in one place so they can never drift apart.
+func idEquals(id uuid.UUID, startAt int) (string, []any) {
+	return fmt.Sprintf("id = $%d::uuid", startAt+1), []any{id.String()}
+}
+
 func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any, error) {
 	switch f := filter.(type) {
 	case nil:
 		return "TRUE", nil, nil
 	case postgres.Query:
 		return postgres.CompileFilter(f, a.schema, startAt)
+	case map[string]any:
+		return postgres.CompileFilter(postgres.Query(f), a.schema, startAt)
 	case equalsFilter:
 		where, args, err := postgres.CompileFilter(f.query, a.schema, startAt)
 		if err != nil {
@@ -55,8 +75,12 @@ func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any,
 		args = append(args, f.excludeID.String())
 		return fmt.Sprintf("(%s) AND id != $%d::uuid", where, startAt+len(args)), args, nil
 	case combinedFilter:
-		where, args, err := postgres.CompileFilter(f.query, a.schema, startAt)
-		if err != nil {
+		var where string
+		var args []any
+		var err error
+		if f.id != nil {
+			where, args = idEquals(*f.id, startAt)
+		} else if where, args, err = postgres.CompileFilter(f.query, a.schema, startAt); err != nil {
 			return "", nil, err
 		}
 		if !f.excludeDeleted {
@@ -67,26 +91,17 @@ func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any,
 		// here as raw SQL instead, no bind parameter needed (a literal
 		// boolean, never client input).
 		return fmt.Sprintf("(%s) AND deleted = false", where), args, nil
-	default:
-		return "", nil, fmt.Errorf("restpostgres: filter must be a postgres.Query, EqualsFilter's result, or CombineFilter's result, got %T", filter)
-	}
-}
-
-// lookupWhere renders lookup (a uuid.UUID or a postgresLookup) as a
-// boolean SQL expression over the physical id/version columns,
-// starting placeholders at startAt.
-func (a *postgresAdapter) lookupWhere(lookup any, startAt int) (string, []any, error) {
-	switch l := lookup.(type) {
 	case uuid.UUID:
-		return fmt.Sprintf("id = $%d::uuid", startAt+1), []any{l.String()}, nil
+		where, args := idEquals(f, startAt)
+		return where, args, nil
 	case postgresLookup:
-		id, ok := l.ID.(uuid.UUID)
+		id, ok := f.ID.(uuid.UUID)
 		if !ok {
-			return "", nil, fmt.Errorf("restpostgres: lookup.ID must be a uuid.UUID, got %T", l.ID)
+			return "", nil, fmt.Errorf("restpostgres: lookup.ID must be a uuid.UUID, got %T", f.ID)
 		}
-		return fmt.Sprintf("id = $%d::uuid AND version = $%d", startAt+1, startAt+2), []any{id.String(), l.Version}, nil
+		return fmt.Sprintf("id = $%d::uuid AND version = $%d", startAt+1, startAt+2), []any{id.String(), f.Version}, nil
 	default:
-		return "", nil, fmt.Errorf("restpostgres: unsupported lookup type %T", lookup)
+		return "", nil, fmt.Errorf("restpostgres: filter must be a postgres.Query, EqualsFilter's result, CombineFilter's result, a uuid.UUID, or WriteLookup's result, got %T", filter)
 	}
 }
 
@@ -169,7 +184,7 @@ func (a *postgresAdapter) CountDocuments(ctx context.Context, filter any) (int64
 
 // FindOne reads one document by lookup; pgx.ErrNoRows if none match.
 func (a *postgresAdapter) FindOne(ctx context.Context, lookup, projection any) (rest.Doc, error) {
-	where, args, err := a.lookupWhere(lookup, 0)
+	where, args, err := a.compileFilter(lookup, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -239,23 +254,35 @@ func (a *postgresAdapter) InsertMany(ctx context.Context, docs []rest.Doc) error
 // UpdateOne overwrites the whole doc column at lookup (the CAS
 // condition WriteLookup built, or a bare id with no version check) and
 // bumps version/updated_at in the same statement -- never a partial
-// $set, since doc is an opaque jsonb blob here. On success (matched ==
-// 1), updated["_etag"]/["_updated"] are set from what RETURNING
-// confirms the database actually wrote. changes is accepted for
-// interface parity with mongoAdapter (which needs it to build a $set)
-// but unused here. matched == 0 without an error is not a failure --
-// the caller (checkMatched) decides 404 vs 412 by re-reading.
+// $set, since doc is an opaque jsonb blob here. When the resource is
+// SoftDelete and updated carries a _deleted key, the physical deleted
+// column is set too (rest.Service.Delete's soft-delete branch and
+// Replace both always set it) -- deleted can never live inside doc
+// (businessFieldsOnly strips it, like every other meta field), so it
+// needs its own SET term, not a fold into the jsonb blob. On success
+// (matched == 1), updated["_etag"]/["_updated"] are set from what
+// RETURNING confirms the database actually wrote. changes is accepted
+// for interface parity with mongoAdapter (which needs it to build a
+// $set) but unused here. matched == 0 without an error is not a
+// failure -- the caller (checkMatched) decides 404 vs 412 by
+// re-reading.
 func (a *postgresAdapter) UpdateOne(ctx context.Context, lookup any, updated, changes rest.Doc) (int64, error) {
-	where, whereArgs, err := a.lookupWhere(lookup, 1)
-	if err != nil {
-		return 0, err
-	}
 	fieldsJSON, err := json.Marshal(businessFieldsOnly(updated))
 	if err != nil {
 		return 0, fmt.Errorf("restpostgres: UpdateOne: %w", err)
 	}
-	args := append([]any{fieldsJSON}, whereArgs...)
-	q := fmt.Sprintf("UPDATE %s SET doc = $1::jsonb, version = version + 1, updated_at = now() WHERE %s RETURNING version, updated_at", a.table, where)
+	sets := []string{"doc = $1::jsonb", "version = version + 1", "updated_at = now()"}
+	args := []any{fieldsJSON}
+	if deleted, ok := updated["_deleted"].(bool); a.softDelete && ok {
+		args = append(args, deleted)
+		sets = append(sets, fmt.Sprintf("deleted = $%d", len(args)))
+	}
+	where, whereArgs, err := a.compileFilter(lookup, len(args))
+	if err != nil {
+		return 0, err
+	}
+	args = append(args, whereArgs...)
+	q := fmt.Sprintf("UPDATE %s SET %s WHERE %s RETURNING version, updated_at", a.table, strings.Join(sets, ", "), where)
 	var version int64
 	var updatedAt time.Time
 	if err := a.store.Querier(ctx).QueryRow(ctx, q, args...).Scan(&version, &updatedAt); err != nil {
@@ -276,10 +303,11 @@ func (a *postgresAdapter) ReplaceOne(ctx context.Context, lookup any, replacemen
 	return a.UpdateOne(ctx, lookup, replacement, nil)
 }
 
-// DeleteOne deletes the row at lookup. Hard delete only -- soft delete
-// (setting the deleted column) is Fase 4 (rest.Service integration).
+// DeleteOne deletes the row at lookup. Hard delete only -- a
+// SoftDelete resource's rest.Service.Delete never calls this, it goes
+// through UpdateOne instead (setting the deleted column there).
 func (a *postgresAdapter) DeleteOne(ctx context.Context, lookup any) (int64, error) {
-	where, args, err := a.lookupWhere(lookup, 0)
+	where, args, err := a.compileFilter(lookup, 0)
 	if err != nil {
 		return 0, err
 	}

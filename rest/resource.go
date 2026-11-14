@@ -89,6 +89,13 @@ type Resource struct {
 	// still accepts: the hooks put there the etags replaced by writes that
 	// did not touch what the client edits (Eve has no such field).
 	CompatibleEtags string
+	// RequireMergePatchContentType enforces RFC 7396 §A's requirement
+	// that a PATCH request use "application/merge-patch+json" -- an
+	// opt-in capability a resource whose Adapter.MergePatch is RFC 7396
+	// end to end (a Postgres resource) turns on. Eve/Mongo resources,
+	// whose MergePatch is a deep merge, not RFC 7396, leave it off and
+	// keep accepting any Content-Type, as Eve itself always did.
+	RequireMergePatchContentType bool
 
 	Hooks Hooks
 }

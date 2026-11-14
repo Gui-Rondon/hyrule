@@ -131,6 +131,20 @@ func withEpochDates(doc Doc) Doc {
 	return out
 }
 
+// asTime extracts a time.Time out of a Doc's _created/_updated value --
+// bson.DateTime for a Mongo document, a plain time.Time for a Postgres
+// one (restpostgres/doc.go's hydrate never stores a bson.DateTime). ok
+// is false when the key is absent or neither type.
+func asTime(v any) (time.Time, bool) {
+	switch t := v.(type) {
+	case bson.DateTime:
+		return t.Time(), true
+	case time.Time:
+		return t, true
+	}
+	return time.Time{}, false
+}
+
 func etagOf(doc Doc) string {
 	if s, ok := doc["_etag"].(string); ok && s != "" {
 		return s

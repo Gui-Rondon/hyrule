@@ -5,26 +5,29 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/Gui-Rondon/hyrule/platform/postgres"
 	"github.com/Gui-Rondon/hyrule/rest"
 )
 
 // This file completes postgresAdapter's rest.QueryAdapter half (Fase
-// 4b's first cut) -- ParseWhere/ParseSort/ParseProjection decode a
-// client's where/sort/projection query parameters, and CombineFilter/
+// 4b) -- ParseWhere/ParseSort/ParseProjection decode a client's
+// where/sort/projection query parameters, and CombineFilter/
 // CombineSort/CombineProjection combine them with the resource's own
 // defaults, same role as mongoAdapter's methods of the same name
-// (rest/mongoadapter.go).
+// (rest/mongoadapter.go). rest/http.go's parseListQueryFor
+// (rest/query.go) calls through these for a resource's own collection
+// GET -- a Postgres resource is reachable over HTTP end to end since
+// Fase 4b's HTTP-wiring cut (restpostgres/http_test.go).
 //
-// Deliberately out of scope for this cut, named so it isn't mistaken
-// for an oversight: rest.Resource.Datasource.Filter/DefaultSort/
-// Projection are bson.M/bson.D-typed (Mongo-only) -- a Postgres
-// resource is assumed, for now, to never set them. CombineFilter still
-// applies soft delete (Resource.SoftDelete has no such typing
-// problem); CombineSort/CombineProjection fall back to "nothing set"
-// rather than a Datasource default. rest/http.go is not touched here
-// either -- ListQuery.Filter/Sort/Projection stay bson.M/bson.D, so no
-// HTTP request can reach a Postgres resource's List yet.
+// Deliberately out of scope, named so it isn't mistaken for an
+// oversight: rest.Resource.Datasource.Filter/DefaultSort/Projection
+// are bson.M/bson.D-typed (Mongo-only) -- a Postgres resource is
+// assumed, for now, to never set them. CombineFilter still applies
+// soft delete (Resource.SoftDelete has no such typing problem);
+// CombineSort/CombineProjection fall back to "nothing set" rather than
+// a Datasource default.
 //
 // Also deliberately out of scope, named rather than silently wrong:
 // ParseWhere decodes raw with the standard library's default JSON
@@ -36,14 +39,21 @@ import (
 // (scientific notation, int64 for declared fields) cover, not solved
 // here. A KindNumber field (float64 accepted) is unaffected.
 
-// combinedFilter is CombineFilter's result: a client postgres.Query
-// ANDed with "deleted = false" when excludeDeleted -- the Postgres
-// equivalent of mongoAdapter's bson.M{"_deleted": bson.M{"$ne": true}}
-// condition, except "deleted" is a physical column, never part of the
-// jsonb doc, so it can't be expressed as a postgres.Query operator;
-// compileFilter (crud.go) ANDs it in as raw SQL instead.
+// combinedFilter is CombineFilter's result: a client filter ANDed with
+// "deleted = false" when excludeDeleted -- the Postgres equivalent of
+// mongoAdapter's bson.M{"_deleted": bson.M{"$ne": true}} condition,
+// except "deleted" is a physical column, never part of the jsonb doc,
+// so it can't be expressed as a postgres.Query operator; compileFilter
+// (crud.go) ANDs it in as raw SQL instead.
+//
+// The client filter itself is either a postgres.Query (ParseWhere's
+// result, a jsonb doc condition) or an id (IDFilter's result, a
+// physical-column condition) -- never both; exactly one of query/id is
+// set, enforced by CombineFilter's type switch below, not by this
+// struct's shape alone.
 type combinedFilter struct {
 	query          postgres.Query
+	id             *uuid.UUID
 	excludeDeleted bool
 }
 
@@ -61,30 +71,32 @@ func (a *postgresAdapter) ParseWhere(raw string, res *rest.Resource) (any, error
 	return postgres.Query(decoded), nil
 }
 
-// CombineFilter combines clientFilter (ParseWhere's result, or
-// another postgres.Query/map[string]any) with soft delete, read from
-// res.SoftDelete -- never from a.softDelete. The two can diverge (a
-// resource's rest.Resource.SoftDelete and the restpostgres.Options.
-// SoftDelete its NewAdapter call was given are two independently set
-// booleans, with nothing enforcing they agree), and res is this
-// method's own parameter for exactly this reason -- the same contract
-// mongoAdapter's CombineFilter follows for Mongo. a.softDelete stays
-// authoritative only for what it already was before this file
-// (hydrate's _deleted field, doc.go), not reopened here.
-// Resource.Datasource.Filter is not applied -- see this file's top
-// doc comment.
+// CombineFilter combines clientFilter (ParseWhere's result, IDFilter's
+// result, or another postgres.Query/map[string]any/uuid.UUID) with
+// soft delete, read from res.SoftDelete -- never from a.softDelete.
+// The two can diverge (a resource's rest.Resource.SoftDelete and the
+// restpostgres.Options.SoftDelete its NewAdapter call was given are
+// two independently set booleans, with nothing enforcing they agree),
+// and res is this method's own parameter for exactly this reason --
+// the same contract mongoAdapter's CombineFilter follows for Mongo.
+// a.softDelete stays authoritative only for what it already was
+// before this file (hydrate's _deleted field, doc.go), not reopened
+// here. Resource.Datasource.Filter is not applied -- see this file's
+// top doc comment.
 func (a *postgresAdapter) CombineFilter(res *rest.Resource, clientFilter any, includeDeleted bool) (any, error) {
-	var query postgres.Query
+	cf := combinedFilter{excludeDeleted: res.SoftDelete && !includeDeleted}
 	switch f := clientFilter.(type) {
 	case nil:
 	case postgres.Query:
-		query = f
+		cf.query = f
 	case map[string]any:
-		query = postgres.Query(f)
+		cf.query = postgres.Query(f)
+	case uuid.UUID:
+		cf.id = &f
 	default:
-		return nil, fmt.Errorf("restpostgres: CombineFilter: clientFilter must be a postgres.Query, got %T", clientFilter)
+		return nil, fmt.Errorf("restpostgres: CombineFilter: clientFilter must be a postgres.Query, map[string]any or uuid.UUID, got %T", clientFilter)
 	}
-	return combinedFilter{query: query, excludeDeleted: res.SoftDelete && !includeDeleted}, nil
+	return cf, nil
 }
 
 // ParseSort decodes raw ("-field,other", the same textual convention
