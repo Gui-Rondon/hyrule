@@ -102,16 +102,18 @@ func (a *postgresAdapter) ParseSort(raw string) (any, error) {
 		}
 		desc := false
 		if after, ok := strings.CutPrefix(field, "-"); ok {
-			desc, field = true, after
+			desc, field = true, after // not re-trimmed: a space right
+			// after "-" must fail the check below, not be cleaned away
 		}
-		// Checked again after stripping "-": a bare "-" (or "-,field")
-		// must not produce a SortTerm with an empty Field -- that would
-		// reach orderByClause (sort.go) as a parameterized, cast
-		// ORDER BY on a field named "", silently sorting as if sort had
-		// never been given instead of erroring loudly, the same
-		// discipline toSortTerms/toProjection already apply to a wrong
-		// type.
-		if field == "" {
+		// Checked again after stripping "-", deliberately without
+		// re-trimming it first: a bare "-" (or "-,field", "- name",
+		// "--name") must not produce a SortTerm with an empty or
+		// space-corrupted Field -- that would reach orderByClause
+		// (sort.go) as a parameterized, cast ORDER BY on a field that
+		// doesn't match any real column/jsonb key, silently sorting
+		// wrong instead of erroring loudly, the same discipline
+		// toSortTerms/toProjection already apply to a wrong type.
+		if field == "" || strings.ContainsAny(field, " \t") || strings.HasPrefix(field, "-") {
 			return nil, fmt.Errorf("restpostgres: invalid sort %q", raw)
 		}
 		terms = append(terms, SortTerm{Field: field, Desc: desc})

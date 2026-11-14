@@ -149,7 +149,11 @@ func TestParseSortRejectsEmptyFields(t *testing.T) {
 // with an empty Field instead of an error.
 func TestParseSortRejectsBareDash(t *testing.T) {
 	a := &postgresAdapter{}
-	for _, raw := range []string{"-", "-,field", "field,-"} {
+	// "- name"/"--name" are a second round of the same bug: an earlier
+	// fix only checked for an empty Field after stripping one leading
+	// "-", so a space or a second "-" survived into a corrupted,
+	// silently-wrong SortTerm.Field instead of erroring.
+	for _, raw := range []string{"-", "-,field", "field,-", "- name", "--name"} {
 		if _, err := a.ParseSort(raw); err == nil {
 			t.Errorf("ParseSort(%q): expected an error, got none", raw)
 		}
