@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Gui-Rondon/hyrule/platform/config"
 )
 
 // maxIdentifierBytes is Postgres' own identifier limit (NAMEDATALEN
@@ -71,6 +73,18 @@ const (
 	// IndexesOff ignores the declared indexes entirely.
 	IndexesOff IndexesMode = "off"
 )
+
+// IndexesModeFromConfig reads postgres.indexes_mode.
+func IndexesModeFromConfig(cfg config.Config) (IndexesMode, error) {
+	switch m := IndexesMode(cfg.String("postgres.indexes_mode", "")); m {
+	case "":
+		return IndexesCreate, nil
+	case IndexesCreate, IndexesCheck, IndexesOff:
+		return m, nil
+	default:
+		return "", fmt.Errorf("postgres.indexes_mode: unknown mode %q (create, check, off)", m)
+	}
+}
 
 // sqlStringLiteral renders s as a single-quoted SQL string literal,
 // doubling embedded single quotes the standard, unambiguous way --
@@ -173,11 +187,11 @@ func indexExists(ctx context.Context, pool *pgxpool.Pool, table, name string) (b
 // Never called by NewAdapter or any other registration path in this
 // repo, same precedent as EnsureFunctions (Fase 1): a schema-setup
 // step a caller runs explicitly, alongside CREATE TABLE/CREATE INDEX,
-// not something a Resource's own setup triggers on its own. app/app.go
-// (the real service bootstrap) has no Postgres integration at all
-// today -- there is no Mongo-style .indices.conf/app.Spec.Indexes
-// equivalent to wire this into yet; that's separate, larger, unasked-
-// for work, not a gap in this function.
+// not something a Resource's own setup triggers on its own.
+// app.Build calls it for a Backend: app.BackendPostgres service (after
+// Setup, same order as the Mongo side), with app.Spec.PostgresIndexes
+// as specs -- Go-typed values, not a .indices.conf-equivalent text
+// format (IndexSpec has no parser to mirror mongodb.ParseIndexes with).
 //
 // Known, accepted limitation: if an index named like one of specs
 // already exists with a *different* definition, this treats it as

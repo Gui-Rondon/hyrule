@@ -1,14 +1,15 @@
 // Command comments-api is Fase 7's end-to-end proof for the Postgres
 // path: a real resource (blog comments) served over real HTTP by a
 // real binary, backed by platform/postgres+restpostgres instead of
-// Mongo. app.Main has no Postgres side yet (an explicit, deliberate
-// gap -- see platform/postgres/indexes.go's own doc comment and the
-// Postgres portability plan's Fase 6 closeout note: wiring Postgres
-// into the shared app.Env bootstrap is separate work, not attempted
-// here), so this wires platform/server, platform/postgres,
-// restpostgres and rest directly -- the same four packages a
-// restpostgres integration test wires, just as a real main() instead
-// of a *testing.T helper.
+// Mongo. app.Main gained a Postgres side (app.BackendPostgres) after
+// this was written, but this command still wires platform/server,
+// platform/postgres, restpostgres and rest directly instead of
+// app.Main -- moving it onto the shared bootstrap is separate,
+// not-yet-attempted work (the "postgres em produção" plan's Stream B,
+// fase B3). This remains a valid, independent way to serve a Postgres
+// resource either way, the same four packages a restpostgres
+// integration test wires, just as a real main() instead of a
+// *testing.T helper.
 //
 //	POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
 //	  PORT=8080 go run .

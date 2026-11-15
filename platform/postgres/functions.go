@@ -7,6 +7,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// ensureFunctionsLockKey is an arbitrary, fixed pg_advisory_xact_lock
+// key EnsureFunctions serializes on -- any value works, as long as it
+// stays constant across every caller and doesn't collide with another
+// advisory lock this codebase takes (none exist today).
+const ensureFunctionsLockKey int64 = 7651100
+
 // The three functions below convert a jsonb-sourced text value to a
 // typed SQL value without ever raising inside a query -- every
 // malformed or out-of-range input returns SQL NULL, not an error. Each
@@ -57,12 +63,32 @@ $$;`
 
 // EnsureFunctions creates (or replaces) the three hyrule_safe_* SQL
 // helper functions this package's generated SQL may rely on. It's
-// idempotent -- safe to call on every process start.
+// idempotent -- safe to call on every process start, including several
+// processes starting at once (several services, or, in this repo,
+// several packages' test suites, against the same database): run
+// without the advisory lock below, CREATE OR REPLACE FUNCTION on the
+// same name from two sessions at the same instant can hit Postgres'
+// own "tuple concurrently updated" (confirmed for real, racing this
+// repo's own test suites against each other) -- a catalog-level
+// conflict between two DDL statements, not a sign either one was
+// wrong. pg_advisory_xact_lock serializes every caller on the same key
+// instead, so the race never happens rather than being retried after
+// the fact; it's visible across every session connected to the
+// database, not just this pool, and releases itself when the
+// transaction below ends.
 func EnsureFunctions(ctx context.Context, pool *pgxpool.Pool) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("postgres: EnsureFunctions: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", ensureFunctionsLockKey); err != nil {
+		return fmt.Errorf("postgres: EnsureFunctions: %w", err)
+	}
 	for _, stmt := range []string{hyruleSafeIntegerSQL, hyruleSafeNumericSQL, hyruleSafeTimestamptzSQL} {
-		if _, err := pool.Exec(ctx, stmt); err != nil {
+		if _, err := tx.Exec(ctx, stmt); err != nil {
 			return fmt.Errorf("postgres: EnsureFunctions: %w", err)
 		}
 	}
-	return nil
+	return tx.Commit(ctx)
 }

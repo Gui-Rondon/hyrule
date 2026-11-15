@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -14,6 +15,33 @@ func TestEnsureFunctionsIdempotent(t *testing.T) {
 	}
 	if err := EnsureFunctions(ctx, pool); err != nil {
 		t.Fatalf("second call (CREATE OR REPLACE) must not fail: %v", err)
+	}
+}
+
+// TestEnsureFunctionsConcurrent calls EnsureFunctions from several
+// goroutines at the same instant, the way several services (or, in this
+// repo, several packages' test suites) starting up at once against the
+// same database would -- CREATE OR REPLACE FUNCTION racing itself this
+// way can hit Postgres' "tuple concurrently updated" (observed for real
+// running this repo's own suite under -race before EnsureFunctions
+// serialized on pg_advisory_xact_lock). Every goroutine must still see
+// a nil error.
+func TestEnsureFunctionsConcurrent(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	const n = 12
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := range n {
+		wg.Go(func() {
+			errs[i] = EnsureFunctions(ctx, pool)
+		})
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("goroutine %d: %v", i, err)
+		}
 	}
 }
 
