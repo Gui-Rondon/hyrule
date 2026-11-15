@@ -296,6 +296,16 @@ run concurrently with other lab gates or writers. See the [migration runbook](..
 for expand/backfill/contract, adoption, explicit dirty-state repair and limits.
 This is a manual local gate; no infrastructure execution in GitHub Actions.
 
+## Manual declared-index plans (A6)
+
+`make postgres-ha-explain-test POSTGRES_HA_PORT=5540` captures the real adapter
+SELECT and produces JSON EXPLAIN plans plus a local Markdown summary. It runs
+only with its separate opt-in against a disposable private schema. Planner
+non-use is reported without failing; infrastructure, coverage of declarations
+and result errors fail. See the [A6 runbook](explain.md) for prepared-plan modes,
+artifacts, current observations, cleanup and limits. Execution is manual/local;
+no GitHub Actions provisioning or execution is added.
+
 ## Persistence, reset and diagnosis
 
 `make postgres-ha-down` preserves Postgres, etcd and S3 volumes together. A
