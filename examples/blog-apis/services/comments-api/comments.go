@@ -5,10 +5,16 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Gui-Rondon/hyrule/app"
+	"github.com/Gui-Rondon/hyrule/behaviors/events"
+	"github.com/Gui-Rondon/hyrule/outbox"
+	"github.com/Gui-Rondon/hyrule/outboxpostgres"
+	"github.com/Gui-Rondon/hyrule/platform/health"
 	"github.com/Gui-Rondon/hyrule/platform/postgres"
+	"github.com/Gui-Rondon/hyrule/platform/pubsub"
 	"github.com/Gui-Rondon/hyrule/rest"
 	"github.com/Gui-Rondon/hyrule/restpostgres"
 )
@@ -75,6 +81,10 @@ func ensureTable(ctx context.Context, pool *pgxpool.Pool, table string) error {
 // e2e run (examples/blog-apis/e2e/run.sh) might be using against the
 // same shared dev Postgres.
 func setupWithTable(table string) func(ctx context.Context, env *app.Env) error {
+	return setupWithTables(table, outboxpostgres.Table)
+}
+
+func setupWithTables(table, outboxTable string) func(context.Context, *app.Env) error {
 	return func(ctx context.Context, env *app.Env) error {
 		if err := ensureTable(ctx, env.Postgres, table); err != nil {
 			return fmt.Errorf("comments-api: %w", err)
@@ -86,13 +96,57 @@ func setupWithTable(table string) func(ctx context.Context, env *app.Env) error 
 		if err != nil {
 			return fmt.Errorf("comments-api: %w", err)
 		}
-		env.API.Register(&rest.Resource{
+		if err := outboxpostgres.EnsureTable(ctx, env.Postgres, outboxTable); err != nil {
+			return err
+		}
+		box := &outboxpostgres.Outbox{Pool: env.Postgres, Table: outboxTable}
+		topic := env.Config.String("pubsub.to_publish", "comments-to-publish")
+		relay := &outboxpostgres.Relay{Outbox: box}
+		check, err := outbox.CheckFromConfig(env.Config, relay)
+		if err != nil {
+			return err
+		}
+		// Validate configuration during setup without retaining a client when
+		// Build is used without background tasks (or in dry run).
+		ps, err := pubsub.Connect(ctx, env.Config)
+		if err != nil {
+			return err
+		}
+		if err := ps.Close(); err != nil {
+			return err
+		}
+		env.AddCheck(check)
+		env.AddCheck(health.Checker{Name: "pubsub_healthcheck", Check: func(ctx context.Context) (bool, string) {
+			if !env.Config.Bool("pubsub.healthcheck", true) {
+				return true, "Healthcheck deactivated"
+			}
+			client, err := pubsub.Connect(ctx, env.Config)
+			if err != nil {
+				return false, err.Error()
+			}
+			defer client.Close()
+			return pubsub.Check(env.Config, client, topic).Check(ctx)
+		}})
+		res := &rest.Resource{
 			Name:            "comments",
 			ItemTitle:       "comment",
 			Schema:          commentsSchema,
 			Adapter:         adapter,
 			ResourceMethods: []string{http.MethodGet, http.MethodPost},
 			ItemMethods:     []string{http.MethodGet, http.MethodPatch, http.MethodDelete},
+		}
+		res.Hooks.Use(events.ConditionalHooks(box, publishCondition(topic)))
+		env.API.Register(res)
+		env.Go("outbox-relay", func(ctx context.Context) error {
+			client, err := pubsub.Connect(ctx, env.Config)
+			if err != nil {
+				return err
+			}
+			defer client.Close()
+			pub := &outbox.PubSub{Client: client}
+			defer pub.Stop()
+			relay.Publisher = pub
+			return relay.Run(ctx)
 		})
 		return nil
 	}
@@ -100,3 +154,11 @@ func setupWithTable(table string) func(ctx context.Context, env *app.Env) error 
 
 // setup is the production Setup, over the real "comments" table.
 var setup = setupWithTable(commentsTable)
+
+// publishCondition shares the declarative transition semantics of posts-api.
+func publishCondition(topic string) outbox.Condition {
+	return outbox.OnFieldChange("status", []string{"published"}, func(doc map[string]any) outbox.Event {
+		id, _ := doc["_id"].(uuid.UUID)
+		return outbox.Event{Topic: topic, Type: "comment.published", Key: id.String(), Body: doc}
+	})
+}

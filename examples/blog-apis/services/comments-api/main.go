@@ -7,7 +7,7 @@
 // tags-api's main.go for the pattern this converges to.
 //
 //	POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
-//	  PORT=8080 go run .
+//	  PUBSUB_EMULATOR_HOST=localhost:8085 CONFIG_FILE=config.json PORT=8080 go run .
 package main
 
 import "github.com/Gui-Rondon/hyrule/app"

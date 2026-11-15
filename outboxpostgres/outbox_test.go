@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Gui-Rondon/hyrule/outbox"
@@ -197,8 +198,22 @@ func TestAddEncodesBody(t *testing.T) {
 }
 
 func TestEnsureTableAndOutboxDefaultToTableConstant(t *testing.T) {
-	pool := testPool(t)
-	t.Cleanup(func() { pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+outboxpostgres.Table) })
+	// The default table name is also used by real services. Isolate the
+	// default-name test in its own schema instead of touching public.outbox.
+	admin := testPool(t)
+	schema := fmt.Sprintf("outbox_default_%d", time.Now().UnixNano())
+	ident := pgx.Identifier{schema}.Sanitize()
+	if _, err := admin.Exec(context.Background(), "CREATE SCHEMA "+ident); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { admin.Exec(context.Background(), "DROP SCHEMA "+ident+" CASCADE") })
+	cfg := admin.Config()
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
 	if err := outboxpostgres.EnsureTable(context.Background(), pool, ""); err != nil {
 		t.Fatal(err)
 	}
