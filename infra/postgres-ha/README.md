@@ -377,3 +377,18 @@ Sources: [Patroni replication policy](https://patroni.readthedocs.io/en/latest/r
 [Postgres recovery targets](https://www.postgresql.org/docs/16/runtime-config-wal.html#RUNTIME-CONFIG-WAL-RECOVERY-TARGET),
 [WAL-G storage](https://wal-g.readthedocs.io/STORAGES/),
 [SeaweedFS mini](https://github.com/seaweedfs/seaweedfs#quick-start).
+
+### Ordenação por UUID
+
+`make postgres-ha-id-sort-test POSTGRES_HA_PORT=5540` executa o gate manual
+local de `_id`, sem provisionar serviços. Em schema isolado, o adapter real
+consulta 20 mil UUIDs determinísticos em tabela com identificador escapado.
+Valida ASC/DESC e páginas com offsets 0, 10 e 19990 nos modos auto, custom e
+generic: 18 planos e conjuntos ordenados conferidos por IDs exatos. As páginas
+iniciais exigem scan da PK na direção correta, sem Sort (12 verificações);
+o offset alto verifica apenas resultados, pois a escolha de plano depende
+do custo. Nenhum scan é desabilitado. SQL, planos, configurações e resultados
+ficam em `.local/postgres-id-sort/`; schema e conexões são removidos ao final.
+O gate requer `POSTGRES_ID_SORT_TEST=1` e `POSTGRES_EXPLAIN_URI` quando invocado
+diretamente, e permanece fora do GitHub Actions. Não cobre ordenação tipada
+JSONB, sparse nem mudanças na política de planos genéricos.

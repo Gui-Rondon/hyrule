@@ -76,6 +76,12 @@ mandava:
 Uma lista (`[]`) ou dict (`{}`) vazio significa sem sort. Qualquer outra
 coisa que não bate com uma das três formas é `400`.
 
+No Postgres, `sort=_id` e `sort=-_id` ordenam pela coluna UUID física.
+O adapter continua retornando `_id` como UUID; a conversão textual usada
+na leitura da linha não determina a ordenação. Isso permite usar a chave
+primária, mas filtros e offsets altos ainda podem favorecer scan e Sort.
+Nenhuma ordenação padrão é adicionada.
+
 ## `projection`
 
 Um objeto JSON, passado direto como a projection do Mongo

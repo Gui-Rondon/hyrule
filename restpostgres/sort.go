@@ -67,6 +67,11 @@ func (a *postgresAdapter) orderByClause(sort []SortTerm, startAt int) (string, [
 		switch column, isMeta := metaColumn(s.Field); {
 		case isMeta:
 			expr = column
+			if s.Field == "_id" {
+				// SELECT id::text exposes an output named id. Qualify the
+				// physical UUID column so ORDER BY can use the primary key.
+				expr = a.table + "." + column
+			}
 		case strings.Contains(s.Field, "."):
 			n++
 			args = append(args, strings.Split(s.Field, "."))
