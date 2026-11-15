@@ -3,6 +3,8 @@ package restpostgres
 import (
 	"fmt"
 	"strings"
+
+	"github.com/Gui-Rondon/hyrule/platform/postgres"
 )
 
 // SortTerm is one ORDER BY term for Find. Field is either a meta field
@@ -55,6 +57,8 @@ func metaColumn(field string) (column string, ok bool) {
 // field's declared Kind. A dotted field ("a.b") addresses a nested
 // path, sorted as text -- the same restriction CompileFilter's
 // compileNestedField has (nested paths never use a declared Kind).
+// SafeDateTimeSort opts top-level datetime into the existing safe helper; the
+// default preserves the direct cast, including errors for invalid data.
 func (a *postgresAdapter) orderByClause(sort []SortTerm, startAt int) (string, []any) {
 	if len(sort) == 0 {
 		return "", nil
@@ -80,6 +84,9 @@ func (a *postgresAdapter) orderByClause(sort []SortTerm, startAt int) (string, [
 			n++
 			args = append(args, s.Field)
 			expr = fmt.Sprintf("(doc->>$%d)::%s", n, a.schema.FieldKind(s.Field).SQLCast())
+			if a.safeDateTimeSort && a.schema.FieldKind(s.Field) == postgres.KindDateTime {
+				expr = fmt.Sprintf("hyrule_safe_timestamptz(doc->>$%d)", n)
+			}
 		}
 		dir := "ASC"
 		if s.Desc {

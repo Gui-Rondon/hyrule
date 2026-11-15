@@ -19,6 +19,12 @@ type Options struct {
 	// them -- mirrors rest.Resource.SoftDelete. A resource without it
 	// never has a _deleted field in its Doc, same as Mongo's.
 	SoftDelete bool
+	// SafeDateTimeSort opts top-level datetime document sorts into the same
+	// hyrule_safe_timestamptz helper used by filters and legacy datetime indexes.
+	// Values the helper rejects sort as SQL NULL; stored values are unchanged.
+	// The default keeps the direct cast and its errors. Requires EnsureFunctions.
+	// Nested paths and meta columns keep their existing ordering.
+	SafeDateTimeSort bool
 	// Retry configures how a PATCH under If-Match: * retries an
 	// optimistic-concurrency conflict -- rest.Service's patchOnce loop
 	// reads it back through RetryPolicy, so it's validated once, here
@@ -43,8 +49,9 @@ type postgresAdapter struct {
 	// table is store.Table, sanitized once here -- store.Table never
 	// changes for the adapter's lifetime, so every CRUD method reuses
 	// this instead of re-sanitizing the same identifier on every call.
-	table      string
-	softDelete bool
+	table            string
+	softDelete       bool
+	safeDateTimeSort bool
 }
 
 var _ rest.Adapter = (*postgresAdapter)(nil)
@@ -79,11 +86,12 @@ func NewAdapter(store postgres.Store, tx postgres.Transactor, opts Options) (*po
 		return nil, fmt.Errorf("restpostgres: %w", err)
 	}
 	return &postgresAdapter{
-		store:      store,
-		tx:         tx,
-		schema:     schemaSpec,
-		retry:      opts.Retry,
-		table:      pgx.Identifier{store.Table}.Sanitize(),
-		softDelete: opts.SoftDelete,
+		store:            store,
+		tx:               tx,
+		schema:           schemaSpec,
+		retry:            opts.Retry,
+		table:            pgx.Identifier{store.Table}.Sanitize(),
+		softDelete:       opts.SoftDelete,
+		safeDateTimeSort: opts.SafeDateTimeSort,
 	}, nil
 }
