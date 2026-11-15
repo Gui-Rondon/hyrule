@@ -8,18 +8,26 @@
 
 Um framework Go para montar microsserviços rápido, e testar os fluxos
 deles com a mesma facilidade: descreva um recurso (schema, métodos,
-lookups) num arquivo YAML — sem Go nenhum — e ganhe uma API REST
-rodando, com CRUD completo, validação, ETags, paginação e um outbox
-transacional, sobre Mongo (o caminho via YAML continua só-Mongo por
-enquanto). Um recurso com lógica própria continua sendo um binário Go
-pequeno, sobre Mongo ou Postgres (`restpostgres`, ver a referência do
-Adapter abaixo). Dos dois jeitos, o `testkit` dá a cada teste um banco
-isolado e um cliente HTTP, e o dry run deixa um serviço inteiro rodar
-contra tráfego real com toda escrita revertida — então você testa os
-fluxos de verdade de um serviço sem levantar a stack real nem simular
-na mão. Por baixo mantém o
-contrato HTTP do Eve (Python) (`rest`), de onde o projeto
-migrou.
+lookups) — num arquivo YAML, sem Go nenhum, ou em Go quando precisa de
+lógica própria — e ganhe uma API REST rodando com:
+
+- **CRUD completo, validação e paginação** a partir de um schema, sem
+  handler escrito à mão.
+- **ETags/`If-Match` nativos** — concorrência otimista, não algo que
+  você monta por conta própria.
+- **Mongo ou Postgres, mesmo contrato HTTP** — o caminho via YAML
+  continua só-Mongo por enquanto; um recurso escrito à mão escolhe
+  qualquer um dos dois backends via `rest.Adapter` (`restpostgres` pro
+  Postgres, ver a referência do Adapter abaixo) pra CRUD, validação,
+  ETags e queries.
+- **Outbox transacional** (uma escrita e o evento que ela causa
+  comitam juntos, na mesma transação, ou nenhum dos dois), **`testkit`**
+  (banco isolado + cliente HTTP por teste) e **dry run** (um serviço
+  inteiro contra tráfego real, toda escrita revertida) — só-Mongo por
+  enquanto, igual o caminho via YAML acima.
+
+Por baixo mantém o contrato HTTP do Eve (Python) (`rest`), de onde o
+projeto migrou.
 
 📖 **Documentação completa: https://gui-rondon.github.io/hyrule/** — a
 seção Reference já está em português

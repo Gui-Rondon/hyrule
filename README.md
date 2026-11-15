@@ -7,18 +7,26 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A Go framework for scaffolding microservices fast, and testing their
-flows just as fast: describe a resource (schema, methods, lookups) in a
-YAML file — no Go at all — and get a running REST API with full CRUD,
-validation, ETags, pagination and a transactional outbox, on Mongo (the
-YAML path stays Mongo-only for now). A resource with its own logic
-stays a small Go binary, on Mongo or Postgres (`restpostgres`, see the
-Adapter reference below). Either way, `testkit` gives each test an
-isolated database and an HTTP client, and dry run lets a whole
-service run against real traffic with every write rolled back — so
-you can exercise a service's actual flows without standing up the
-real stack or faking your way through it. Under the hood it keeps the
-HTTP contract of Eve (Python) (`rest`), which is where the project
-migrated from.
+flows just as fast: describe a resource (schema, methods, lookups) —
+in a YAML file, no Go at all, or in Go when it needs its own logic —
+and get a running REST API with:
+
+- **Full CRUD, validation and pagination** from a schema, no
+  hand-written handler.
+- **ETags/`If-Match` built in** — optimistic concurrency, not
+  something you wire up yourself.
+- **Mongo or Postgres, same HTTP contract** — the YAML path stays
+  Mongo-only for now; a hand-written resource picks either backend
+  through `rest.Adapter` (`restpostgres` for Postgres, see the Adapter
+  reference below) for CRUD, validation, ETags and querying.
+- **A transactional outbox** (a write and the event it causes commit
+  together, in the same transaction, or neither does), **`testkit`**
+  (isolated database + HTTP client per test) and **dry run** (a whole
+  service against real traffic, every write rolled back) — Mongo-only
+  for now, same as the YAML path above.
+
+Under the hood it keeps the HTTP contract of Eve (Python) (`rest`),
+which is where the project migrated from.
 
 📖 **Full documentation: https://gui-rondon.github.io/hyrule/** — a
 guided [Learn](https://gui-rondon.github.io/hyrule/docs/learn/intro)

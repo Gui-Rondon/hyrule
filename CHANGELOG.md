@@ -86,6 +86,7 @@ the minor version instead.
   exact on Postgres (`jsonb`), rounded through `float64` on Mongo (BSON
   has no arbitrary-precision integer type) — rather than being an
   unexamined edge case.
+- A "Platform" section under [Learn](website/docs/learn/intro.md):
   `website/docs/platform/{intro,creating-a-project,creating-services,
   local-development,ci-and-deploy}.md`. Covers exactly `hyrule
   new`/`hyrule service create` and the Fase 4 `ci/affected`/`deploy.sh`

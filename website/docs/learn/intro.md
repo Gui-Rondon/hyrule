@@ -7,19 +7,31 @@ sidebar_position: 1
 hyrule is a Go framework for scaffolding microservices fast, and
 testing their flows just as fast. You describe a **resource** — its
 fields, its validation rules, which HTTP methods it answers to — and
-hyrule gives you a working API: CRUD, request validation, ETags for
-optimistic concurrency, pagination, and a transactional outbox for
-emitting events exactly once per write. This guided path (and the
-transactional outbox) stays MongoDB today — a resource with its own
-Go code can run on Postgres instead, see the
-[Adapter](/docs/reference/adapter) reference page.
+get a working REST API for it. What that buys you, specifically:
 
-Speed doesn't stop at scaffolding: `testkit` gives every test an
-isolated database and an HTTP client with no service to stand up, and
-dry run lets a whole service run against real traffic with every write
-rolled back — so a resource's actual flows, including the ones that
-span several writes and an outbox event, get tested as themselves, not
-as a mock of themselves.
+- **Full CRUD, validation and pagination** from a schema, with no
+  hand-written handler.
+- **Optimistic concurrency built in** — ETags and `If-Match`, not
+  something you wire up yourself.
+- **Mongo or Postgres, same HTTP contract** — a resource with its own
+  Go code picks either backend through `rest.Adapter` for CRUD,
+  validation, ETags and querying; see the
+  [Adapter](/docs/reference/adapter) reference page.
+- **A transactional outbox**: a write and the event it causes commit
+  together, in the same transaction, or neither does. No separate job
+  that can drift from what actually got written.
+- **Dry run**: a whole service runs against real traffic with every
+  write rolled back — so you exercise actual flows, including ones
+  that span several writes and an outbox event, without faking any of
+  it.
+- **`testkit`**: an isolated database and an HTTP client per test, no
+  service to stand up, no mocks of your own storage.
+
+The YAML path below, the transactional outbox, `testkit`'s isolated
+database, and dry run all stay Mongo-only for now — a Postgres-backed
+resource is hand-written Go, tested against a real Postgres directly
+(`examples/blog-apis/services/comments-api`'s own tests are the
+working example).
 
 You can describe that resource two ways. In Go:
 
