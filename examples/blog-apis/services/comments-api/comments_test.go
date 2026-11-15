@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Gui-Rondon/hyrule/app"
+	"github.com/Gui-Rondon/hyrule/platform/config"
 	"github.com/Gui-Rondon/hyrule/testkit"
 )
 
@@ -28,6 +30,9 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
+// newTestClient builds the service the same way app.Main does
+// (app.Build, app.BackendPostgres), against a throwaway table instead
+// of the real commentsTable -- see setupWithTable's own doc comment.
 func newTestClient(t *testing.T) *testkit.Client {
 	t.Helper()
 	pool := testPool(t)
@@ -37,19 +42,30 @@ func newTestClient(t *testing.T) *testkit.Client {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+table) })
-	api, err := setup(ctx, pool, table)
+
+	spec := app.Spec{
+		Name:            "comments-api",
+		Backend:         app.BackendPostgres,
+		DefaultDB:       "comments",
+		Version:         "test",
+		Setup:           setupWithTable(table),
+		PostgresIndexes: commentsIndexes(table),
+	}
+	handler, err := app.Build(ctx, spec, app.Deps{
+		Config: config.Config{}, Postgres: pool, Auth: testkit.DisabledAuth(t),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return testkit.NewClient(t, api)
+	return testkit.NewClient(t, handler)
 }
 
-// TestCRUDAndFilter drives the real HTTP surface setup() builds end
-// to end: create, read, list filtered by post_id (Fase 6's
-// commentsIndexes is the index that query makes use of), update under
-// If-Match, stale If-Match rejected, delete, then confirm it's gone --
-// the same shape examples/blog-apis/services/tags-api/tags_test.go
-// exercises for the Mongo path, now against a real Postgres table.
+// TestCRUDAndFilter drives the real HTTP surface app.Main builds end to
+// end: create, read, list filtered by post_id (Fase 6's commentsIndexes
+// is the index that query makes use of), update under If-Match, stale
+// If-Match rejected, delete, then confirm it's gone -- the same shape
+// examples/blog-apis/services/tags-api/tags_test.go exercises for the
+// Mongo path, now against a real Postgres table.
 func TestCRUDAndFilter(t *testing.T) {
 	c := newTestClient(t)
 
@@ -113,5 +129,22 @@ func TestCRUDAndFilter(t *testing.T) {
 	gone := c.Do("GET", "/comments/"+id, nil)
 	if gone.Status != http.StatusNotFound {
 		t.Fatalf("GET after DELETE = %d %v, want 404", gone.Status, gone.Map())
+	}
+}
+
+// TestStatusAndHealthcheck proves comments-api now gets /status and
+// /healthcheck for free from app.Main (finishBuild) -- comments-api
+// never had either before B3, and the e2e harness's readiness probe
+// moves onto /status because of this.
+func TestStatusAndHealthcheck(t *testing.T) {
+	c := newTestClient(t)
+
+	status := c.Do("GET", "/status", nil)
+	if status.Status != http.StatusOK || status.String("version") != "test" {
+		t.Fatalf("GET /status = %d %v", status.Status, status.Map())
+	}
+	hc := c.Do("GET", "/healthcheck", nil)
+	if hc.Status != http.StatusOK {
+		t.Fatalf("GET /healthcheck = %d %s", hc.Status, hc.Raw)
 	}
 }

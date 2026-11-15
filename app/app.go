@@ -142,6 +142,9 @@ type Env struct {
 // restpostgres.NewAdapter, since platform/postgres.Store does not
 // implement rest.Store (see store.go's own doc comment).
 func (e *Env) Store(collection string) rest.Store {
+	if e.DB == nil {
+		panic("app: Env.Store is BackendMongo only -- this Setup's Spec.Backend is BackendPostgres")
+	}
 	return mongodb.NewStore(e.DB.Collection(collection))
 }
 

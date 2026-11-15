@@ -5,11 +5,12 @@
 # posts-api/comments-api, talking to the same Mongo/Redis/Pub-Sub/Postgres
 # `make env-up` starts for the framework's own tests, plus Elasticsearch
 # (best effort) -- no mocks anywhere in this path. comments-api is the
-# Postgres path (restpostgres, not app.Main -- it has no Mongo config
-# file or /status, see examples/blog-apis/services/comments-api/main.go):
-# the other four stay Mongo-only, unchanged. Complements loadtest/
-# (read-only perf): this plan asserts correctness, and its loop count
-# doubles as a light load knob.
+# Postgres path (app.Main with app.BackendPostgres, same bootstrap and
+# CONFIG_FILE/auth/status/healthcheck convention as the other four,
+# since B3 of the "postgres em produção" plan -- the only difference is
+# which database it talks to). Complements loadtest/ (read-only perf):
+# this plan asserts correctness, and its loop count doubles as a light
+# load knob.
 #
 #   examples/blog-apis/e2e/run.sh [loops]
 #   examples/blog-apis/e2e/run.sh down
@@ -107,24 +108,19 @@ docker run -d --name e2e-posts-api --network "$net" \
 	-v "$here/.keys/legacy.pub:/keys/legacy.pub:ro" \
 	"hyrule-e2e/posts-api:dev" >/dev/null
 
-# No CONFIG_FILE/MONGO_*: comments-api bypasses app.Main entirely
-# (platform/postgres+restpostgres directly, see its main.go) -- its own
-# table/indexes (EnsureFunctions/EnsureIndexes) are created at startup
-# against the postgres alias joined to $net above.
 docker run -d --name e2e-comments-api --network "$net" \
 	-e PORT=8080 -e POSTGRES_CONNECTION_STRING="postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable" \
+	-e CONFIG_FILE=/cfg/comments-api.json \
+	-v "$here/config/comments-api.json:/cfg/comments-api.json:ro" \
 	"hyrule-e2e/comments-api:dev" >/dev/null
 
 echo "==> waiting for the 5 services to answer"
 docker run --rm --network "$net" curlimages/curl:8.10.1 sh -c '
 	for i in $(seq 1 30); do
 		ok=1
-		for svc in e2e-tags-api e2e-authors-api e2e-categories-api e2e-posts-api; do
+		for svc in e2e-tags-api e2e-authors-api e2e-categories-api e2e-posts-api e2e-comments-api; do
 			curl -sf "http://$svc:8080/status" >/dev/null || ok=0
 		done
-		# comments-api has no app.Main /status -- its home route (Eve
-		# _links document) is the equivalent readiness signal.
-		curl -sf "http://e2e-comments-api:8080/" >/dev/null || ok=0
 		[ "$ok" = 1 ] && exit 0
 		sleep 1
 	done

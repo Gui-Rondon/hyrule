@@ -194,6 +194,31 @@ func TestBuildPostgresRequiresPool(t *testing.T) {
 	}
 }
 
+// TestEnvStorePanicsWithClearMessageForBackendPostgres: Env.Store is
+// BackendMongo only (its own doc comment says so) -- calling it from a
+// BackendPostgres Setup (e.g. a Mongo service's Setup adapted in a
+// hurry) must fail loud with a message naming the mistake, not a bare
+// nil-pointer dereference on e.DB.
+func TestEnvStorePanicsWithClearMessageForBackendPostgres(t *testing.T) {
+	pool := postgresTestPool(t)
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("env.Store must panic for BackendPostgres")
+		}
+		if msg, ok := r.(string); !ok || !strings.Contains(msg, "BackendMongo only") {
+			t.Errorf("panic = %v, want a message naming BackendMongo only", r)
+		}
+	}()
+	app.Build(context.Background(), app.Spec{
+		Name: "items-api", Backend: app.BackendPostgres, Version: "1.2.3",
+		Setup: func(_ context.Context, env *app.Env) error {
+			env.Store("whatever")
+			return nil
+		},
+	}, app.Deps{Config: config.Config{}, Postgres: pool, Auth: testkit.DisabledAuth(t)})
+}
+
 // TestBuildPostgresDryRunDoesNotPersist is B2's real proof: a write in
 // dry run still answers as if it succeeded (X-Dry-Run header, 201), but
 // the row is never actually committed -- postgres.Transactor{Rollback:
