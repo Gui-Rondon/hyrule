@@ -89,29 +89,29 @@ api.Register(res)
 Before the first request, the table needs to exist (`id uuid primary
 key default gen_random_uuid()`, `doc jsonb not null default '{}'`,
 `created_at`/`updated_at timestamptz`, `version bigint`, `deleted
-boolean`), `platform/postgres.EnsureFunctions` needs to have run at
-least once against that database (the `hyrule_safe_*` SQL functions
-`KindDateTime` filters/sorts/indexes depend on), and any declarative
-index (`platform/postgres.EnsureIndexes`/`IndexSpec`) needs to be
-ensured explicitly — none of this happens inside `NewAdapter` itself,
-on purpose, the same precedent `EnsureFunctions`' own doc comment
-names. [`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis/services/comments-api)
-is a complete, real example doing exactly this at startup — the first
-(and, today, only) resource in the repo served end to end over HTTP
-by a real binary through this path, instead of only through
+boolean`) — none of this happens inside `NewAdapter` itself, on
+purpose. `platform/postgres.EnsureFunctions` (the `hyrule_safe_*` SQL
+functions `KindDateTime` filters/sorts/indexes depend on) and any
+declarative index (`platform/postgres.EnsureIndexes`/`IndexSpec`) are
+the one exception: a service built with `app.Main`/`app.Spec.Backend:
+app.BackendPostgres` gets both called for it automatically at boot
+(the same moment `mongo.indexes`/`Spec.Indexes` are for a Mongo-backed
+service) — only the table DDL stays the service's own job.
+[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis/services/comments-api)
+is a complete, real example doing exactly this — the first (and,
+today, only) resource in the repo served end to end over HTTP by a
+real binary through this path, instead of only through
 `restpostgres`'s own tests.
 
-There is no `app.Main` support for a Postgres resource yet
-(`app.Env`/`app.Spec` are Mongo-only bootstrap) — `comments-api`
-wires `platform/server`, `platform/postgres` and `restpostgres`
-directly in its own `main()` instead. Wiring Postgres into the shared
-service bootstrap is separate, not-yet-started work, not an oversight
-in `Adapter` itself.
+`app.Main` gained a Postgres side (`app.Spec.Backend`,
+`app.Env.Postgres`/`PostgresTx`) in the "postgres em produção" plan's
+Streams A/B — `comments-api` uses it (`main.go`): `platform/server`
+wiring, config loading, `/status`/`/healthcheck`, and dry run
+(`postgres.Transactor.Rollback`) all now work for a Postgres-backed
+service exactly as they do for a Mongo one.
 
 ## What's still Mongo-only
 
-- `app.Env`/`app.Main`'s whole bootstrap (config, auth, health,
-  `/status`), as above.
 - `rest.Resource.Datasource.Filter`/`DefaultSort`/`Projection` are
   `bson.M`/`bson.D`-typed — a Postgres resource is assumed, today, to
   never set them (`restpostgres/query.go`'s own doc comment names

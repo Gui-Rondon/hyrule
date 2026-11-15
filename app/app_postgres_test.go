@@ -165,6 +165,22 @@ func TestBuildPostgresEnsuresDeclaredIndexes(t *testing.T) {
 	}
 }
 
+// TestBuildPostgresNoDryRun mirrors the Mongo-side NoDryRun check
+// (app/dryrun_test.go's TestBuildDryRun) for BackendPostgres: a service
+// with effects that cannot be rolled back refuses to start in dry run.
+func TestBuildPostgresNoDryRun(t *testing.T) {
+	pool := postgresTestPool(t)
+	table := postgresTestTable(t, pool)
+	spec := itemsPostgresSpec(table)
+	spec.NoDryRun = "it only runs background jobs"
+	_, err := app.Build(context.Background(), spec, app.Deps{
+		Config: config.Config{}, Postgres: pool, Auth: testkit.DisabledAuth(t), DryRun: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "it only runs background jobs") {
+		t.Errorf("NoDryRun: %v", err)
+	}
+}
+
 // TestBuildPostgresRequiresPool: Deps.Postgres is not optional for
 // BackendPostgres (unlike BackendMongo's Deps.DB, there is no "connect
 // one from Deps.Config" fallback inside Build).
@@ -178,17 +194,90 @@ func TestBuildPostgresRequiresPool(t *testing.T) {
 	}
 }
 
-// TestBuildPostgresRejectsDryRun: dry run is not implemented yet for
-// BackendPostgres (Stream B2) -- Build must refuse it outright, not
-// silently run with the writes uncontrolled.
-func TestBuildPostgresRejectsDryRun(t *testing.T) {
+// TestEnvStorePanicsWithClearMessageForBackendPostgres: Env.Store is
+// BackendMongo only (its own doc comment says so) -- calling it from a
+// BackendPostgres Setup (e.g. a Mongo service's Setup adapted in a
+// hurry) must fail loud with a message naming the mistake, not a bare
+// nil-pointer dereference on e.DB.
+func TestEnvStorePanicsWithClearMessageForBackendPostgres(t *testing.T) {
+	pool := postgresTestPool(t)
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("env.Store must panic for BackendPostgres")
+		}
+		if msg, ok := r.(string); !ok || !strings.Contains(msg, "BackendMongo only") {
+			t.Errorf("panic = %v, want a message naming BackendMongo only", r)
+		}
+	}()
+	app.Build(context.Background(), app.Spec{
+		Name: "items-api", Backend: app.BackendPostgres, Version: "1.2.3",
+		Setup: func(_ context.Context, env *app.Env) error {
+			env.Store("whatever")
+			return nil
+		},
+	}, app.Deps{Config: config.Config{}, Postgres: pool, Auth: testkit.DisabledAuth(t)})
+}
+
+// TestBuildPostgresDryRunDoesNotPersist is B2's real proof: a write in
+// dry run still answers as if it succeeded (X-Dry-Run header, 201), but
+// the row is never actually committed -- postgres.Transactor{Rollback:
+// true}, not a WriteGuard-equivalent, since every production write
+// already goes through Store.Querier(ctx) (the ambient transaction
+// Rollback discards).
+func TestBuildPostgresDryRunDoesNotPersist(t *testing.T) {
 	pool := postgresTestPool(t)
 	table := postgresTestTable(t, pool)
-	_, err := app.Build(context.Background(), itemsPostgresSpec(table), app.Deps{
+	handler, err := app.Build(context.Background(), itemsPostgresSpec(table), app.Deps{
 		Config: config.Config{}, Postgres: pool, Auth: testkit.DisabledAuth(t), DryRun: true,
 	})
-	if err == nil {
-		t.Error("Build must refuse dry run for the Postgres backend")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/items", strings.NewReader(`{"name":"a"}`))
+	req.Header.Set("Content-Type", "application/json")
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /items = %d: %s", rec.Code, rec.Body)
+	}
+	if rec.Header().Get("X-Dry-Run") != "true" {
+		t.Errorf("X-Dry-Run header = %q, want true", rec.Header().Get("X-Dry-Run"))
+	}
+
+	var n int
+	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM "+table).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("rows in %s after a dry run write = %d, want 0 (nothing must persist)", table, n)
+	}
+}
+
+// TestBuildPostgresDryRunDoesNotCreateDeclaredIndexes mirrors
+// TestBuildPostgresEnsuresDeclaredIndexes but in dry run: creating an
+// index is a write too, so indexesMode is downgraded from
+// IndexesCreate to IndexesCheck the same way the Mongo side already
+// does.
+func TestBuildPostgresDryRunDoesNotCreateDeclaredIndexes(t *testing.T) {
+	pool := postgresTestPool(t)
+	table := postgresTestTable(t, pool)
+	spec := itemsPostgresSpec(table)
+	if _, err := app.Build(context.Background(), spec, app.Deps{
+		Config: config.Config{}, Postgres: pool, Auth: testkit.DisabledAuth(t), DryRun: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var exists bool
+	err := pool.QueryRow(context.Background(),
+		`SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND tablename = $1 AND indexname = $2)`,
+		table, table+"_name_idx").Scan(&exists)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exists {
+		t.Error("dry run must not create the declared index")
 	}
 }
 
@@ -265,22 +354,5 @@ func TestRunServesUntilCanceledPostgres(t *testing.T) {
 	}
 	if !stopped.Load() {
 		t.Error("Run returned before the background task stopped")
-	}
-}
-
-// TestRunRejectsDryRunForPostgres proves Run (not just Build) refuses
-// dry run for BackendPostgres before ever opening a pool.
-func TestRunRejectsDryRunForPostgres(t *testing.T) {
-	t.Setenv("DRY_RUN", "true")
-	t.Setenv("POSTGRES_CONNECTION_STRING", "postgres://127.0.0.1:1/x")
-	cfgFile := filepath.Join(t.TempDir(), "cfg.json")
-	os.WriteFile(cfgFile, []byte(`{}`), 0o600)
-	t.Setenv("CONFIG_FILE", cfgFile)
-	err := app.Run(context.Background(), app.Spec{
-		Name: "items-api", Backend: app.BackendPostgres, Version: "1.2.3",
-		Setup: func(context.Context, *app.Env) error { return nil },
-	})
-	if err == nil || !strings.Contains(err.Error(), "dry run") {
-		t.Errorf("err = %v", err)
 	}
 }

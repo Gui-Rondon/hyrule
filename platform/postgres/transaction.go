@@ -42,6 +42,15 @@ type Transactor struct {
 	// RollbackTimeout bounds the cleanup Rollback; zero means
 	// defaultRollbackTimeout.
 	RollbackTimeout time.Duration
+	// Rollback runs fn exactly as usual but never commits -- the
+	// deferred cleanup rollback in WithTransaction below always runs on
+	// any path that didn't commit, so skipping Commit is enough to
+	// reuse it. app.Build sets this from Spec.Backend's dry run
+	// (app.Deps.DryRun) -- the Postgres counterpart of
+	// mongodb.Transactor{Rollback: true}, simpler here because there is
+	// no driver-level sess.WithTransaction to steer with a sentinel
+	// error.
+	Rollback bool
 }
 
 func (t Transactor) rollbackTimeout() time.Duration {
@@ -52,7 +61,10 @@ func (t Transactor) rollbackTimeout() time.Duration {
 }
 
 // WithTransaction begins a transaction, runs fn with a context carrying
-// it, and commits on success. On any error from fn (or from Commit), the
+// it, and commits on success -- unless Rollback is set, in which case a
+// successful fn is rolled back instead (dry run: fn's writes still ran
+// against a real transaction, exercising every constraint/trigger, but
+// nothing is persisted). On any error from fn (or from Commit), the
 // transaction is rolled back with a timeout independent of ctx's own
 // cancellation, so a caller that already canceled ctx still gets a clean
 // rollback instead of an abandoned connection.
@@ -76,6 +88,9 @@ func (t Transactor) WithTransaction(ctx context.Context, fn func(context.Context
 	}()
 	if err := fn(context.WithValue(ctx, txKey{}, txEntry{pool: t.Pool, tx: tx})); err != nil {
 		return err
+	}
+	if t.Rollback {
+		return nil
 	}
 	return tx.Commit(ctx)
 }
