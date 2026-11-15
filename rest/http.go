@@ -17,6 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/Gui-Rondon/hyrule/platform/auth"
+	"github.com/Gui-Rondon/hyrule/platform/httppath"
 	"github.com/Gui-Rondon/hyrule/platform/metrics"
 )
 
@@ -364,7 +365,7 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 // resource_link does.
 func (s *Service) WriteList(w http.ResponseWriter, r *http.Request, lookup bson.M) {
 	writeCache(w, s.res.CacheControl, s.res.CacheExpires)
-	s.writeList(w, r, lookup, strings.Trim(r.URL.Path, "/"))
+	s.writeList(w, r, lookup, httppath.TrimOuterSlashes(r.URL.Path))
 }
 
 // WriteListFallback answers a custom list route with lookup when its page
@@ -373,7 +374,7 @@ func (s *Service) WriteList(w http.ResponseWriter, r *http.Request, lookup bson.
 // then the slow $regex).
 func (s *Service) WriteListFallback(w http.ResponseWriter, r *http.Request, lookup, fallback bson.M) {
 	writeCache(w, s.res.CacheControl, s.res.CacheExpires)
-	s.writeList(w, r, lookup, strings.Trim(r.URL.Path, "/"), fallback)
+	s.writeList(w, r, lookup, httppath.TrimOuterSlashes(r.URL.Path), fallback)
 }
 
 // writeList lists with each lookup, combined with the client where, until
@@ -499,7 +500,7 @@ func (s *Service) unpaginatedLinks(q *ListQuery, count int, base string) map[str
 func (h *handler) getItem(w http.ResponseWriter, r *http.Request, lookup any) {
 	base := h.res().URL
 	if al := h.res().AdditionalLookup; al != nil && al.PathLinks && !objectIDRe.MatchString(r.PathValue("lookup")) {
-		base = strings.Trim(r.URL.Path, "/")
+		base = httppath.TrimOuterSlashes(r.URL.Path)
 	}
 	h.svc.writeFound(w, r, lookup, base)
 }
@@ -512,7 +513,7 @@ func (s *Service) WriteFound(w http.ResponseWriter, r *http.Request, lookup bson
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		writeCache(w, s.res.CacheControl, s.res.CacheExpires)
 	}
-	s.writeFound(w, r, lookup, strings.Trim(r.URL.Path, "/"))
+	s.writeFound(w, r, lookup, httppath.TrimOuterSlashes(r.URL.Path))
 }
 
 func (s *Service) writeFound(w http.ResponseWriter, r *http.Request, lookup any, base string) {
