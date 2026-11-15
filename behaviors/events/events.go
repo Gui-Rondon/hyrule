@@ -33,8 +33,15 @@ func With(ctx context.Context, events ...outbox.Event) context.Context {
 	return context.WithValue(ctx, key{}, append(append([]outbox.Event(nil), pending...), events...))
 }
 
+// Adder stores events inside the write transaction of ctx -- *outbox.Outbox
+// (Mongo) and outboxpostgres.Outbox (Postgres) both implement it, so Hooks/
+// ConditionalHooks work the same with either.
+type Adder interface {
+	Add(ctx context.Context, events ...outbox.Event) error
+}
+
 // Hooks store the events of the context in box during every pre-write hook.
-func Hooks(box *outbox.Outbox) rest.Hooks {
+func Hooks(box Adder) rest.Hooks {
 	add := func(ctx context.Context) error {
 		pending, _ := ctx.Value(key{}).([]outbox.Event)
 		return box.Add(ctx, pending...)
@@ -61,7 +68,7 @@ func Hooks(box *outbox.Outbox) rest.Hooks {
 // insert. On update, where the hook only carries the changed fields, doc is
 // original shallow-merged with updates — enough for a Condition that reads
 // simple top-level fields such as status.
-func ConditionalHooks(box *outbox.Outbox, cond outbox.Condition) rest.Hooks {
+func ConditionalHooks(box Adder, cond outbox.Condition) rest.Hooks {
 	onWrite := func(ctx context.Context, doc, original rest.Doc) error {
 		events, ok := cond(ctx, doc, original)
 		if !ok {

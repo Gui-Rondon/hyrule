@@ -18,6 +18,13 @@ type Stats struct {
 	Oldest   time.Duration
 }
 
+// StatsProvider reports the state of an outbox's pending events --
+// *Relay (Mongo) and outboxpostgres.Relay (Postgres) both implement
+// it, so Check/CheckFromConfig work the same with either.
+type StatsProvider interface {
+	Stats(ctx context.Context) (Stats, error)
+}
+
 // Stats counts the pending events (index pending) and the age of the oldest.
 func (r *Relay) Stats(ctx context.Context) (Stats, error) {
 	var s Stats
@@ -38,7 +45,7 @@ func (r *Relay) Stats(ctx context.Context) (Stats, error) {
 // Check is the outbox_check of /healthcheck: it fails when the oldest
 // pending event is older than maxDelay, i.e. the relay is stuck or the
 // destination keeps failing.
-func Check(r *Relay, maxDelay time.Duration) health.Checker {
+func Check(r StatsProvider, maxDelay time.Duration) health.Checker {
 	return health.Checker{
 		Name: "outbox_check",
 		Check: func(ctx context.Context) (bool, string) {
@@ -63,7 +70,7 @@ func Check(r *Relay, maxDelay time.Duration) health.Checker {
 const defaultMaxDelay = 5 * time.Minute
 
 // CheckFromConfig is Check with outbox.max_delay (a Go duration, default 5m).
-func CheckFromConfig(cfg config.Config, r *Relay) (health.Checker, error) {
+func CheckFromConfig(cfg config.Config, r StatsProvider) (health.Checker, error) {
 	d, err := time.ParseDuration(cfg.String("outbox.max_delay", defaultMaxDelay.String()))
 	if err != nil {
 		return health.Checker{}, fmt.Errorf("outbox.max_delay: %w", err)

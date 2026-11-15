@@ -48,6 +48,18 @@ func (s Store) Querier(ctx context.Context) Querier {
 	return s.Pool
 }
 
+// InTransaction reports whether ctx carries a transaction opened by a
+// Transactor on pool (via WithTransaction) -- the same check Querier
+// makes above, exported for code outside this package that needs to
+// tell a request-scoped write transaction apart from an autocommit
+// call on the same pool without going through a Store (e.g.
+// outboxpostgres.Outbox.Add, mirroring outbox.Outbox's own
+// mongoInTransaction check).
+func InTransaction(ctx context.Context, pool *pgxpool.Pool) bool {
+	e, ok := ctx.Value(txKey{}).(txEntry)
+	return ok && e.pool == pool
+}
+
 // Store wraps a *pgxpool.Pool and one table. Unlike mongodb.Store, this
 // does not implement rest.Store, on purpose -- see
 // website/docs/reference/adapter.md for what a Postgres-backed
