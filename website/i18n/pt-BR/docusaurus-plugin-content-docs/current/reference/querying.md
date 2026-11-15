@@ -134,8 +134,13 @@ validação e bindings, mantendo campos e valores parametrizados.
 
 Esse caminho permite que filtros seletivos virem `Index Cond` em planos
 customizados e, nos cenários medidos, em `auto`. Planos genéricos com nome de
-campo parametrizado ainda podem não aproveitar o índice de expressão. Isso
-não altera índices sparse, ordenação ou configurações globais do planner.
+campo parametrizado ainda podem não aproveitar o índice de expressão. Para
+índices sparse, peça presença explícita, por exemplo:
+`{"slug":{"$eq":"slug-15001","$exists":true}}`. Em `CompileWhere`, `$exists`
+positivo no nível superior expõe `doc ? $N`, permitindo provar o predicado
+parcial em planos customizados. Igualdade sozinha não expõe esse predicado.
+O campo continua parametrizado. Nenhuma guarda é acrescentada implicitamente
+às comparações; as declarações de índices e configurações do planner são iguais.
 
 Isso é uma coisa diferente, de nível mais alto, que o
 `platform/postgres.Filter` abaixo, que continua só igualdade de

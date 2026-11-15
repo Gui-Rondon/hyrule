@@ -29,7 +29,7 @@ func TestDeclaredIndexExplain(t *testing.T) {
 	runDeclaredIndexExplain(t, false)
 }
 
-func runDeclaredIndexExplain(t *testing.T, strict bool) {
+func runDeclaredIndexExplain(t *testing.T, strict bool) *pgexplain.Report {
 	uri := os.Getenv("POSTGRES_EXPLAIN_URI")
 	if uri == "" {
 		t.Fatal("POSTGRES_EXPLAIN_URI required")
@@ -160,6 +160,10 @@ func runDeclaredIndexExplain(t *testing.T, strict bool) {
 		{Name: "datetime-common", Index: fixtures[2], Schema: fixtureSchema, Filter: postgres.Query{"published_at": postgres.Query{"$gte": "2020-01-01T00:00:00Z"}}, WantRows: 20000},
 	}
 	cases = append(cases, pgexplain.Case{Name: "comments-selective-after-hot", Index: declared[0], Schema: commentsSchema, Filter: postgres.Query{"post_id": "post-15001"}, WantRows: 1, Check: checkField("post_id", "post-15001"), WarmupFilter: postgres.Query{"post_id": "hot-post"}, WantWarmupRows: 10000})
+	sparseExplicit := cases[2]
+	sparseExplicit.Name = "unique-sparse-explicit-presence"
+	sparseExplicit.Filter = postgres.Query{"slug": postgres.Query{"$eq": "slug-15001", "$exists": true}}
+	cases = append(cases, sparseExplicit)
 	if err := pgexplain.Inventory(all, cases); err != nil {
 		t.Fatal(err)
 	}
@@ -213,5 +217,5 @@ func runDeclaredIndexExplain(t *testing.T, strict bool) {
 	}
 	report.NegativeControls = append(report.NegativeControls, "invalid_index_rejected")
 	t.Logf("catalog guard controls: %v", report.NegativeControls)
-
+	return report
 }

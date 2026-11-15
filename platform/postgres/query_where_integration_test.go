@@ -65,7 +65,7 @@ func TestCompileWhereScalarAndNestedNegation(t *testing.T) {
 		namesMatching(t, pool, table, Query{"$not": Query{"$not": q}}, schema)
 	}
 	// Cross product mixes nullable comparisons with already-normalized operators.
-	terms := []Query{{"x": "yes"}, {"x": Query{"$ne": "yes"}}, {"x": Query{"$exists": true}}, {"when": Query{"$gt": "2020-01-01T12:00:00Z"}}}
+	terms := []Query{{"x": Query{"$eq": nil}}, {"x": Query{"$gt": "no"}}, {"x": Query{"$eq": "yes", "$exists": true}}, {"x": "yes"}, {"x": Query{"$ne": "yes"}}, {"x": Query{"$exists": true}}, {"when": Query{"$gt": "2020-01-01T12:00:00Z"}}}
 	for _, a := range terms {
 		for _, b := range terms {
 			for _, op := range []string{"$and", "$or"} {
