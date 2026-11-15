@@ -27,11 +27,13 @@ get a working REST API for it. What that buys you, specifically:
 - **`testkit`**: an isolated database and an HTTP client per test, no
   service to stand up, no mocks of your own storage.
 
-The YAML path below, the transactional outbox, `testkit`'s isolated
-database, and dry run all stay Mongo-only for now — a Postgres-backed
-resource is hand-written Go, tested against a real Postgres directly
+The YAML path below, the transactional outbox, and `testkit`'s isolated
+database all stay Mongo-only for now — a Postgres-backed resource is
+hand-written Go, tested against a real Postgres directly
 (`examples/blog-apis/services/comments-api`'s own tests are the
-working example).
+working example). Dry run, through `app.Spec.Backend`, now covers
+both: `postgres.Transactor{Rollback: true}` rolls back a Postgres
+service's writes the same way a Mongo one's are.
 
 You can describe that resource two ways. In Go:
 

@@ -51,9 +51,10 @@ const (
 	// Spec.Backend means this.
 	BackendMongo Backend = ""
 	// BackendPostgres wires Env.Postgres/platform/postgres.Connect
-	// instead. Dry run is not implemented yet for this backend (Stream
-	// B2 of the "postgres em produção" plan) -- Run and Build both
-	// refuse it outright rather than running it incorrectly.
+	// instead. Dry run is implemented via postgres.Transactor.Rollback
+	// -- no WriteGuard-equivalent exists (or is needed): every
+	// production write already goes through Store.Querier(ctx), which
+	// only ever runs inside the ambient transaction Rollback discards.
 	BackendPostgres Backend = "postgres"
 )
 
@@ -125,8 +126,7 @@ type Env struct {
 	Info       health.Info
 	// DryRun: the writes are rolled back, the post-write hooks and the
 	// background tasks do not run. A service whose routes have other
-	// effects refuses them with RefuseInDryRun. Always false for
-	// BackendPostgres today -- Run/Build refuse dry run outright for it.
+	// effects refuses them with RefuseInDryRun.
 	DryRun bool
 
 	checkers []health.Checker
@@ -237,15 +237,12 @@ func Run(ctx context.Context, spec Spec) error {
 	}
 
 	if spec.Backend == BackendPostgres {
-		if dryRun {
-			return fmt.Errorf("%s: dry run is not implemented yet for the Postgres backend", spec.Name)
-		}
 		pool, err := postgres.Connect(startCtx, cfg, spec.DefaultDB)
 		if err != nil {
 			return err
 		}
 		defer pool.Close()
-		handler, err := Build(startCtx, spec, Deps{Config: cfg, Postgres: pool, Start: start})
+		handler, err := Build(startCtx, spec, Deps{Config: cfg, Postgres: pool, Start: start, DryRun: dryRun, DryRunTimeout: dryRunTimeout})
 		if err != nil {
 			return err
 		}
@@ -289,9 +286,6 @@ func Build(ctx context.Context, spec Spec, deps Deps) (http.Handler, error) {
 		dryRunTimeout = defaultDryRunTimeout
 	}
 	if spec.Backend == BackendPostgres {
-		if deps.DryRun {
-			return nil, fmt.Errorf("%s: dry run is not implemented yet for the Postgres backend", spec.Name)
-		}
 		return buildPostgres(ctx, spec, deps, authn, dryRunTimeout)
 	}
 	return buildMongo(ctx, spec, deps, authn, dryRunTimeout)
@@ -363,14 +357,17 @@ func buildMongo(ctx context.Context, spec Spec, deps Deps, authn *auth.Authentic
 	return finishBuild(spec, env, dryRun), nil
 }
 
-// buildPostgres is Build's BackendPostgres path. Dry run is refused by
-// Build before this is ever called -- env.DryRun is always false here.
+// buildPostgres is Build's BackendPostgres path.
 func buildPostgres(ctx context.Context, spec Spec, deps Deps, authn *auth.Authenticator, dryRunTimeout time.Duration) (http.Handler, error) {
 	if deps.Postgres == nil {
 		return nil, errors.New("app: Deps.Postgres must not be nil for the Postgres backend")
 	}
 	if err := postgres.EnsureFunctions(ctx, deps.Postgres); err != nil {
 		return nil, err
+	}
+	dryRun := deps.DryRun
+	if dryRun && spec.NoDryRun != "" {
+		return nil, fmt.Errorf("%s does not run in dry run: %s", spec.Name, spec.NoDryRun)
 	}
 	queryTimeout, err := time.ParseDuration(deps.Config.String("postgres.query_timeout", defaultQueryTimeout.String()))
 	if err != nil {
@@ -380,9 +377,14 @@ func buildPostgres(ctx context.Context, spec Spec, deps Deps, authn *auth.Authen
 	if err != nil {
 		return nil, err
 	}
+	if dryRun && indexesMode == postgres.IndexesCreate {
+		// building an index is a write too
+		indexesMode = postgres.IndexesCheck
+	}
 
-	tx := postgres.Transactor{Pool: deps.Postgres}
+	tx := postgres.Transactor{Pool: deps.Postgres, Rollback: dryRun}
 	info := health.LoadInfo(spec.Version)
+	info.DryRun = dryRun
 	env := &Env{
 		Config:     deps.Config,
 		Postgres:   deps.Postgres,
@@ -390,10 +392,11 @@ func buildPostgres(ctx context.Context, spec Spec, deps Deps, authn *auth.Authen
 		API: rest.New(rest.Options{
 			Auth: authn, Transactor: tx, Messages: spec.Messages, HTMLForbidden: spec.HTMLForbidden,
 			CacheControl: spec.CacheControl, CacheExpires: spec.CacheExpires,
-			QueryTimeout: queryTimeout, DryRunTimeout: dryRunTimeout,
+			QueryTimeout: queryTimeout, DryRun: dryRun, DryRunTimeout: dryRunTimeout,
 		}),
-		Info:  info,
-		start: deps.Start,
+		Info:   info,
+		DryRun: dryRun,
+		start:  deps.Start,
 	}
 	env.checkers = append(env.checkers, health.Postgres(deps.Postgres))
 	if err := spec.Setup(ctx, env); err != nil {
@@ -404,8 +407,8 @@ func buildPostgres(ctx context.Context, spec Spec, deps Deps, authn *auth.Authen
 	}
 
 	slog.Info("service ready", "app", spec.Name, "version", spec.Version, "branch", env.Info.Branch,
-		"auth", authn.Enabled(), "backend", "postgres")
-	return finishBuild(spec, env, false), nil
+		"auth", authn.Enabled(), "backend", "postgres", "dry_run", dryRun)
+	return finishBuild(spec, env, dryRun), nil
 }
 
 // finishBuild registers /status and /healthcheck, applies Env.Wrap and

@@ -32,6 +32,43 @@ func TestWithTransactionCommits(t *testing.T) {
 	}
 }
 
+// TestWithTransactionRollbackField proves Transactor{Rollback: true}
+// (app's dry run for the Postgres backend, B2) never commits even when
+// fn succeeds -- the write still runs against a real transaction
+// (exercising constraints/triggers), but nothing persists, the same
+// outward effect app.Env.DryRun promises for every backend.
+func TestWithTransactionRollbackField(t *testing.T) {
+	pool := testPool(t)
+	table := "tx_dryrun_test"
+	setupTable(t, pool, table, `CREATE TABLE `+table+` (name TEXT NOT NULL)`)
+	store := NewStore(pool, table)
+	tx := Transactor{Pool: pool, Rollback: true}
+
+	err := tx.WithTransaction(context.Background(), func(ctx context.Context) error {
+		if err := store.InsertMany(ctx, []map[string]any{{"name": "a"}}); err != nil {
+			return err
+		}
+		n, err := store.CountDocuments(ctx, nil)
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			t.Fatalf("count inside the transaction = %d, want 1 (the write still runs, just never commits)", n)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := store.CountDocuments(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("count after a successful fn with Rollback=true = %d, want 0 (nothing must persist)", n)
+	}
+}
+
 func TestWithTransactionRollsBackOnError(t *testing.T) {
 	pool := testPool(t)
 	table := "tx_rollback_test"
