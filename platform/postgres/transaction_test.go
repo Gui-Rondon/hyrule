@@ -69,6 +69,32 @@ func TestWithTransactionRollbackField(t *testing.T) {
 	}
 }
 
+// TestInTransaction proves the exported check used outside this
+// package (outboxpostgres.Outbox.Add) matches Store.Querier's own
+// private one: false with no ambient transaction, true inside one on
+// the same pool, false inside one on a different pool.
+func TestInTransaction(t *testing.T) {
+	pool1 := testPool(t)
+	pool2 := testPool(t)
+	ctx := context.Background()
+	if InTransaction(ctx, pool1) {
+		t.Error("no transaction: InTransaction = true")
+	}
+	tx1 := Transactor{Pool: pool1}
+	err := tx1.WithTransaction(ctx, func(txCtx context.Context) error {
+		if !InTransaction(txCtx, pool1) {
+			t.Error("inside WithTransaction on pool1: InTransaction(pool1) = false")
+		}
+		if InTransaction(txCtx, pool2) {
+			t.Error("inside WithTransaction on pool1: InTransaction(pool2) = true")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWithTransactionRollsBackOnError(t *testing.T) {
 	pool := testPool(t)
 	table := "tx_rollback_test"
