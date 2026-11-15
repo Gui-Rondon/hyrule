@@ -110,6 +110,55 @@ wiring, config loading, `/status`/`/healthcheck`, and dry run
 (`postgres.Transactor.Rollback`) all now work for a Postgres-backed
 service exactly as they do for a Mongo one.
 
+## Prepared plans and an explicit pool policy
+
+The current pgx default caches prepared statements. The adapter binds document
+field names as well as values; a generic plan cannot necessarily match those
+field parameters to a literal expression index. `auto` can therefore retain
+an inefficient plan even after an index is declared. In the local 20,000-row
+control, five sorts on an unindexed integer field led the next sort on an
+indexed integer field (the same SQL shape) to use a generic Seq Scan + Sort.
+A custom plan used the typed index without Sort, with identical results.
+This observation does not predict every workload's `auto` choice.
+
+An operator can opt a pool into custom plans through the **existing** connection
+URI, without changing compiler SQL or adding an adapter option:
+
+```text
+postgres://user:password@host:5432/database?sslmode=require&plan_cache_mode=force_custom_plan
+```
+
+Set this on the connection string that actually wins configuration precedence:
+`POSTGRES_CONNECTION_STRING`, then `postgres.uri`, then individual connection
+settings. Append `&plan_cache_mode=force_custom_plan` when a query string already
+exists, or start with `?plan_cache_mode=force_custom_plan`. `postgres.Connect`
+passes it to every physical connection as a startup parameter; there is no new
+`postgres.plan_cache_mode` configuration key. If the URI omits it, existing
+server/role configuration applies (normally `auto`).
+
+This is a **pool-wide opt-in**, including transactions and other users of that
+pool, such as writes and outbox queries. Parameterized statements incur planning
+work on each execution; an index is still a planner choice, and missing indexes
+or unaligned JSONB filters are not repaired by this setting. Parameterless UUID
+queries can still use generic plans and their primary key. Measure planning
+cost, execution, buffers and application latency against the real workload
+before adoption. To roll back, remove the URI option and recreate the pool.
+No application default, query transport, binding or production index changes.
+
+`make postgres-ha-plan-policy-test POSTGRES_HA_PORT=5540` is a manual local gate:
+five real adapter warmups, a sixth real call on the same connection, and
+`EXPLAIN EXECUTE` of **that actual pgx-cached statement**. Twelve plans compare
+`auto`, `force_custom_plan` and `force_generic_plan` for equality, datetime,
+typed sort and UUID controls. Counter deltas identify the explained plan;
+results must match across policies. Two simultaneous `postgres.Connect`
+connections also verify URI propagation. Auto choices remain observational;
+custom selective/index-order checks are asserted. Artifacts are saved under
+`.local/postgres-plan-policy/` after isolated-schema cleanup. The gate provisions
+no infrastructure and is not enabled in GitHub Actions.
+
+See PostgreSQL's [prepared plan rules](https://www.postgresql.org/docs/16/sql-prepare.html)
+and [plan_cache_mode](https://www.postgresql.org/docs/16/runtime-config-query.html#GUC-PLAN-CACHE-MODE).
+
 ## What's still Mongo-only
 
 - `rest.Resource.Datasource.Filter`/`DefaultSort`/`Projection` are

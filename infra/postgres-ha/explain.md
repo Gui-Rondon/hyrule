@@ -215,3 +215,36 @@ Adoption requires a new explicit name and a data audit. Existing same-name
 indexes are not compared or migrated. Datetime, unique/sparse typed indexes,
 nested paths, planner policy and production comments-api indexes are outside
 this change. Existing WHERE, UUID and sparse gates remain separate regressions.
+
+## Actual cached adapter plan policy gate
+
+```sh
+make postgres-ha-plan-policy-test POSTGRES_HA_PORT=5540
+```
+
+Manual/local only, enabled by `POSTGRES_PLAN_POLICY_TEST=1` with
+`POSTGRES_EXPLAIN_URI`. No infrastructure is provisioned. Twelve plans cover
+four workloads in auto/custom/generic: equality after frequent-value warmups,
+datetime after wide-range warmups, indexed typed sort after unindexed-field
+warmups, and UUID ordering. Each fresh pool has one connection and the normal
+pgx statement cache; five warmups and the sixth SELECT all execute through the
+real adapter. EXPLAIN EXECUTE targets that cached statement's catalog name,
+not a synthetic second PREPARE. Counter totals/deltas verify the executions
+and explained plan. Result IDs match across policies and the subsequent actual
+EXECUTE; ordering is checked only where requested, with unique fixture keys.
+
+Custom plans must have the selective Index Cond or the expected index scan
+without Sort. Generic is an explicit control; auto choices are observed. The
+parameterless UUID query remains generic even under force_custom_plan, with
+PK ordering checked in every mode. Scans are never disabled. A separate check
+opens two simultaneous connections through postgres.Connect and verifies the
+existing URI startup parameter on both. Settings belong only to test pools.
+Reports in `.local/postgres-plan-policy/` become complete after schema cleanup.
+
+The local control reproduced auto choosing a generic Seq Scan + Sort after
+five unindexed-field sorts, even when the sixth call sorted an indexed field.
+`plan_cache_mode=force_custom_plan` in the existing winning connection URI is
+an operator opt-in mitigation, with planning cost on each parameterized execution
+and scope across the entire pool. Defaults, SQL, bindings and transports are
+unchanged. Remove the URI option and recreate the pool to revert. This gate
+provides evidence, not a general policy recommendation or throughput guarantee.

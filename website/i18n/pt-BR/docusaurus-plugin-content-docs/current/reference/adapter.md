@@ -105,17 +105,64 @@ inicialização — a primeira (e, até hoje, única) resource do repo
 servida de ponta a ponta sobre HTTP por esse caminho, em vez de só
 nos próprios testes de `restpostgres`.
 
-Não existe suporte de `app.Main` pra uma resource Postgres ainda
-(`app.Env`/`app.Spec` são bootstrap Mongo-only) — `comments-api`
-conecta `platform/server`, `platform/postgres` e `restpostgres`
-diretamente no próprio `main()`. Conectar Postgres no bootstrap
-compartilhado dos serviços é trabalho separado, ainda não começado,
-não uma lacuna do `Adapter` em si.
+`app.Main` ganhou suporte a Postgres (`app.Spec.Backend`,
+`app.Env.Postgres`/`PostgresTx`) nas Streams A/B do plano de produção.
+`comments-api` usa esse bootstrap em `main.go`: configuração, wiring de
+`platform/server`, `/status`/`/healthcheck` e dry run
+(`postgres.Transactor.Rollback`) funcionam para serviços Postgres.
+
+## Planos preparados e política explícita por pool
+
+O padrão atual do pgx mantém statements preparados em cache. O adapter usa
+bindings tanto para campos do documento quanto para valores; um plano genérico
+nem sempre consegue associar os parâmetros de campo a um índice de expressão
+literal. Assim, `auto` pode manter um plano ineficiente mesmo com índice
+declarado. No controle local com 20 mil linhas, cinco sorts por um campo inteiro
+sem índice fizeram o próximo sort por um campo inteiro indexado (mesma forma
+SQL) usar Seq Scan + Sort genérico. O plano customizado usou o índice tipado
+sem Sort e preservou os resultados. Isso não prevê a escolha de `auto` em todo
+workload.
+
+O operador pode optar por planos customizados através da URI **já existente**,
+sem alterar SQL do compilador nem adicionar opção ao adapter:
+
+```text
+postgres://user:password@host:5432/database?sslmode=require&plan_cache_mode=force_custom_plan
+```
+
+Configure a connection string que vence a precedência:
+`POSTGRES_CONNECTION_STRING`, depois `postgres.uri`, depois campos individuais
+de conexão. Acrescente `&plan_cache_mode=force_custom_plan` quando já houver
+query string, ou comece com `?plan_cache_mode=force_custom_plan`.
+`postgres.Connect` encaminha o parâmetro no startup de cada conexão física;
+não existe nova chave `postgres.plan_cache_mode`. Sem a opção na URI, vale a
+configuração existente do servidor/role (normalmente `auto`).
+
+A opção abrange **todo o pool**, incluindo transações e outros consumidores,
+como escritas e consultas do outbox. Statements parametrizados têm custo de
+planejamento a cada execução; o índice continua sendo escolha do planner, e
+a opção não resolve índices ausentes nem filtros JSONB desalinhados. Consultas
+UUID sem parâmetros ainda podem usar planos genéricos e a chave primária.
+Meça planejamento, execução, buffers e latência da aplicação no workload real
+antes da adoção. Para reverter, remova a opção da URI e recrie o pool.
+O padrão da aplicação, transporte, bindings e índices de produção não mudam.
+
+`make postgres-ha-plan-policy-test POSTGRES_HA_PORT=5540` é um gate manual/local:
+cinco warmups pelo adapter real, sexta chamada real na mesma conexão e
+`EXPLAIN EXECUTE` **do próprio statement em cache do pgx**. Doze planos comparam
+`auto`, `force_custom_plan` e `force_generic_plan` para igualdade, datetime,
+sort tipado e UUID. Deltas dos contadores identificam o plano explicado;
+resultados devem coincidir entre políticas. Duas conexões simultâneas abertas
+por `postgres.Connect` também verificam propagação da URI. As escolhas auto
+continuam observacionais; índice seletivo/ordenação são exigidos em custom.
+Artefatos ficam em `.local/postgres-plan-policy/` após cleanup do schema isolado.
+O gate não provisiona infraestrutura nem é habilitado no GitHub Actions.
+
+Ver [regras de planos preparados](https://www.postgresql.org/docs/16/sql-prepare.html)
+e [plan_cache_mode](https://www.postgresql.org/docs/16/runtime-config-query.html#GUC-PLAN-CACHE-MODE).
 
 ## O que ainda é Mongo-only
 
-- O bootstrap completo de `app.Env`/`app.Main` (config, auth, health,
-  `/status`), como acima.
 - `rest.Resource.Datasource.Filter`/`DefaultSort`/`Projection` são
   tipados `bson.M`/`bson.D` — uma resource Postgres é assumida, hoje,
   como nunca os definindo (o próprio comentário de
