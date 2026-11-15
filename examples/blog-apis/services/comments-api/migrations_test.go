@@ -25,6 +25,10 @@ import (
 )
 
 func migrationPool(t *testing.T, uri string) *pgxpool.Pool {
+	return gatePool(t, uri, "a5_", nil)
+}
+
+func gatePool(t *testing.T, uri, prefix string, tracer pgx.QueryTracer) *pgxpool.Pool {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -33,7 +37,7 @@ func migrationPool(t *testing.T, uri string) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(admin.Close)
-	schema := "a5_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	schema := prefix + strings.ReplaceAll(uuid.NewString(), "-", "")
 	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); err != nil {
 		t.Fatal(err)
 	}
@@ -46,6 +50,7 @@ func migrationPool(t *testing.T, uri string) *pgxpool.Pool {
 	})
 	cfg := admin.Config()
 	cfg.MaxConns = 6
+	cfg.ConnConfig.Tracer = tracer
 	cfg.ConnConfig.RuntimeParams["search_path"] = schema
 	cfg.ConnConfig.RuntimeParams["application_name"] = schema
 	cfg.ConnConfig.RuntimeParams["statement_timeout"] = "5s"
