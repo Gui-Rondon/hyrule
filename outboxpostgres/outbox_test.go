@@ -196,6 +196,21 @@ func TestAddEncodesBody(t *testing.T) {
 	}
 }
 
+func TestEnsureTableAndOutboxDefaultToTableConstant(t *testing.T) {
+	pool := testPool(t)
+	t.Cleanup(func() { pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+outboxpostgres.Table) })
+	if err := outboxpostgres.EnsureTable(context.Background(), pool, ""); err != nil {
+		t.Fatal(err)
+	}
+	box := &outboxpostgres.Outbox{Pool: pool, AllowNoTransaction: true}
+	if err := box.Add(context.Background(), outbox.Event{Topic: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	if n := countAll(t, pool, outboxpostgres.Table); n != 1 {
+		t.Errorf("rows in the default table = %d, want 1", n)
+	}
+}
+
 func TestAddNoAttributesIsSQLNull(t *testing.T) {
 	pool := testPool(t)
 	table := testTable(t, pool)
