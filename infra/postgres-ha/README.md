@@ -392,3 +392,10 @@ ficam em `.local/postgres-id-sort/`; schema e conexões são removidos ao final.
 O gate requer `POSTGRES_ID_SORT_TEST=1` e `POSTGRES_EXPLAIN_URI` quando invocado
 diretamente, e permanece fora do GitHub Actions. Não cobre ordenação tipada
 JSONB, sparse nem mudanças na política de planos genéricos.
+
+### Predicados sparse
+
+`make postgres-ha-sparse-test POSTGRES_HA_PORT=5540` valida o lookup seletivo
+no índice parcial com `$exists: true` explícito e Index Cond em auto/custom. Reutiliza os 30 planos A6 e
+mantém o caso de chave ausente e generic como controles. Gate exclusivamente
+manual/local; detalhes e limites em [explain.md](explain.md#sparse-predicate-regression-gate).

@@ -133,8 +133,12 @@ keeping field names and values parameterized.
 
 This lets selective predicates become `Index Cond` in custom plans and, in the
 measured cases, `auto`. Generic plans with parameterized field names may still
-not use expression indexes. It changes neither sparse indexes, sorting nor
-global planner settings.
+not use expression indexes. For sparse indexes, explicitly request key presence,
+e.g. `{"slug":{"$eq":"slug-15001","$exists":true}}`. In `CompileWhere`,
+positive top-level `$exists` exposes `doc ? $N`, allowing custom plans to prove
+the partial-index predicate. Equality alone does not expose that predicate.
+The field remains a binding. No guards are added implicitly to comparisons;
+index declarations and planner settings are unchanged.
 
 That's a different, higher-level thing than `platform/postgres.Filter`
 below, which stays deliberately equality-only (`column: value`, ANDed

@@ -26,11 +26,11 @@ the other post IDs are selective. Fixtures have unique slugs on 75% of rows,
 each run, so fingerprints compare modes within a run. ANALYZE runs after
 loading and creating indexes. No production or public table is sampled.
 
-Nine cases cover selective/common comments lookups, present/missing sparse
+Ten cases cover selective/common comments lookups, present/missing sparse
 keys, compound ordering/pagination, selective/common datetimes, a selective
 lookup after five hot-post warmups, and a primary-key
-lookup control. That control can use an unrelated index; it must not be
-reported as use of the expected declared index. Plan choices remain observations.
+lookup control, plus a sparse equality with explicit key presence. The
+primary-key control can use an unrelated index; it must not be reported as use of the expected declared index. Plan choices remain observations.
 The sparse absent-key case deliberately does not imply its partial predicate.
 
 ## Query and plan fidelity
@@ -88,7 +88,7 @@ Artifacts are written under `.local/postgres-explain/<UTC-time>-<UUID>/`:
 - `plan-*.json`: complete PostgreSQL EXPLAIN JSON for each observation.
 - `summary.md`: human-readable plan/index/scan/row/buffer/timing table.
 
-Successful runs currently produce 27 plans (9 cases x 3 modes). Errors preserve
+Successful runs currently produce 30 plans (10 cases x 3 modes). Errors preserve
 a partial report with `complete=false`; file-write errors fail the gate. The
 completion flag is atomically published only after database cleanup and all
 artifact writes, so a failed summary write cannot leave a success marker. Only
@@ -149,3 +149,33 @@ The historical baseline above describes the pre-correction behavior.
 References: [EXPLAIN](https://www.postgresql.org/docs/16/sql-explain.html),
 [prepared plans](https://www.postgresql.org/docs/16/sql-prepare.html),
 [planner settings](https://www.postgresql.org/docs/16/runtime-config-query.html).
+
+## Sparse predicate regression gate
+
+```sh
+make postgres-ha-sparse-test POSTGRES_HA_PORT=5540
+```
+
+This manual/local gate reuses all ten A6 scenarios (30 real plans) and requires
+the unique sparse lookup with explicit `$exists: true` to use the expected
+partial index with `Index Cond` in auto and custom modes. The report records two regression checks. The
+missing-key control still returns all 5,000 missing rows; generic remains
+observational because its field-name parameter prevents partial-predicate
+implication. The report and cleanup retain the A6 behavior above. Direct Go
+invocation requires `POSTGRES_SPARSE_TEST=1` and `POSTGRES_EXPLAIN_URI`; no
+provisioning or execution is added to GitHub Actions.
+
+`CompileWhere` exposes an explicit top-level `$exists: true` as `doc ? $N`,
+without the scalar compiler's `IS TRUE` wrapper. For example:
+
+```json
+{"slug": {"$eq": "slug-15001", "$exists": true}}
+```
+
+The presence predicate allows a custom plan to prove the partial-index
+predicate. Field names remain parameters. Equality alone still does not imply
+the predicate to the planner and remains a separate observational control.
+Missing/null/negation semantics and bindings are checked against CompileFilter
+using real database tests. CompileFilter retains its normalized scalar boolean.
+No implicit guards are added to comparisons. Index definitions, uniqueness,
+sorting and generic-plan policy are unchanged.

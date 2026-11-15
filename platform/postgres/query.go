@@ -461,6 +461,11 @@ func (c *compiler) compileOp(field string, kind Kind, op string, val any) (strin
 		}
 		ptr := c.param(field)
 		if b {
+			// Expose an explicit presence predicate to partial-index
+			// implication. doc is non-null; the field remains a binding.
+			if c.whereOnly {
+				return fmt.Sprintf("(doc ? %s::text)", ptr), nil
+			}
 			return fmt.Sprintf("(doc ? %s::text) IS TRUE", ptr), nil
 		}
 		return fmt.Sprintf("(NOT (doc ? %s::text)) IS TRUE", ptr), nil
