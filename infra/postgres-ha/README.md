@@ -306,6 +306,14 @@ and result errors fail. See the [A6 runbook](explain.md) for prepared-plan modes
 artifacts, current observations, cleanup and limits. Execution is manual/local;
 no GitHub Actions provisioning or execution is added.
 
+## Focused WHERE predicate regressions
+
+`make postgres-ha-where-test POSTGRES_HA_PORT=5540` adds strict selective-index
+and datetime-evaluation assertions to the real A6 matrix, with its own manual
+opt-in. It also exercises hot-post warmups before a selective lookup. See the
+[WHERE regression section](explain.md#focused-where-regression-gate). No new
+infrastructure provisioning or GitHub Actions execution is added.
+
 ## Persistence, reset and diagnosis
 
 `make postgres-ha-down` preserves Postgres, etcd and S3 volumes together. A

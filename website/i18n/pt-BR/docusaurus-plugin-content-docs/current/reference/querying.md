@@ -112,12 +112,24 @@ recurso com `SoftDelete` — convenção do próprio Eve.
 
 Um `where=` contra uma `rest.Resource` com Postgres carrega os
 operadores sim — o `ParseWhere` de `restpostgres` decodifica ele num
-`postgres.Query`, e `platform/postgres.CompileFilter` compila o mesmo
+`postgres.Query`, e `platform/postgres.CompileWhere` compila o mesmo
 conjunto de operadores `$eq/$ne/$gt/$gte/$lt/$lte/$in/$nin/$exists/
 $has/$hasSome/$hasEvery/$not/$and/$or` contra a coluna `jsonb` do
 documento da resource, pra qualquer campo que o `Schema` da resource
 declare um `Kind`. Ver [`adapter.md`](adapter.md) pra como uma
 resource com Postgres é registrada.
+
+`CompileWhere` é específico para cláusulas SQL `WHERE`: comparações positivas
+podem produzir SQL NULL, tratado como não correspondência. A DSL `$not` usa
+`IS NOT TRUE` para preservar ausência/JSON null e negações aninhadas. Não
+concatene `NOT` ao SQL retornado; use a DSL. `CompileFilter` continua disponível
+com seu booleano normalizado e comportamento anterior. Os dois compartilham
+validação e bindings, mantendo campos e valores parametrizados.
+
+Esse caminho permite que filtros seletivos virem `Index Cond` em planos
+customizados e, nos cenários medidos, em `auto`. Planos genéricos com nome de
+campo parametrizado ainda podem não aproveitar o índice de expressão. Isso
+não altera índices sparse, ordenação ou configurações globais do planner.
 
 Isso é uma coisa diferente, de nível mais alto, que o
 `platform/postgres.Filter` abaixo, que continua só igualdade de

@@ -35,7 +35,7 @@ type equalsFilter struct {
 }
 
 // compileFilter renders filter as a boolean SQL expression, starting
-// placeholders at startAt (as postgres.CompileFilter's own startAt
+// placeholders at startAt (as postgres.CompileWhere's own startAt
 // does). filter is whatever this adapter's own methods produced:
 // nil/postgres.Query/map[string]any (matches every row, or a direct
 // jsonb condition -- CombineFilter also accepts these, so a caller
@@ -62,11 +62,11 @@ func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any,
 	case nil:
 		return "TRUE", nil, nil
 	case postgres.Query:
-		return postgres.CompileFilter(f, a.schema, startAt)
+		return postgres.CompileWhere(f, a.schema, startAt)
 	case map[string]any:
-		return postgres.CompileFilter(postgres.Query(f), a.schema, startAt)
+		return postgres.CompileWhere(postgres.Query(f), a.schema, startAt)
 	case equalsFilter:
-		where, args, err := postgres.CompileFilter(f.query, a.schema, startAt)
+		where, args, err := postgres.CompileWhere(f.query, a.schema, startAt)
 		if err != nil {
 			return "", nil, err
 		}
@@ -81,14 +81,14 @@ func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any,
 		var err error
 		if f.id != nil {
 			where, args = idEquals(*f.id, startAt)
-		} else if where, args, err = postgres.CompileFilter(f.query, a.schema, startAt); err != nil {
+		} else if where, args, err = postgres.CompileWhere(f.query, a.schema, startAt); err != nil {
 			return "", nil, err
 		}
 		if !f.excludeDeleted {
 			return where, args, nil
 		}
 		// "deleted" is a physical column, never part of the jsonb doc --
-		// CompileFilter has no way to express this, so it's ANDed in
+		// CompileWhere has no way to express this, so it's ANDed in
 		// here as raw SQL instead, no bind parameter needed (a literal
 		// boolean, never client input).
 		return fmt.Sprintf("(%s) AND deleted = false", where), args, nil

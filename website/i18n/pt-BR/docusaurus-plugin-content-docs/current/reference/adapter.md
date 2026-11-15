@@ -63,7 +63,7 @@ implementam ela por completo, cada um com sua própria asserção
 | `MergePatch` | merge profundo do Eve (`MERGE_NESTED_DOCUMENTS`) — um `null` literal é guardado, nunca remove uma chave | RFC 7396 JSON Merge Patch — `null` remove a chave; `rest.Resource.RequireMergePatchContentType` exige `application/merge-patch+json` quando ligado |
 | `ValidatesMergedDocument()` | `false` — só o corpo do PATCH do cliente é validado | `true` — o documento mesclado é checado pelas chaves `Required` que o RFC 7396 pode ter removido (seção 20's Fase 4c) |
 | Soft delete | um campo `_deleted` dentro do documento | uma coluna física `deleted`, nunca dentro de `doc` |
-| Números num `where=` declarado | `json.Number` no caminho do filtro, convertido ad hoc | o `CompileFilter` de `platform/postgres` precisa do `Kind` (`KindInteger`/`KindNumber`/`KindDateTime`) de cada campo — ver [`querying.md`](querying.md) |
+| Números num `where=` declarado | `json.Number` no caminho do filtro, convertido ad hoc | o `CompileWhere` de `platform/postgres` precisa do `Kind` (`KindInteger`/`KindNumber`/`KindDateTime`) de cada campo — ver [`querying.md`](querying.md) |
 | Classificação de erro | `mongo.ErrNoDocuments`/`IsDuplicateKeyError`/códigos de erro do servidor | códigos SQLSTATE do Postgres (`23505` violação de unicidade, `57014`/`40P01`/`40001` transitórios) |
 
 ## Construindo uma resource sobre Postgres

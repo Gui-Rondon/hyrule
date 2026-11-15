@@ -111,12 +111,24 @@ a `SoftDelete` resource — Eve's own convention.
 
 A `where=` against a Postgres-backed `rest.Resource` does carry
 operators over — `restpostgres`'s `ParseWhere` decodes it into a
-`postgres.Query`, and `platform/postgres.CompileFilter` compiles the
+`postgres.Query`, and `platform/postgres.CompileWhere` compiles the
 same operator set `$eq/$ne/$gt/$gte/$lt/$lte/$in/$nin/$exists/
 $has/$hasSome/$hasEvery/$not/$and/$or` carries against the resource's
 `jsonb` document column, for any field the resource's `Schema`
 declares a `Kind` for. See [`adapter.md`](adapter.md) for how a
 Postgres-backed resource is registered.
+
+`CompileWhere` is specifically for SQL `WHERE` clauses: positive comparisons
+may yield SQL NULL, which WHERE rejects. DSL `$not` uses `IS NOT TRUE` to
+preserve missing/JSON-null and nested-negation behavior. Do not concatenate
+`NOT` around its output; use the DSL. `CompileFilter` remains available with
+its original normalized scalar boolean. Both share validation and bindings,
+keeping field names and values parameterized.
+
+This lets selective predicates become `Index Cond` in custom plans and, in the
+measured cases, `auto`. Generic plans with parameterized field names may still
+not use expression indexes. It changes neither sparse indexes, sorting nor
+global planner settings.
 
 That's a different, higher-level thing than `platform/postgres.Filter`
 below, which stays deliberately equality-only (`column: value`, ANDed
