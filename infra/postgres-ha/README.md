@@ -1,4 +1,4 @@
-# Local Postgres HA lab (A1)
+# Local Postgres HA lab (A1/A2)
 
 This opt-in lab exercises real PostgreSQL streaming replication and WAL-G S3
 archiving. It is run **manually, locally**. It has no GitHub Actions workflow and
@@ -85,8 +85,8 @@ Patroni uses three etcd members and the following dynamic configuration:
 
 HAProxy checks Patroni's `/primary` endpoint, routes new TCP connections to the
 leader and closes sessions when a backend is marked down. It does not retry
-transactions or preserve in-flight sessions. A2 will measure reconnection and
-new writes after actually killing a node; A1 does not claim that guarantee.
+transactions or preserve in-flight sessions. The separate A2 failover test
+measures reconnection and new writes after actually killing a node; the A1 smoke alone does not claim that guarantee.
 
 Bootstrap DCS settings are applied only on initial cluster creation. Editing
 `bootstrap.dcs` in YAML does not update an existing cluster. Inspect with
@@ -133,6 +133,77 @@ HTTP and `os/exec` with argument arrays for the Docker Compose CLI. Bounded
 contexts and polling establish readiness; fixed sleeps are not acceptance
 criteria. `POSTGRES_CONNECTION_STRING` is cleared only inside the test so an
 application's environment cannot redirect it away from the lab.
+
+## Destructive failover test (A2)
+
+Run manually, locally, **one lab command/test at a time**. Do not run smoke,
+failover, up/down/reset or other writers concurrently. This target does not
+start infrastructure; missing or unhealthy infrastructure is a failure.
+
+```sh
+make postgres-ha-up POSTGRES_HA_PORT=5540
+make postgres-ha-test POSTGRES_HA_PORT=5540
+make postgres-ha-failover-test POSTGRES_HA_PORT=5540
+make postgres-ha-test POSTGRES_HA_PORT=5540
+make postgres-ha-status POSTGRES_HA_PORT=5540
+```
+
+`postgres-ha-test` remains the A1 smoke only. The destructive target sets the
+separate `POSTGRES_HA_FAILOVER_TEST=1` opt-in and runs only
+`TestPrimaryCrashApplicationRecovery`, with `-race -count=1`. Ordinary tests
+skip both checks. No GitHub Actions provisioning or execution is involved.
+
+The A2 harness:
+
+1. Requires all three nodes, one SQL/Patroni leader, two streaming replicas,
+   strict synchronous policy, `synchronous_commit=on`, matching system
+   identifiers and healthy etcd quorum. Checks the proxy points to that leader.
+2. Creates a unique document table and starts a real local HTTP server using
+   `app.Build`, `restpostgres` and one `platform/postgres.Connect` pool through
+   HAProxy. Records IDs and expected content for ten successful HTTP writes.
+   It does **not** wait for both replicas to replay those writes before killing.
+3. Discovers the primary dynamically, checks the Compose-selected container's
+   project/service labels and disabled restart policy, then sends SIGKILL to
+   that node's entire container (Patroni and PostgreSQL). Confirms it stopped
+   and that an already-open proxy session breaks.
+4. Continues bounded HTTP POST attempts using the **same server and pool**.
+   Patroni elects another primary without manual promotion; the surviving
+   standby must become synchronous. The new leader must have the same system
+   identifier and a higher timeline. Each attempt uses a new marker: an error
+   or missing response is an unknown result, never evidence of rollback and
+   never an instruction to replay that logical operation blindly.
+5. Requires multiple confirmed new HTTP writes, HTTP health recovery, and
+   correct ID/content for **every confirmed write**, including those before
+   the crash, through HTTP and direct SQL on the new primary. The old primary
+   remains stopped throughout acceptance. The deadline is 120 seconds from
+   the kill command; it is a local acceptance budget, **not a production SLA**.
+   Logs report the first observed healthy leader and first confirmed HTTP
+   write separately; polling is not an exact election-time measurement.
+6. Restarts only the interrupted node in cleanup, with an independent bounded
+   context, and waits for it to rejoin as a replica with two streaming standbys
+   and healthy etcd quorum. Also checks confirmed contents on the rejoined
+   replica. No failback is requested. Drops only the test table after successful
+   recovery. A subsequent A1 smoke verifies WAL archival on the new leader as
+   well as the restored topology.
+
+On assertion failure, bounded Compose diagnostics are collected **before**
+recovery. Recovery is attempted on both success and failure; a failed run before
+promotion may recover with the original leader. No automatic volume deletion,
+reinitialization or full reset is performed. If recovery
+fails, the test fails and preserves its uniquely named table for diagnosis.
+Inspect logs and use `make postgres-ha-up POSTGRES_HA_PORT=5540` to restart lab
+services with existing volumes. If the Go process is forcibly killed, its
+cleanup cannot run: use the same recovery command, inspect topology, and rerun
+the smoke. A healthy node startup alone is not proof of completed failover.
+
+This proves recovery from one abrupt primary-container failure while the host,
+proxy, etcd quorum, S3 and remaining Postgres nodes are available. Requests can
+fail during the outage; in-flight commits with no client confirmation remain
+ambiguous. It does not prove continuous availability, exactly-once semantics,
+network-partition fencing, multi-node/host/disk failure tolerance or production
+RTO/RPO under load. The HTTP resource exercises the shared application path;
+it does not run comments-api's Pub/Sub workflow. Base backup/PITR is A3,
+migrations A5 and query-plan analysis A6.
 
 ## Persistence, reset and diagnosis
 
@@ -184,11 +255,12 @@ The image installs it with `pip --require-hashes`. Version/digest changes need
 another real build and smoke run. Linux AMD64 is the locally verified platform;
 ARM64 has a pinned WAL-G artifact but is not claimed tested here.
 
-A1 proves healthy topology and WAL archival round-trip only. Base backup and
-PITR restoration are A3; killing a primary and testing application recovery
-is A2. The single-host lab has one proxy and one S3 service: it does not prove
-host-failure tolerance or end-to-end production HA. No migration, public Go
-API, ordinary development Compose or GitHub Actions workflow changes are made.
+A1 proves healthy topology and WAL archival round-trip; the separate A2 test
+proves application recovery after a primary-container crash. Base backup and
+PITR restoration remain A3. The single-host lab has one proxy and one S3
+service: it does not prove host-failure tolerance or end-to-end production HA.
+No migration, public Go API, ordinary development Compose or GitHub Actions
+workflow changes are made.
 
 Sources: [Patroni replication policy](https://patroni.readthedocs.io/en/latest/replication_modes.html),
 [Patroni REST API](https://patroni.readthedocs.io/en/latest/rest_api.html),
