@@ -122,6 +122,10 @@ docker run -d --name e2e-posts-api --network "$net" \
 	-v "$here/.keys/legacy.pub:/keys/legacy.pub:ro" \
 	"hyrule-e2e/posts-api:dev" >/dev/null
 
+echo "==> applying comments-api migrations explicitly"
+(cd "$root" && POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
+ go run ./examples/blog-apis/cmd/comments-migrate -action prepare)
+
 docker run -d --name e2e-comments-api --network "$net" \
 	-e PORT=8080 -e POSTGRES_CONNECTION_STRING="postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable" \
 	-e CONFIG_FILE=/cfg/comments-api.json -e PUBSUB_EMULATOR_HOST=pubsub:8085 \

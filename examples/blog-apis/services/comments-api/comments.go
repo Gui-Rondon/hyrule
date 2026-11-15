@@ -6,10 +6,10 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Gui-Rondon/hyrule/app"
 	"github.com/Gui-Rondon/hyrule/behaviors/events"
+	"github.com/Gui-Rondon/hyrule/examples/blog-apis/internal/commentsschema"
 	"github.com/Gui-Rondon/hyrule/outbox"
 	"github.com/Gui-Rondon/hyrule/outboxpostgres"
 	"github.com/Gui-Rondon/hyrule/platform/health"
@@ -46,28 +46,6 @@ func commentsIndexes(table string) []postgres.IndexSpec {
 	}
 }
 
-// ensureTable creates table if it doesn't exist yet, with the shape
-// every restpostgres resource expects (restpostgres/adapter_test.go's
-// setupResourceTable: id/doc/created_at/updated_at/version/deleted --
-// no migration tool exists yet for a Postgres resource, so a real
-// service creates its own table at startup, the same DDL a hand-written
-// migration would run once). app.Spec has no table-DDL equivalent of
-// Spec.PostgresIndexes, so this stays the service's own job -- unlike
-// EnsureFunctions/EnsureIndexes, which app.Build (B1) now runs on its
-// own and this Setup must not call a second time.
-func ensureTable(ctx context.Context, pool *pgxpool.Pool, table string) error {
-	ddl := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-		id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-		doc        jsonb       NOT NULL DEFAULT '{}',
-		created_at timestamptz NOT NULL DEFAULT now(),
-		updated_at timestamptz NOT NULL DEFAULT now(),
-		version    bigint      NOT NULL DEFAULT 1,
-		deleted    boolean     NOT NULL DEFAULT false
-	)`, table)
-	_, err := pool.Exec(ctx, ddl)
-	return err
-}
-
 // setup wires a real postgresAdapter into env.API -- the app.Main
 // counterpart of restpostgres/http_test.go's newHTTPTestAPI, minus the
 // test-only table teardown. env.Postgres/env.PostgresTx come from
@@ -75,18 +53,15 @@ func ensureTable(ctx context.Context, pool *pgxpool.Pool, table string) error {
 // Options, so a dry run (DRY_RUN=true) rolls this resource's writes
 // back exactly as any Mongo-backed service's would.
 //
-// Parameterized by table (not just commentsTable) so comments_test.go
-// can run the exact same setup against its own throwaway table instead
-// of the real "comments" one -- the same table a concurrently running
-// e2e run (examples/blog-apis/e2e/run.sh) might be using against the
-// same shared dev Postgres.
+// Table names remain parameters for adapters, while tests isolate the whole
+// migrated schema (including version state) from the service's real tables.
 func setupWithTable(table string) func(ctx context.Context, env *app.Env) error {
 	return setupWithTables(table, outboxpostgres.Table)
 }
 
 func setupWithTables(table, outboxTable string) func(context.Context, *app.Env) error {
 	return func(ctx context.Context, env *app.Env) error {
-		if err := ensureTable(ctx, env.Postgres, table); err != nil {
+		if err := commentsschema.Check(ctx, env.Postgres, table); err != nil {
 			return fmt.Errorf("comments-api: %w", err)
 		}
 		adapter, err := restpostgres.NewAdapter(postgres.NewStore(env.Postgres, table), env.PostgresTx, restpostgres.Options{

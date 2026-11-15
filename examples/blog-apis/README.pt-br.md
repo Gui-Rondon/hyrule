@@ -55,6 +55,8 @@ fica em **https://gui-rondon.github.io/hyrule/**.
 ```bash
 make env-up
 curl -sf -X PUT http://localhost:8085/v1/projects/local-dev/topics/comments-to-publish
+POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
+  make comments-migrate MIGRATE_ARGS='-action prepare'
 make build SERVICE=comments-api
 printf '%s\n' '{"auth":{"enable":false},"pubsub":{"project_id":"local-dev","to_publish":"comments-to-publish"}}' > .local/comments-api.json
 POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
@@ -70,3 +72,5 @@ do comentário; a chave de ordenação é seu UUID. `pubsub.to_publish` tem defa
 as escritas e não inicia o relay. `/healthcheck` verifica Postgres, atraso do
 outbox e tópico. O harness e2e verifica a entrega real numa assinatura isolada,
 além do comportamento HTTP.
+
+As migrations rodam explicitamente antes do startup; veja o [runbook da A5](internal/commentsschema/README.md).

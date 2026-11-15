@@ -8,9 +8,11 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Gui-Rondon/hyrule/app"
+	"github.com/Gui-Rondon/hyrule/examples/blog-apis/internal/commentsschema"
 	"github.com/Gui-Rondon/hyrule/platform/config"
 	"github.com/Gui-Rondon/hyrule/testkit"
 )
@@ -29,12 +31,45 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err := pool.Ping(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	return pool
+
+	schema := "comments_test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err := pool.Exec(context.Background(), "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := pool.Exec(context.Background(), "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); err != nil {
+			t.Error(err)
+		}
+	})
+	cfg := pool.Config()
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	isolated, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(isolated.Close)
+	m, err := commentsschema.Open(context.Background(), isolated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	if err := commentsschema.To(m, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := commentsschema.To(m, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := commentsschema.Backfill(context.Background(), isolated, 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := commentsschema.To(m, 3); err != nil {
+		t.Fatal(err)
+	}
+	return isolated
 }
 
 // newTestClient builds the service the same way app.Main does
-// (app.Build, app.BackendPostgres), against a throwaway table instead
-// of the real commentsTable -- see setupWithTable's own doc comment.
+// (app.Build, app.BackendPostgres), against a fully migrated private schema.
 func newTestClient(t *testing.T) *testkit.Client {
 	t.Helper()
 	pool := testPool(t)
@@ -42,13 +77,7 @@ func newTestClient(t *testing.T) *testkit.Client {
 		t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8085")
 	}
 	ctx := context.Background()
-	table := "comments_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	outboxTable := table + "_outbox"
-	t.Cleanup(func() { pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+outboxTable) })
-	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+table) })
+	table, outboxTable := "comments", "outbox"
 
 	spec := app.Spec{
 		Name:            "comments-api",

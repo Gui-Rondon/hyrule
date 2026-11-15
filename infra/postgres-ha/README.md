@@ -287,6 +287,15 @@ incremental backups, retention, encryption, off-host disaster recovery, backup
 scheduling, throughput under production load or the comments-api/Pub/Sub
 workflow. Migrations remain A5 and query-plan analysis A6.
 
+## Manual migration rollout gate (A5)
+
+`make postgres-ha-migrations-test POSTGRES_HA_PORT=5540` exercises the actual
+comments-api resource and golang-migrate against isolated schemas in this lab.
+It requires the healthy lab already running, uses its own opt-in, and does not
+run concurrently with other lab gates or writers. See the [migration runbook](../../examples/blog-apis/internal/commentsschema/README.md)
+for expand/backfill/contract, adoption, explicit dirty-state repair and limits.
+This is a manual local gate; no infrastructure execution in GitHub Actions.
+
 ## Persistence, reset and diagnosis
 
 `make postgres-ha-down` preserves Postgres, etcd and S3 volumes together. A

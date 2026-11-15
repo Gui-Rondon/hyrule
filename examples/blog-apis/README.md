@@ -55,6 +55,8 @@ via YAML) lives at **https://gui-rondon.github.io/hyrule/**.
 ```bash
 make env-up
 curl -sf -X PUT http://localhost:8085/v1/projects/local-dev/topics/comments-to-publish
+POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
+  make comments-migrate MIGRATE_ARGS='-action prepare'
 make build SERVICE=comments-api
 printf '%s\n' '{"auth":{"enable":false},"pubsub":{"project_id":"local-dev","to_publish":"comments-to-publish"}}' > .local/comments-api.json
 POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
@@ -70,3 +72,5 @@ running the relay. Delivery is at-least-once: consumers deduplicate by `event_id
 A dry run rolls back both writes and starts no relay. `/healthcheck` checks
 Postgres, the outbox backlog and the destination topic. The e2e harness verifies
 actual delivery to an isolated Pub/Sub subscription as well as HTTP behavior.
+
+Schema migrations run explicitly before startup; see the [A5 migration runbook](internal/commentsschema/README.md).
