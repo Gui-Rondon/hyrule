@@ -29,7 +29,7 @@ SERVICES_DIR ?= examples/blog-apis/services
 # Same gate as the CI: fails below COVERAGE_MIN % (testkit excluded).
 cover:
 	@mkdir -p .local
-	go test -coverpkg=$$(go list ./app/... ./behaviors/... ./declarative/... ./outbox/... ./outboxpostgres/... ./platform/... ./rest/... ./restpostgres/... ./testkit/... ./internal/... ./$(SERVICES_DIR)/... | grep -v /testkit | paste -sd, -) \
+	go test -coverpkg=$$(go list ./app/... ./behaviors/... ./declarative/... ./outbox/... ./outboxpostgres/... ./platform/... ./rest/... ./restpostgres/... ./testkit/... ./internal/... ./examples/blog-apis/internal/... ./examples/blog-apis/cmd/... ./$(SERVICES_DIR)/... | grep -v /testkit | paste -sd, -) \
 		-coverprofile=.local/coverage.out ./... > /dev/null
 	@go tool cover -func=.local/coverage.out | awk -v m=$(COVERAGE_MIN) \
 		'/^total:/ { sub("%", "", $$3); printf "coverage %s%% (minimum %s%%)\n", $$3, m; exit !($$3 + 0 >= m + 0) }'
@@ -88,7 +88,7 @@ standalone-example-test:
 # Opt-in local HA lab; never provisioned by make test or GitHub Actions.
 export POSTGRES_HA_PORT ?= 5434
 POSTGRES_HA_COMPOSE = docker compose --project-name hyrule-postgres-ha -f infra/postgres-ha/compose.yml
-.PHONY: postgres-ha-up postgres-ha-status postgres-ha-test postgres-ha-failover-test postgres-ha-pitr-test postgres-ha-logs postgres-ha-down postgres-ha-reset
+.PHONY: comments-migrate postgres-ha-up postgres-ha-status postgres-ha-test postgres-ha-failover-test postgres-ha-pitr-test postgres-ha-migrations-test postgres-ha-logs postgres-ha-down postgres-ha-reset
 postgres-ha-up:
 	$(POSTGRES_HA_COMPOSE) up -d --build --wait --wait-timeout 240
 
@@ -109,6 +109,13 @@ postgres-ha-failover-test:
 # Isolated full-backup/PITR sandbox; never part of the normal test suite.
 postgres-ha-pitr-test:
 	POSTGRES_HA_PITR_TEST=1 go test -race -count=1 -v -run '^TestBaseBackupPointInTimeRecovery$$' -timeout=10m ./internal/integration/postgresha
+
+# Manual real-schema migration gate; does not provision infrastructure.
+postgres-ha-migrations-test:
+	POSTGRES_MIGRATIONS_TEST=1 POSTGRES_MIGRATIONS_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestMigrationLifecycle$$' -timeout=5m ./examples/blog-apis/services/comments-api
+
+comments-migrate:
+	go run ./examples/blog-apis/cmd/comments-migrate $(MIGRATE_ARGS)
 
 postgres-ha-logs:
 	$(POSTGRES_HA_COMPOSE) logs --no-color --tail=100

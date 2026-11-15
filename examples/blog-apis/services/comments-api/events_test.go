@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -52,7 +51,7 @@ func buildEventService(t *testing.T, dry bool, start func(string, func(context.C
 	if os.Getenv("PUBSUB_EMULATOR_HOST") == "" {
 		t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8085")
 	}
-	table := "comments_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	table := "comments"
 	box := table + "_outbox"
 	t.Cleanup(func() { pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+table+", "+box) })
 	setup := setupWithTables(table, box)

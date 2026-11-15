@@ -6,6 +6,8 @@
 // Mongo-backed service in this directory already uses -- see
 // tags-api's main.go for the pattern this converges to.
 //
+// Run comments-migrate explicitly first (see ../../internal/commentsschema).
+//
 //	POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
 //	  PUBSUB_EMULATOR_HOST=localhost:8085 CONFIG_FILE=config.json PORT=8080 go run .
 package main
