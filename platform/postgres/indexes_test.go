@@ -5,7 +5,22 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/Gui-Rondon/hyrule/platform/config"
 )
+
+func TestIndexesModeFromConfig(t *testing.T) {
+	cases := map[string]IndexesMode{"": IndexesCreate, "create": IndexesCreate, "check": IndexesCheck, "off": IndexesOff}
+	for v, want := range cases {
+		got, err := IndexesModeFromConfig(config.Config{"postgres": map[string]any{"indexes_mode": v}})
+		if err != nil || got != want {
+			t.Errorf("%q = %v %v", v, got, err)
+		}
+	}
+	if _, err := IndexesModeFromConfig(config.Config{"postgres": map[string]any{"indexes_mode": "x"}}); err == nil {
+		t.Error("unknown mode must fail")
+	}
+}
 
 func TestBuildIndexSQLValidation(t *testing.T) {
 	cases := []struct {
