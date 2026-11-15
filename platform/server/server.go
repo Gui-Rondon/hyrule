@@ -69,6 +69,11 @@ type statusRecorder struct {
 	status int
 }
 
+// Unwrap preserves optional ResponseWriter capabilities through AccessLog.
+// Streaming handlers use http.ResponseController to reach Flusher, deadlines,
+// and other capabilities provided by the underlying server.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
