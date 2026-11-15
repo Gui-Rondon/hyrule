@@ -110,6 +110,47 @@ text/hashed/2dsphere), called explicitly by whoever sets up a resource's
 table, same precedent as `EnsureFunctions` (see
 [`adapter.md`](adapter.md#building-a-postgres-backed-resource)).
 
+### Explicit Postgres typed sort indexes
+
+`IndexField.Mode` defaults to `postgres.IndexFieldLegacy`: existing JSONB DDL
+is preserved, including the safe datetime helper. JSONB ordering differs from
+`restpostgres`'s typed ordering, especially for nulls and mixed JSON types.
+To index the current scalar sort expression, opt in per field:
+
+```go
+postgres.IndexSpec{
+    Table: "items", Name: "items_rank_typed_v1",
+    Fields: []postgres.IndexField{{
+        Field: "rank", Kind: postgres.KindInteger,
+        Mode: postgres.IndexFieldTypedSort,
+    }},
+}
+```
+
+This produces `((doc->>'rank')::int8)`. Supported kinds are `KindString`
+(`text`), `KindInteger` (`int8`), `KindNumber` (`numeric`) and `KindBoolean`
+(`boolean`). Compound indexes and `Desc` are supported; the database's default
+NULLS order and collation apply. Ties require an explicit sort term if a stable
+page order is needed. Queries, bindings and their ordering semantics do not change.
+Datetime, array/object, unknown kinds/modes, and typed indexes with `Unique` or
+`Sparse` are rejected. Nested paths and meta fields are outside this mode.
+
+Audit existing data before creation and validate future writes: invalid casts
+prevent index creation and reject writes afterward. JSON null and missing keys
+become SQL NULL; a numeric string may cast to the same value as a JSON number.
+Each additional index costs storage and write work. Use an explicit **new name**;
+`EnsureIndexes`/`CREATE IF NOT EXISTS` neither migrate old definitions nor prove
+that an existing index with the same name has equivalent DDL.
+
+Parameterized field names can still prevent index use with generic plans.
+A typed sort index does not turn a JSONB filter into a typed index condition,
+and deep offsets may still require a Sort. The manual local gate
+`make postgres-ha-typed-sort-test POSTGRES_HA_PORT=5540` uses real `EnsureIndexes`
+and the SELECT captured from `restpostgres.Find`, checks auto/custom plans and
+records generic/deep-offset controls. Artifacts are in `.local/postgres-typed-sort/`.
+It provisions no infrastructure and is not enabled in GitHub Actions. Initial
+adoption is limited to gate fixtures; no comments-api index or migration is added.
+
 ## Places that still go straight to Mongo, on purpose
 
 `outbox` writes to the `outbox` collection with a
