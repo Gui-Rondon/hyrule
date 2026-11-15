@@ -12,7 +12,7 @@ capacidades diferente.
 | [`tags-api`](services/tags-api) | CRUD genérico com campo `Unique` e lookup por slug — o mesmo schema, sem reescrever nada, é [`cmd/hyrule-serve/example.yaml`](../../cmd/hyrule-serve/example.yaml) |
 | [`categories-api`](services/categories-api) | Recurso hierárquico: caminho materializado recalculado a cada escrita, endpoint `GET /categories/tree` construído direto a partir da interface `Store` (sem `*mongo.Collection` em lugar nenhum) |
 | [`posts-api`](services/posts-api) | O exemplo mais completo: relações (`author_id`, `category_id`, `tags`), outbox transacional, endpoints custom `/publish` e `/schedule` (este último escreve num hash do Redis e no outbox na mesma transação), indexação opcional no Elasticsearch |
-| [`comments-api`](services/comments-api) | O caminho com Postgres: `restpostgres.NewAdapter` em vez de `app.Main` (ainda sem suporte a Postgres lá), um índice declarativo ([Reference → Adapter](https://gui-rondon.github.io/hyrule/docs/reference/adapter)) |
+| [`comments-api`](services/comments-api) | Postgres via `app.Main`/`restpostgres`, índice declarativo e outbox transacional publicando `comment.published` no Pub/Sub |
 
 ## Rodando localmente
 
@@ -49,3 +49,24 @@ um projeto criado por `hyrule new` faria.
 Este exemplo não é o framework — é só um *uso* dele. A documentação do
 próprio hyrule (interface `Store`, outbox condicional, resources via YAML)
 fica em **https://gui-rondon.github.io/hyrule/**.
+
+## comments-api: Postgres + Pub/Sub
+
+```bash
+make env-up
+curl -sf -X PUT http://localhost:8085/v1/projects/local-dev/topics/comments-to-publish
+make build SERVICE=comments-api
+printf '%s\n' '{"auth":{"enable":false},"pubsub":{"project_id":"local-dev","to_publish":"comments-to-publish"}}' > .local/comments-api.json
+POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
+  PUBSUB_EMULATOR_HOST=localhost:8085 CONFIG_FILE=.local/comments-api.json \
+  PORT=8082 .local/comments-api
+```
+
+Uma escrita que leva `status` a `published` (inclusive criação já publicada)
+grava `comment.published` na mesma transação Postgres. O corpo é o documento
+do comentário; a chave de ordenação é seu UUID. `pubsub.to_publish` tem default
+`comments-to-publish`; provisione o tópico antes de iniciar o relay. A entrega
+é at-least-once: consumidores deduplicam por `event_id`. Dry run desfaz ambas
+as escritas e não inicia o relay. `/healthcheck` verifica Postgres, atraso do
+outbox e tópico. O harness e2e verifica a entrega real numa assinatura isolada,
+além do comportamento HTTP.

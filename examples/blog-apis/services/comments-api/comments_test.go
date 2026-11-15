@@ -4,8 +4,10 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Gui-Rondon/hyrule/app"
@@ -36,8 +38,13 @@ func testPool(t *testing.T) *pgxpool.Pool {
 func newTestClient(t *testing.T) *testkit.Client {
 	t.Helper()
 	pool := testPool(t)
+	if os.Getenv("PUBSUB_EMULATOR_HOST") == "" {
+		t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8085")
+	}
 	ctx := context.Background()
-	table := "comments_test"
+	table := "comments_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	outboxTable := table + "_outbox"
+	t.Cleanup(func() { pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+outboxTable) })
 	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
 		t.Fatal(err)
 	}
@@ -48,11 +55,11 @@ func newTestClient(t *testing.T) *testkit.Client {
 		Backend:         app.BackendPostgres,
 		DefaultDB:       "comments",
 		Version:         "test",
-		Setup:           setupWithTable(table),
+		Setup:           setupWithTables(table, outboxTable),
 		PostgresIndexes: commentsIndexes(table),
 	}
 	handler, err := app.Build(ctx, spec, app.Deps{
-		Config: config.Config{}, Postgres: pool, Auth: testkit.DisabledAuth(t),
+		Config: config.Config{"pubsub": map[string]any{"project_id": "local-dev", "healthcheck": false}}, Postgres: pool, Auth: testkit.DisabledAuth(t),
 	})
 	if err != nil {
 		t.Fatal(err)

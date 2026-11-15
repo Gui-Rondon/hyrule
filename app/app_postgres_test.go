@@ -304,6 +304,11 @@ func TestRunServesUntilCanceledPostgres(t *testing.T) {
 			close(started)
 			<-ctx.Done()
 			time.Sleep(50 * time.Millisecond)
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := env.Postgres.Ping(cleanupCtx); err != nil {
+				t.Errorf("pool closed before worker cleanup: %v", err)
+			}
 			stopped.Store(true)
 			return nil
 		})

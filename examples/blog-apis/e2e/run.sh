@@ -44,6 +44,13 @@ if [ "${1:-}" = down ]; then
 	exit 0
 fi
 loops=${1:-1}
+comments_topic="comments-e2e-$(date +%s)-$$"
+comments_subscription="$comments_topic"
+cleanup_comments() {
+ curl --max-time 5 -sf -X DELETE "http://localhost:8085/v1/projects/local-dev/subscriptions/$comments_subscription" >/dev/null || true
+ curl --max-time 5 -sf -X DELETE "http://localhost:8085/v1/projects/local-dev/topics/$comments_topic" >/dev/null || true
+}
+trap cleanup_comments EXIT
 
 echo "==> starting shared infra (make env-up)"
 make -C "$root" env-up
@@ -78,6 +85,13 @@ for svc in $services; do
 	docker build --build-arg SERVICE="$svc" -t "hyrule-e2e/${svc}:dev" "$root" >/dev/null
 done
 
+echo "==> provisioning isolated comments topic and subscription"
+curl --max-time 10 -sf -X PUT "http://localhost:8085/v1/projects/local-dev/topics/$comments_topic" >/dev/null
+curl --max-time 10 -sf -X PUT -H 'Content-Type: application/json' \
+ -d "{\"topic\":\"projects/local-dev/topics/$comments_topic\",\"enableMessageOrdering\":true}" \
+ "http://localhost:8085/v1/projects/local-dev/subscriptions/$comments_subscription" >/dev/null
+sed "s/comments-to-publish/$comments_topic/" "$here/config/comments-api.json" > "$here/.keys/comments-api.json"
+
 echo "==> starting e2e-{tags,authors,categories,posts,comments}-api"
 # shellcheck disable=SC2086
 docker rm -f $(printf 'e2e-%s ' $services) >/dev/null 2>&1 || true
@@ -110,8 +124,8 @@ docker run -d --name e2e-posts-api --network "$net" \
 
 docker run -d --name e2e-comments-api --network "$net" \
 	-e PORT=8080 -e POSTGRES_CONNECTION_STRING="postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable" \
-	-e CONFIG_FILE=/cfg/comments-api.json \
-	-v "$here/config/comments-api.json:/cfg/comments-api.json:ro" \
+	-e CONFIG_FILE=/cfg/comments-api.json -e PUBSUB_EMULATOR_HOST=pubsub:8085 \
+	-v "$here/.keys/comments-api.json:/cfg/comments-api.json:ro" \
 	"hyrule-e2e/comments-api:dev" >/dev/null
 
 echo "==> waiting for the 5 services to answer"
@@ -138,7 +152,10 @@ rm -f "$here"/results/*
 docker run --rm --network "$net" \
 	-v "$here/jmeter:/jmx:ro" -v "$here/results:/results" \
 	justb4/jmeter:latest -n -t /jmx/hyrule-e2e.jmx -l /results/results.jtl -j /results/jmeter.log \
-	-Jauth_token="$token" -Jloops="$loops"
+	-Jauth_token="$token" -Jloops="$loops" -Jcomments_subscription="$comments_subscription"
+
+# JMeter can exit zero despite failed assertions. Check the actual samples.
+(cd "$root" && go run ./examples/blog-apis/e2e/check-results "$here/results/results.jtl")
 
 echo
 echo "Results: $here/results/results.jtl ($here/results/jmeter.log for the full JMeter log)"

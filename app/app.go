@@ -244,7 +244,11 @@ func Run(ctx context.Context, spec Spec) error {
 		if err != nil {
 			return err
 		}
-		defer pool.Close()
+		defer func() {
+			stopTasks()
+			tasks.Wait()
+			pool.Close()
+		}()
 		handler, err := Build(startCtx, spec, Deps{Config: cfg, Postgres: pool, Start: start, DryRun: dryRun, DryRunTimeout: dryRunTimeout})
 		if err != nil {
 			return err

@@ -1454,6 +1454,64 @@ props.put("raceCommentEtag", body["_etag"].toString())
           <hashTree/>
         </hashTree>
 
+        <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="6b. Comment transitions and actual PubSub delivery" enabled="true">
+          <stringProp name="scriptLanguage">groovy</stringProp>
+          <stringProp name="cacheKey">true</stringProp>
+          <stringProp name="script">import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+
+def request = { String method, String url, Object body, String etag ->
+ def cfg = org.apache.http.client.config.RequestConfig.custom().setConnectTimeout(3000).setSocketTimeout(3000).build()
+ def client = org.apache.http.impl.client.HttpClients.custom().setDefaultRequestConfig(cfg).build()
+ def builder = org.apache.http.client.methods.RequestBuilder.create(method).setUri(url)
+ if (etag != null) builder.addHeader('If-Match', '"' + etag + '"')
+ if (body != null) builder.setEntity(new org.apache.http.entity.StringEntity(JsonOutput.toJson(body), org.apache.http.entity.ContentType.APPLICATION_JSON))
+ try {
+  def response = client.execute(builder.build())
+  try {
+   assert response.statusLine.statusCode == 200 : method + ' ' + url + ': ' + response.statusLine
+   def text = org.apache.http.util.EntityUtils.toString(response.entity, 'UTF-8')
+   return new JsonSlurper().parseText(text)
+  } finally { response.close() }
+ } finally { client.close() }
+}
+def id = vars.get('commentId')
+def etag = vars.get('commentEtag2')
+// No transition, repeated status, then a second genuine publication.
+[[body:'edited by e2e'], [status:'published'], [status:'pending'], [status:'published']].each { changes -&gt;
+ def doc = request('PATCH', 'http://e2e-comments-api:8080/comments/' + id, changes, etag)
+ etag = doc._etag
+}
+vars.put('commentEtag2', etag)
+def endpoint = 'http://pubsub:8085/v1/projects/local-dev/subscriptions/' + props.get('comments_subscription')
+def events = [] as Set
+def deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+while (events.size() &lt; 2 &amp;&amp; System.nanoTime() &lt; deadline) {
+ def batch = request('POST', endpoint + ':pull', [maxMessages:20, returnImmediately:true], null)
+ def acks = []
+ (batch.receivedMessages ?: []).each { entry -&gt;
+  def msg = entry.message
+  def doc = new JsonSlurper().parseText(new String(msg.data.decodeBase64(), 'UTF-8'))
+  if (doc._id == id) {
+   assert doc.status == 'published'
+   assert msg.orderingKey == id
+   assert msg.attributes.event_type == 'comment.published'
+   assert msg.attributes.event_id
+   assert msg.attributes.occurred_at
+   events.add(msg.attributes.event_id)
+  }
+  acks.add(entry.ackId)
+ }
+ if (acks) request('POST', endpoint + ':acknowledge', [ackIds:acks], null)
+ if (events.size() &lt; 2) Thread.sleep(100)
+}
+assert events.size() == 2 : 'Expected two committed publication events, received ' + events
+SampleResult.setResponseData('Verified two distinct comment.published events for ' + id, 'UTF-8')
+SampleResult.setResponseCode('200')
+</stringProp>
+        </JSR223Sampler>
+        <hashTree/>
+
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="7. DELETE /comments/{id}">
           <stringProp name="HTTPSampler.path">/comments/${commentId}</stringProp>
           <stringProp name="HTTPSampler.method">DELETE</stringProp>

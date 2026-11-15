@@ -26,12 +26,13 @@ func TestRealGraph(t *testing.T) {
 		want  []string
 	}{
 		{"rest", []string{"rest/http.go"}, all},
-		{"outbox", []string{"outbox/relay.go"}, []string{"posts-api"}},
+		{"outbox", []string{"outbox/relay.go"}, []string{"comments-api", "posts-api"}},
+		{"outboxpostgres", []string{"outboxpostgres/relay.go"}, []string{"comments-api"}},
 		{"redis", []string{"platform/redis/redis.go"}, []string{"posts-api"}},
 		{"searchsync", []string{"behaviors/searchsync/searchsync.go"}, []string{"authors-api", "posts-api", "tags-api"}},
 		{"audit", []string{"behaviors/audit/audit.go"}, []string{"authors-api", "posts-api"}},
 		{"one service", []string{dir + "/categories-api/categories.go"}, []string{"categories-api"}},
-		{"deleted file", []string{"outbox/removed.go"}, []string{"posts-api"}},
+		{"deleted file", []string{"outbox/removed.go"}, []string{"comments-api", "posts-api"}},
 		{"deleted service file", []string{dir + "/posts-api/removed.go"}, []string{"posts-api"}},
 		{"deleted test file", []string{dir + "/posts-api/removed_test.go"}, nil},
 		{"manifest", []string{deployDir + "/posts-api/manifest.yml"}, []string{"posts-api"}},
