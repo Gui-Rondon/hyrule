@@ -37,6 +37,7 @@ const sidebars = {
       collapsible: false,
       items: [
         'reference/store',
+        'reference/adapter',
         'reference/querying',
         'reference/outbox',
         'reference/resources-yaml',

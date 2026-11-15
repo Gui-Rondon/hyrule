@@ -3,7 +3,7 @@
 # blog-apis
 
 A práticas do framework hyrule aplicadas a um domínio genérico (um blog),
-em vez de teoria: 4 serviços pequenos, cada um demonstrando um conjunto de
+em vez de teoria: 5 serviços pequenos, cada um demonstrando um conjunto de
 capacidades diferente.
 
 | Serviço | Demonstra |
@@ -12,6 +12,7 @@ capacidades diferente.
 | [`tags-api`](services/tags-api) | CRUD genérico com campo `Unique` e lookup por slug — o mesmo schema, sem reescrever nada, é [`cmd/hyrule-serve/example.yaml`](../../cmd/hyrule-serve/example.yaml) |
 | [`categories-api`](services/categories-api) | Recurso hierárquico: caminho materializado recalculado a cada escrita, endpoint `GET /categories/tree` construído direto a partir da interface `Store` (sem `*mongo.Collection` em lugar nenhum) |
 | [`posts-api`](services/posts-api) | O exemplo mais completo: relações (`author_id`, `category_id`, `tags`), outbox transacional, endpoints custom `/publish` e `/schedule` (este último escreve num hash do Redis e no outbox na mesma transação), indexação opcional no Elasticsearch |
+| [`comments-api`](services/comments-api) | O caminho com Postgres: `restpostgres.NewAdapter` em vez de `app.Main` (ainda sem suporte a Postgres lá), um índice declarativo ([Reference → Adapter](https://gui-rondon.github.io/hyrule/docs/reference/adapter)) |
 
 ## Rodando localmente
 

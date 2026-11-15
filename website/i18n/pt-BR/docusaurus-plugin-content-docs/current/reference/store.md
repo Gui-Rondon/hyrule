@@ -34,14 +34,19 @@ montar o wrapper na mão.
 
 `platform/postgres.Store` segue a mesma forma — `NewStore`
 embrulha um client, `Find`/`FindOne`/... — pra um banco relacional; só
-não é uma implementação da interface acima (ver
-[backend Postgres](postgres-rfc.md) pro porquê), então nada aqui ainda
-liga isso a um `rest.Resource`:
+não é uma implementação da interface acima, de propósito (ver
+[backend Postgres](postgres-rfc.md) pro porquê):
 
 ```go
 store := postgres.NewStore(pool, "tags")
 docs, err := store.Find(ctx, postgres.Filter{"status": "draft"}, 0, 10, nil, nil)
 ```
+
+Esse `Store`, porém, é de nível mais baixo que o que uma `Resource`
+com Postgres de fato registra: `restpostgres.NewAdapter` o embrulha
+(mais um `Transactor` e um `Schema`) num `rest.Adapter` — ver
+[`adapter.md`](adapter.md) pro seam que `Resource.Adapter` é, e por
+que uma resource Postgres define esse em vez de `Store`.
 
 ## O que isso desacopla — e o que não desacopla
 
@@ -58,11 +63,13 @@ Na prática isso quer dizer:
   instrumentação, um cache) é direto: satisfaça a interface.
 - Trocar de Mongo para outro banco exige mais que implementar `Store`: as
   queries (`bson.M`) e os erros checados em `rest/service.go`
-  (`queryError`, `duplicateKey`) ainda assumem Mongo.
-  `platform/postgres` já tem um primeiro esqueleto (seu próprio
-  tipo no formato de `Store`, não uma implementação desta interface — ver
-  [backend Postgres](postgres-rfc.md) pro porquê e pro que ainda está
-  aberto), mas nenhum recurso está ligado a ele ainda.
+  assumiam Mongo até o `rest.Adapter` (ver [`adapter.md`](adapter.md))
+  dar a cada backend sua própria implementação disso.
+  `platform/postgres.Store` (seu próprio tipo no formato de `Store`,
+  não uma implementação desta interface — ver
+  [backend Postgres](postgres-rfc.md) pro porquê) continua sendo a
+  peça de nível mais baixo sobre a qual `restpostgres.postgresAdapter`
+  é construído, não algo que uma `Resource` vê direto.
 
 ## Performance de query hoje
 
@@ -90,13 +97,17 @@ declarar o índice certo é toda a história de otimização de um recurso em
 Mongo.
 
 Isso é Mongo-shaped do início ao fim (as direções de índice acima, o
-`ttl=`, o próprio formato de `indices.conf`) e não vai valer como está
-pro Postgres: o índice padrão do Postgres é btree, com `gin` pra colunas
+`ttl=`, o próprio formato de `indices.conf`) e não vale como está pro
+Postgres: o índice padrão do Postgres é btree, com `gin` pra colunas
 `jsonb`/array/full-text, `gist` pra tipos geométricos/de intervalo e
 `brin` pra tabelas grandes e naturalmente ordenadas; não há `ttl` nativo
 (precisa de cron ou trigger), e `EXPLAIN ANALYZE` dá um plano de query de
-verdade onde o `where=` do Mongo não dá nenhum. Ver
-[backend Postgres](postgres-rfc.md) pra onde isso está indo.
+verdade onde o `where=` do Mongo não dá nenhum.
+`platform/postgres.EnsureIndexes`/`IndexSpec` é o equivalente pro
+Postgres — formato próprio, deliberadamente mais estreito (sem TTL/
+text/hashed/2dsphere), chamado explicitamente por quem configura a
+tabela de uma resource, mesmo precedente do `EnsureFunctions` (ver
+[`adapter.md`](adapter.md#construindo-uma-resource-sobre-postgres)).
 
 ## Pontos que ainda usam Mongo direto, de propósito
 

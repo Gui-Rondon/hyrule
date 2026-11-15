@@ -8,16 +8,26 @@
 
 Um framework Go para montar microsserviços rápido, e testar os fluxos
 deles com a mesma facilidade: descreva um recurso (schema, métodos,
-lookups) num arquivo YAML — sem Go nenhum — e ganhe uma API REST
-rodando, com CRUD completo, validação, ETags, paginação e um outbox
-transacional, sobre Mongo (suporte a Postgres em andamento). Um recurso
-com lógica própria continua sendo um binário Go pequeno. Dos dois
-jeitos, o `testkit` dá a cada teste um banco isolado e um cliente HTTP,
-e o dry run deixa um serviço inteiro rodar contra tráfego real com toda
-escrita revertida — então você testa os fluxos de verdade de um serviço
-sem levantar a stack real nem simular na mão. Por baixo mantém o
-contrato HTTP do Eve (Python) (`rest`), de onde o projeto
-migrou.
+lookups) — num arquivo YAML, sem Go nenhum, ou em Go quando precisa de
+lógica própria — e ganhe uma API REST rodando com:
+
+- **CRUD completo, validação e paginação** a partir de um schema, sem
+  handler escrito à mão.
+- **ETags/`If-Match` nativos** — concorrência otimista, não algo que
+  você monta por conta própria.
+- **Mongo ou Postgres, mesmo contrato HTTP** — o caminho via YAML
+  continua só-Mongo por enquanto; um recurso escrito à mão escolhe
+  qualquer um dos dois backends via `rest.Adapter` (`restpostgres` pro
+  Postgres, ver a referência do Adapter abaixo) pra CRUD, validação,
+  ETags e queries.
+- **Outbox transacional** (uma escrita e o evento que ela causa
+  comitam juntos, na mesma transação, ou nenhum dos dois), **`testkit`**
+  (banco isolado + cliente HTTP por teste) e **dry run** (um serviço
+  inteiro contra tráfego real, toda escrita revertida) — só-Mongo por
+  enquanto, igual o caminho via YAML acima.
+
+Por baixo mantém o contrato HTTP do Eve (Python) (`rest`), de onde o
+projeto migrou.
 
 📖 **Documentação completa: https://gui-rondon.github.io/hyrule/** — a
 seção Reference já está em português
@@ -105,16 +115,18 @@ A documentação completa está em **https://gui-rondon.github.io/hyrule/**:
 | [Reference → Testkit](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/testkit) | testar um recurso (Mongo isolado, cliente HTTP, tokens) |
 | [Reference → Architecture](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture) | a camada `services → behaviors → rest → platform` e por que ela existe |
 | [Reference → Querying](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/querying) | a linguagem de query `where=`/`sort`/`projection` e como ela é interpretada |
-| [Reference → Backend Postgres](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/postgres-rfc) | as decisões de design abertas para um segundo backend, além do Mongo |
+| [Reference → Adapter](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/adapter) | `rest.Adapter`, a costura que uma resource com Postgres (`restpostgres`) registra em vez de `Store` |
+| [Reference → Backend Postgres (histórico)](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/postgres-rfc) | o registro de design original do backend Postgres, superado pela referência do Adapter acima |
 
 ## Estrutura
 
     app/                           bootstrap comum (app.Main / app.Build)
     behaviors/                     hooks reutilizáveis: searchsync (ES), audit, events (outbox na escrita)
-    rest/                          contrato HTTP: Service (regras, sem HTTP) + API (HTTP) + Store (interface de storage)
+    rest/                          contrato HTTP: Service (regras, sem HTTP) + API (HTTP) + Adapter (costura de storage, Store pro Mongo)
+    restpostgres/                  rest.Adapter sobre platform/postgres — o caminho de resource com Postgres
     outbox/                        transactional outbox, relay para o Pub/Sub e o primitivo condicional
-    declarative/                   carrega um Resource/Schema de YAML (cmd/hyrule-serve)
-    platform/                      config, mongodb, auth, search, health, server, pubsub, redis
+    declarative/                   carrega um Resource/Schema de YAML (cmd/hyrule-serve), só Mongo hoje
+    platform/                      config, mongodb, postgres, auth, search, health, server, pubsub, redis
     testkit/                       Mongo isolado por teste, ES gravador, tokens
     internal/domain/               o único pacote que continua interno (geração de slug)
     cmd/hyrule-serve/              binário genérico: registra os recursos de um YAML, sem Go de domínio

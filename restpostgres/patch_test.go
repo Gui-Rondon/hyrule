@@ -172,8 +172,8 @@ func TestEqualsFilterRejectsNonUUIDExcludeID(t *testing.T) {
 
 // TestUniqueIndexIsTheRealGuarantee proves EqualsFilter is only the
 // friendly pre-check -- a real race still relies on the unique index
-// (postgres-rfc.md §5), surfacing as IsDuplicateKey (23505), never a
-// silent duplicate.
+// itself, surfacing as IsDuplicateKey (23505), never a silent
+// duplicate.
 func TestUniqueIndexIsTheRealGuarantee(t *testing.T) {
 	pool := testPool(t)
 	a := newTestAdapter(t, pool, "patch_unique_index_test", nil)

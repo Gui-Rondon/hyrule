@@ -35,8 +35,9 @@ func pgCode(err error) (string, bool) {
 }
 
 // IsDuplicateKeyError reports a unique constraint violation, mirroring
-// mongo.IsDuplicateKeyError for the error translation postgres-rfc.md's
-// point 3 still needs a home for.
+// mongo.IsDuplicateKeyError -- restpostgres.postgresAdapter's
+// ErrorClassifier (website/docs/reference/adapter.md) is this
+// helper's actual home, wrapping it for IsDuplicateKey.
 func IsDuplicateKeyError(err error) bool {
 	code, ok := pgCode(err)
 	return ok && code == uniqueViolation

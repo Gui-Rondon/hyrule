@@ -109,12 +109,21 @@ a `SoftDelete` resource — Eve's own convention.
 
 ## On a relational backend
 
-None of the above is Mongo-agnostic — `where=` *is* Mongo's query
-language, operators included. `platform/postgres.Filter`
-doesn't carry any of this over: it's equality-only (`column: value`,
-ANDed together, a `nil` value meaning `IS NULL`), no `$gt`/`$in`/denylist
-to speak of, because there's no JSON query language to parse in the
-first place:
+A `where=` against a Postgres-backed `rest.Resource` does carry
+operators over — `restpostgres`'s `ParseWhere` decodes it into a
+`postgres.Query`, and `platform/postgres.CompileFilter` compiles the
+same operator set `$eq/$ne/$gt/$gte/$lt/$lte/$in/$nin/$exists/
+$has/$hasSome/$hasEvery/$not/$and/$or` carries against the resource's
+`jsonb` document column, for any field the resource's `Schema`
+declares a `Kind` for. See [`adapter.md`](adapter.md) for how a
+Postgres-backed resource is registered.
+
+That's a different, higher-level thing than `platform/postgres.Filter`
+below, which stays deliberately equality-only (`column: value`, ANDed
+together, a `nil` value meaning `IS NULL`), no `$gt`/`$in`/denylist to
+speak of — it's for `Store`'s own flat-column CRUD, the piece
+`restpostgres` is built on top of, not something a `where=` request
+ever reaches directly:
 
 ```go
 docs, err := store.Find(ctx, postgres.Filter{"status": "published"}, 0, 10,
@@ -122,8 +131,8 @@ docs, err := store.Find(ctx, postgres.Filter{"status": "published"}, 0, 10,
 ```
 
 Same shape as `Find`'s skip/limit/sort/columns above, a narrower filter
-language on purpose — see [Postgres backend](postgres-rfc.md) for why a
-richer one isn't decided yet.
+language on purpose: a richer one exists, just as `postgres.Query`
+above, never as an extension of this `Filter` type itself.
 
 ## Optimizing these queries
 

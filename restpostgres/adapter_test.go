@@ -28,9 +28,10 @@ func testPool(t *testing.T) *pgxpool.Pool {
 }
 
 // setupResourceTable creates the jsonb-document table shape every
-// restpostgres resource expects (postgres-rfc.md §4): id uuid primary
-// key, doc jsonb, created_at/updated_at timestamptz, version bigint,
-// deleted boolean.
+// restpostgres resource expects (website/docs/reference/adapter.md's
+// "Building a Postgres-backed resource"): id uuid primary key, doc
+// jsonb, created_at/updated_at timestamptz, version bigint, deleted
+// boolean.
 func setupResourceTable(t *testing.T, pool *pgxpool.Pool, table string) {
 	ctx := context.Background()
 	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
