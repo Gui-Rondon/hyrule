@@ -84,3 +84,30 @@ e2e-down:
 # root doesn't descend into it, hence this separate target.
 standalone-example-test:
 	cd examples/standalone-tags-api && go test -race ./...
+
+# Opt-in local HA lab; never provisioned by make test or GitHub Actions.
+export POSTGRES_HA_PORT ?= 5434
+POSTGRES_HA_COMPOSE = docker compose --project-name hyrule-postgres-ha -f infra/postgres-ha/compose.yml
+.PHONY: postgres-ha-up postgres-ha-status postgres-ha-test postgres-ha-logs postgres-ha-down postgres-ha-reset
+postgres-ha-up:
+	$(POSTGRES_HA_COMPOSE) up -d --build --wait --wait-timeout 240
+
+postgres-ha-status:
+	$(POSTGRES_HA_COMPOSE) ps -a
+	$(POSTGRES_HA_COMPOSE) exec -T --user postgres pg1 patronictl -c /etc/patroni.yml list
+	@set -e; for node in pg1 pg2 pg3; do \
+		$(POSTGRES_HA_COMPOSE) exec -T --user postgres $$node psql -U postgres -d postgres -c 'SELECT pg_is_in_recovery(), archived_count, failed_count, last_archived_wal, last_failed_wal FROM pg_stat_archiver'; \
+	done
+
+postgres-ha-test:
+	POSTGRES_HA_TEST=1 go test -race -count=1 -v -timeout=5m ./internal/integration/postgresha
+
+postgres-ha-logs:
+	$(POSTGRES_HA_COMPOSE) logs --no-color --tail=100
+
+postgres-ha-down:
+	$(POSTGRES_HA_COMPOSE) down --timeout 30
+
+# Explicitly destroys only this lab's database, etcd and S3 volumes together.
+postgres-ha-reset:
+	$(POSTGRES_HA_COMPOSE) down --volumes --timeout 30
