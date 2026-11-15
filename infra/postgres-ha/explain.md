@@ -26,8 +26,9 @@ the other post IDs are selective. Fixtures have unique slugs on 75% of rows,
 each run, so fingerprints compare modes within a run. ANALYZE runs after
 loading and creating indexes. No production or public table is sampled.
 
-Eight cases cover selective/common comments lookups, present/missing sparse
-keys, compound ordering/pagination, selective/common datetimes and a primary-key
+Nine cases cover selective/common comments lookups, present/missing sparse
+keys, compound ordering/pagination, selective/common datetimes, a selective
+lookup after five hot-post warmups, and a primary-key
 lookup control. That control can use an unrelated index; it must not be
 reported as use of the expected declared index. Plan choices remain observations.
 The sparse absent-key case deliberately does not imply its partial predicate.
@@ -87,7 +88,7 @@ Artifacts are written under `.local/postgres-explain/<UTC-time>-<UUID>/`:
 - `plan-*.json`: complete PostgreSQL EXPLAIN JSON for each observation.
 - `summary.md`: human-readable plan/index/scan/row/buffer/timing table.
 
-Successful runs currently produce 24 plans (8 cases x 3 modes). Errors preserve
+Successful runs currently produce 27 plans (9 cases x 3 modes). Errors preserve
 a partial report with `complete=false`; file-write errors fail the gate. The
 completion flag is atomically published only after database cleanup and all
 artifact writes, so a failed summary write cannot leave a success marker. Only
@@ -96,10 +97,30 @@ Artifacts are gitignored and retained for local inspection. Cleanup drops only
 the generated schema. If the test process is forcibly terminated, use its
 logged schema name to inspect and remove that schema; do not reset the lab.
 
+## Focused WHERE regression gate
+
+```sh
+make postgres-ha-where-test POSTGRES_HA_PORT=5540
+```
+
+This separate opt-in (`POSTGRES_WHERE_TEST=1`) runs the same actual-adapter
+matrix with focused assertions for the predicate correction. Selective comments
+and datetime cases must produce an Index Cond on the expected index in custom
+and auto modes; comments also uses five hot-post warmups before the rare value.
+Warmups are captured from the real adapter, must have identical SQL shape, and
+verify their own rows/ID fingerprints. Reports record the warmup bindings/count.
+
+A read-only generic-plan control locally enables function tracking and compares
+CompileFilter with CompileWhere: each must call the datetime helper once per
+source row (20,000 calls, not 40,000), with identical matching counts. Tracking
+and planner mode are SET LOCAL and rolled back. Regression checks are recorded
+in report.json. The general A6 gate remains observational; generic index non-use,
+sparse predicates and typed sort differences are outside this correction.
+
 ## Observations and limits
 
-Local PostgreSQL 16.16 runs chose sequential scans for the seven declared-index
-query scenarios in all three modes, including selective lookups and custom
+The PR #38 baseline on local PostgreSQL 16.16 chose sequential scans for the
+seven declared-index query scenarios in all three modes, including selective lookups and custom
 plans. The direct UUID lookup control is reported separately; its actual index
 choice is recorded without being counted as use of the declared compound index. These are reported
 accurately while result checks pass; this is evidence of current query/index
@@ -118,6 +139,12 @@ covers Go IndexSpec declarations, not every physical primary-key/outbox index,
 all possible filters, cold-cache behavior, concurrent load or planner versions.
 It changes no public API, compiler, production index definition or migration.
 Merge of integration/postgres-portability into main remains a separate decision.
+
+After the WHERE correction, rerun the matrix to inspect current choices:
+CompileFilter keeps its original scalar boolean, while the adapter uses the
+shared CompileWhere path. Positive comparisons can become index conditions and
+DSL NOT applies IS NOT TRUE, without duplicating the safe datetime expression.
+The historical baseline above describes the pre-correction behavior.
 
 References: [EXPLAIN](https://www.postgresql.org/docs/16/sql-explain.html),
 [prepared plans](https://www.postgresql.org/docs/16/sql-prepare.html),

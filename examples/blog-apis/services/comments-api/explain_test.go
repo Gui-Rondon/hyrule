@@ -26,6 +26,10 @@ func TestDeclaredIndexExplain(t *testing.T) {
 	if os.Getenv("POSTGRES_EXPLAIN_TEST") != "1" {
 		t.Skip("manual local plans: make postgres-ha-explain-test")
 	}
+	runDeclaredIndexExplain(t, false)
+}
+
+func runDeclaredIndexExplain(t *testing.T, strict bool) {
 	uri := os.Getenv("POSTGRES_EXPLAIN_URI")
 	if uri == "" {
 		t.Fatal("POSTGRES_EXPLAIN_URI required")
@@ -155,6 +159,7 @@ func TestDeclaredIndexExplain(t *testing.T) {
 		}},
 		{Name: "datetime-common", Index: fixtures[2], Schema: fixtureSchema, Filter: postgres.Query{"published_at": postgres.Query{"$gte": "2020-01-01T00:00:00Z"}}, WantRows: 20000},
 	}
+	cases = append(cases, pgexplain.Case{Name: "comments-selective-after-hot", Index: declared[0], Schema: commentsSchema, Filter: postgres.Query{"post_id": "post-15001"}, WantRows: 1, Check: checkField("post_id", "post-15001"), WarmupFilter: postgres.Query{"post_id": "hot-post"}, WantWarmupRows: 10000})
 	if err := pgexplain.Inventory(all, cases); err != nil {
 		t.Fatal(err)
 	}
@@ -174,8 +179,16 @@ func TestDeclaredIndexExplain(t *testing.T) {
 			t.Fatalf("EXPLAIN %s: %v", c.Name, err)
 		}
 		for _, result := range report.Results[len(report.Results)-3:] {
+			if strict && (c.Name == "comments-selective" || c.Name == "comments-selective-after-hot" || c.Name == "datetime-selective") && (result.Mode == "auto" || result.Mode == "force_custom_plan") {
+				requireSelectiveIndexCondition(t, result.Plan, result.ExpectedIndex)
+				report.RegressionChecks = append(report.RegressionChecks, c.Name+"/"+result.Mode+"/index_cond")
+			}
 			t.Logf("%s %s: %s expected=%s used=%v scans=%v rows=%d buffers=%d/%d time=%.3fms custom/generic=%d/%d", c.Name, result.Mode, result.Status, result.ExpectedIndex, result.UsedIndexes, result.ScanTypes, result.Rows, result.SharedHits, result.SharedReads, result.ExecutionMS, result.CustomPlans, result.GenericPlans)
 		}
+	}
+	if strict {
+		checkDatetimeEvaluations(t, ctx, pool, report.RowsSeeded)
+		report.RegressionChecks = append(report.RegressionChecks, "datetime_generic_single_evaluation")
 	}
 	// Guard controls happen only after collecting all real plans, on our own
 	// fixture indexes. Each failed observation uses its own partial report.

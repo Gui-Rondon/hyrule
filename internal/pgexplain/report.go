@@ -49,14 +49,16 @@ func (Tracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, d pgx.TraceQuery
 func (Tracer) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
 
 type Case struct {
-	Name     string
-	Index    postgres.IndexSpec
-	Schema   rest.Schema
-	Filter   any
-	Sort     []restpostgres.SortTerm
-	Limit    int64
-	WantRows int
-	Check    func([]rest.Doc) error
+	WarmupFilter   any
+	WantWarmupRows int
+	Name           string
+	Index          postgres.IndexSpec
+	Schema         rest.Schema
+	Filter         any
+	Sort           []restpostgres.SortTerm
+	Limit          int64
+	WantRows       int
+	Check          func([]rest.Doc) error
 }
 
 func indexName(spec postgres.IndexSpec) string {
@@ -125,6 +127,8 @@ type planDocument struct {
 }
 
 type Result struct {
+	WarmupRows      int             `json:"warmup_rows,omitempty"`
+	WarmupArgs      []any           `json:"warmup_args,omitempty"`
 	ExplainPlanKind string          `json:"explain_plan_kind"`
 	Case            string          `json:"case"`
 	Mode            string          `json:"mode"`
@@ -148,6 +152,7 @@ type Result struct {
 }
 
 type Report struct {
+	RegressionChecks []string             `json:"regression_checks,omitempty"`
 	NegativeControls []string             `json:"negative_controls"`
 	Settings         map[string]string    `json:"settings"`
 	Complete         bool                 `json:"complete"`
@@ -224,7 +229,13 @@ func readIDs(ctx context.Context, tx pgx.Tx, sql string, args []any) ([]string, 
 	return ids, rows.Err()
 }
 
-func explainMode(ctx context.Context, pool *pgxpool.Pool, c Case, sql string, args []any, wantHash, mode string) (result Result, err error) {
+type warmup struct {
+	args []any
+	rows int
+	hash string
+}
+
+func explainMode(ctx context.Context, pool *pgxpool.Pool, c Case, sql string, args []any, wantHash, mode string, warm warmup) (result Result, err error) {
 	result = Result{Case: c.Name, Mode: mode, ExpectedIndex: indexName(c.Index), SQL: sql, Args: args}
 	conn, err := pool.Acquire(ctx)
 	if err != nil {
@@ -266,12 +277,14 @@ func explainMode(ctx context.Context, pool *pgxpool.Pool, c Case, sql string, ar
 	// In auto mode, exercise the five custom executions preceding the planner's
 	// generic/custom decision. Report counters rather than presuming its choice.
 	if mode == "auto" {
+		result.WarmupRows = warm.rows
+		result.WarmupArgs = warm.args
 		for range 5 {
-			ids, err := readIDs(ctx, tx, execute, args)
+			ids, err := readIDs(ctx, tx, execute, warm.args)
 			if err != nil {
 				return result, err
 			}
-			if len(ids) != c.WantRows || fingerprint(ids, len(c.Sort) > 0) != wantHash {
+			if len(ids) != warm.rows || fingerprint(ids, len(c.Sort) > 0) != warm.hash {
 				return result, fmt.Errorf("auto warmup result differs from adapter")
 			}
 		}
@@ -375,8 +388,30 @@ func (r *Report) Run(ctx context.Context, pool *pgxpool.Pool, c Case) (err error
 		ids[i] = fmt.Sprint(doc["_id"])
 	}
 	wantHash := fingerprint(ids, len(c.Sort) > 0)
+	warm := warmup{args: args, rows: c.WantRows, hash: wantHash}
+	if c.WarmupFilter != nil {
+		warmCapture := &capture{}
+		warmDocs, err := adapter.Find(context.WithValue(ctx, captureKey{}, warmCapture), c.WarmupFilter, c.Sort, nil, 0, c.Limit)
+		if err != nil {
+			return err
+		}
+		if len(warmDocs) != c.WantWarmupRows {
+			return fmt.Errorf("warmup rows=%d expected=%d", len(warmDocs), c.WantWarmupRows)
+		}
+		warmCapture.Lock()
+		warmSQL, warmArgs, warmCount := warmCapture.sql, warmCapture.args, warmCapture.count
+		warmCapture.Unlock()
+		if warmCount != 1 || warmSQL != sql {
+			return fmt.Errorf("warmup must execute the same prepared query shape")
+		}
+		warmIDs := make([]string, len(warmDocs))
+		for i, doc := range warmDocs {
+			warmIDs[i] = fmt.Sprint(doc["_id"])
+		}
+		warm = warmup{args: warmArgs, rows: c.WantWarmupRows, hash: fingerprint(warmIDs, len(c.Sort) > 0)}
+	}
 	for _, mode := range []string{"auto", "force_custom_plan", "force_generic_plan"} {
-		result, err := explainMode(ctx, pool, c, sql, args, wantHash, mode)
+		result, err := explainMode(ctx, pool, c, sql, args, wantHash, mode, warm)
 		r.Results = append(r.Results, result)
 		if err != nil {
 			return fmt.Errorf("%s: %w", mode, err)

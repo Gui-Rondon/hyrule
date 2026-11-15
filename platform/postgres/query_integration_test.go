@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -32,14 +33,39 @@ func insertDocs(t *testing.T, pool *pgxpool.Pool, table string, docs ...string) 
 	}
 }
 
-// namesMatching runs CompileFilter's output against table and returns
-// the matched rows' doc->>'name', sorted, for assertion convenience.
+// namesMatching compares both compilers against the same real rows and returns
+// their selected doc->>'name' values, sorted, for assertion convenience.
 func namesMatching(t *testing.T, pool *pgxpool.Pool, table string, q Query, schema SchemaSpec) []string {
 	t.Helper()
 	where, args, err := CompileFilter(q, schema, 0)
 	if err != nil {
 		t.Fatalf("CompileFilter: %v", err)
 	}
+	optimized, optimizedArgs, err := CompileWhere(q, schema, 0)
+	if err != nil {
+		t.Fatalf("CompileWhere: %v", err)
+	}
+	if !reflect.DeepEqual(args, optimizedArgs) {
+		t.Fatalf("bindings differ: legacy=%v where=%v", args, optimizedArgs)
+	}
+	legacyRows, err := pool.Query(context.Background(), "SELECT doc->>'name' FROM "+table+" WHERE "+where+" ORDER BY doc->>'name'", args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var legacyNames []string
+	for legacyRows.Next() {
+		var name string
+		if err := legacyRows.Scan(&name); err != nil {
+			legacyRows.Close()
+			t.Fatal(err)
+		}
+		legacyNames = append(legacyNames, name)
+	}
+	legacyRows.Close()
+	if err := legacyRows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	where, args = optimized, optimizedArgs
 	rows, err := pool.Query(context.Background(), "SELECT doc->>'name' FROM "+table+" WHERE "+where+" ORDER BY doc->>'name'", args...)
 	if err != nil {
 		t.Fatalf("query (where=%q args=%v): %v", where, args, err)
@@ -55,6 +81,9 @@ func namesMatching(t *testing.T, pool *pgxpool.Pool, table string, q Query, sche
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, legacyNames) {
+		t.Fatalf("selection changed: query=%v legacy=%v where=%v", q, legacyNames, got)
 	}
 	return got
 }

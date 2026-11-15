@@ -61,7 +61,7 @@ directly. `mongoAdapter` (`rest/mongoadapter.go`) and `restpostgres`'s
 | `MergePatch` | Eve's deep merge (`MERGE_NESTED_DOCUMENTS`) — a literal `null` is stored, never deletes a key | RFC 7396 JSON Merge Patch — `null` deletes the key, replacing the whole value otherwise; `rest.Resource.RequireMergePatchContentType` enforces `application/merge-patch+json` when set |
 | `ValidatesMergedDocument()` | `false` — only the client's own PATCH body is validated | `true` — the merged document is checked for `Required` keys RFC 7396 may have deleted (seção 20's Fase 4c) |
 | Soft delete | a `_deleted` field inside the document | a physical `deleted` column, never inside `doc` |
-| Declared `where=` numbers | `json.Number` on the filter path, converted ad hoc | `platform/postgres`'s `CompileFilter` needs a `Kind` (`KindInteger`/`KindNumber`/`KindDateTime`) per field — see [`querying.md`](querying.md) |
+| Declared `where=` numbers | `json.Number` on the filter path, converted ad hoc | `platform/postgres`'s `CompileWhere` needs a `Kind` (`KindInteger`/`KindNumber`/`KindDateTime`) per field — see [`querying.md`](querying.md) |
 | Error classification | `mongo.ErrNoDocuments`/`IsDuplicateKeyError`/server error codes | Postgres SQLSTATE codes (`23505` unique violation, `57014`/`40P01`/`40001` transient) |
 
 ## Building a Postgres-backed resource

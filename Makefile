@@ -88,7 +88,7 @@ standalone-example-test:
 # Opt-in local HA lab; never provisioned by make test or GitHub Actions.
 export POSTGRES_HA_PORT ?= 5434
 POSTGRES_HA_COMPOSE = docker compose --project-name hyrule-postgres-ha -f infra/postgres-ha/compose.yml
-.PHONY: comments-migrate postgres-ha-up postgres-ha-status postgres-ha-test postgres-ha-failover-test postgres-ha-pitr-test postgres-ha-migrations-test postgres-ha-explain-test postgres-ha-logs postgres-ha-down postgres-ha-reset
+.PHONY: comments-migrate postgres-ha-up postgres-ha-status postgres-ha-test postgres-ha-failover-test postgres-ha-pitr-test postgres-ha-migrations-test postgres-ha-explain-test postgres-ha-where-test postgres-ha-logs postgres-ha-down postgres-ha-reset
 postgres-ha-up:
 	$(POSTGRES_HA_COMPOSE) up -d --build --wait --wait-timeout 240
 
@@ -117,6 +117,10 @@ postgres-ha-migrations-test:
 # Manual plans/report gate; no provisioning and no failure for planner non-use.
 postgres-ha-explain-test:
 	POSTGRES_EXPLAIN_TEST=1 POSTGRES_EXPLAIN_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestDeclaredIndexExplain$$' -timeout=8m ./examples/blog-apis/services/comments-api
+
+# Focused regression assertions; the general A6 report remains observational.
+postgres-ha-where-test:
+	POSTGRES_WHERE_TEST=1 POSTGRES_EXPLAIN_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestWherePredicatePlans$$' -timeout=8m ./examples/blog-apis/services/comments-api
 
 comments-migrate:
 	go run ./examples/blog-apis/cmd/comments-migrate $(MIGRATE_ARGS)

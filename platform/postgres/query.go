@@ -66,10 +66,26 @@ func asQueryList(v any) ([]Query, bool) {
 // something else. An empty/nil Query compiles to "TRUE" (matches every
 // row). schema picks the SQL cast for each field's filter values.
 func CompileFilter(q Query, schema SchemaSpec, startAt int) (where string, args []any, err error) {
+	return compilePredicate(q, schema, startAt, false)
+}
+
+// CompileWhere compiles the same document DSL as CompileFilter for use only in
+// SQL WHERE clauses (without a WHERE keyword). It preserves selected rows and
+// bindings, but positive comparisons may yield SQL NULL for missing/invalid
+// values. WHERE rejects that result; use Query's $not for null-safe negation,
+// never concatenate NOT around this SQL. Use CompileFilter when observing the
+// normalized scalar boolean instead. Field names and values remain bound.
+// Generic prepared plans may still not match expression indexes whose field
+// name is a parameter; this does not change planner settings or index policy.
+func CompileWhere(q Query, schema SchemaSpec, startAt int) (where string, args []any, err error) {
+	return compilePredicate(q, schema, startAt, true)
+}
+
+func compilePredicate(q Query, schema SchemaSpec, startAt int, whereOnly bool) (string, []any, error) {
 	if len(q) == 0 {
 		return "TRUE", nil, nil
 	}
-	c := &compiler{schema: schema, n: startAt}
+	c := &compiler{schema: schema, n: startAt, whereOnly: whereOnly}
 	expr, err := c.compileQuery(q)
 	if err != nil {
 		return "", nil, err
@@ -78,9 +94,10 @@ func CompileFilter(q Query, schema SchemaSpec, startAt int) (where string, args 
 }
 
 type compiler struct {
-	schema SchemaSpec
-	args   []any
-	n      int
+	whereOnly bool
+	schema    SchemaSpec
+	args      []any
+	n         int
 }
 
 // param appends v as the next bind argument and returns its placeholder.
@@ -88,6 +105,18 @@ func (c *compiler) param(v any) string {
 	c.args = append(c.args, v)
 	c.n++
 	return fmt.Sprintf("$%d", c.n)
+}
+
+// comparison keeps the legacy scalar contract unless compiling a WHERE.
+// A bare positive comparison can become an index condition and evaluates a
+// safe datetime helper only once. IS DISTINCT FROM is already null-safe and
+// is left unchanged in this first selective-predicate optimization.
+func (c *compiler) comparison(ref, op, lit string) string {
+	expr := fmt.Sprintf("(%s %s %s)", ref, op, lit)
+	if c.whereOnly && op != "IS DISTINCT FROM" {
+		return expr
+	}
+	return expr + " IS TRUE"
 }
 
 // checkKindValue rejects a Go value whose type pgx cannot bind to
@@ -202,6 +231,9 @@ func (c *compiler) compileTop(key string, value any) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		if c.whereOnly {
+			return "((" + expr + ") IS NOT TRUE)", nil
+		}
 		return "(NOT (" + expr + "))", nil
 	default:
 		return c.compileField(key, value)
@@ -262,7 +294,7 @@ func (c *compiler) compileNestedField(path []string, ops Query) (string, error) 
 			if err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("(%s = %s) IS TRUE", ref, lit), nil
+			return c.comparison(ref, "=", lit), nil
 		case "$ne":
 			lit, err := c.jsonbLiteral(val, KindString)
 			if err != nil {
@@ -319,9 +351,10 @@ var comparisonSQL = map[string]string{"$gt": ">", "$gte": ">=", "$lt": "<", "$lt
 // now) parses doc's stored text as a real timestamptz instead, so
 // every comparison built from dateTimeRef/dateTimeLiteral is by
 // instant; it also returns SQL NULL (never raises) for an absent
-// field, an explicit JSON null, or unparseable text -- which never
-// satisfies any comparison once wrapped in IS TRUE, the same "never
-// matches" contract every other Kind already has.
+// field, an explicit JSON null, or unparseable text. Positive equality/range
+// comparisons reject that NULL; null-aware operators retain their own rules.
+// CompileFilter normalizes comparisons with IS TRUE; CompileWhere lets WHERE
+// reject NULL directly, with null-safe DSL negation.
 //
 // Every KindDateTime-aware operator ($eq/$ne/$gt/$gte/$lt/$lte/$in/
 // $nin -- see compileOp/compileInNin) builds its SQL from this and
@@ -361,7 +394,7 @@ func (c *compiler) compileDateTimeCompare(field, sqlOp string, val any) (string,
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("(%s %s %s) IS TRUE", ref, sqlOp, lit), nil
+	return c.comparison(ref, sqlOp, lit), nil
 }
 
 // compileDateTimeInNin mirrors compileInNin's EXISTS/unnest shape, but
@@ -405,7 +438,7 @@ func (c *compiler) compileOp(field string, kind Kind, op string, val any) (strin
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("(%s %s %s) IS TRUE", ref, eqSQL[op], lit), nil
+		return c.comparison(ref, eqSQL[op], lit), nil
 	case "$gt", "$gte", "$lt", "$lte":
 		if val == nil {
 			return "", fmt.Errorf("postgres: %s does not accept null", op)
@@ -418,7 +451,7 @@ func (c *compiler) compileOp(field string, kind Kind, op string, val any) (strin
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("(%s %s %s) IS TRUE", ref, comparisonSQL[op], lit), nil
+		return c.comparison(ref, comparisonSQL[op], lit), nil
 	case "$in", "$nin":
 		return c.compileInNin(field, kind, op, val)
 	case "$exists":
