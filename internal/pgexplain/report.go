@@ -60,6 +60,9 @@ type Case struct {
 	Limit          int64
 	WantRows       int
 	Check          func([]rest.Doc) error
+
+	// SafeDateTimeSort explicitly enables the adapter option for this case.
+	SafeDateTimeSort bool
 }
 
 func indexName(spec postgres.IndexSpec) string {
@@ -361,7 +364,7 @@ func (r *Report) Run(ctx context.Context, pool *pgxpool.Pool, c Case) (err error
 	if !valid || !ready {
 		return fmt.Errorf("index invalid/not ready")
 	}
-	adapter, err := restpostgres.NewAdapter(postgres.NewStore(pool, c.Index.Table), postgres.Transactor{Pool: pool}, restpostgres.Options{Schema: c.Schema, Retry: rest.DefaultRetryOptions()})
+	adapter, err := restpostgres.NewAdapter(postgres.NewStore(pool, c.Index.Table), postgres.Transactor{Pool: pool}, restpostgres.Options{Schema: c.Schema, Retry: rest.DefaultRetryOptions(), SafeDateTimeSort: c.SafeDateTimeSort})
 	if err != nil {
 		return err
 	}

@@ -108,3 +108,21 @@ func TestOrderByIDQualifiesSanitizedTable(t *testing.T) {
 		t.Fatalf("args = %v", args)
 	}
 }
+
+func TestOrderByDateTimeSortIsExplicit(t *testing.T) {
+	for _, safe := range []bool{false, true} {
+		a := &postgresAdapter{table: `"docs"`, safeDateTimeSort: safe, schema: postgres.SchemaSpec{Fields: map[string]postgres.Kind{"when": postgres.KindDateTime, "odd'\\雪": postgres.KindDateTime, "nested.when": postgres.KindDateTime}}}
+		terms := []SortTerm{{Field: "when", Desc: true}, {Field: "odd'\\雪"}, {Field: "nested.when"}, {Field: "_id"}, {Field: "name"}}
+		got, args := a.orderByClause(terms, 2)
+		want := ` ORDER BY (doc->>$3)::timestamptz DESC, (doc->>$4)::timestamptz ASC, doc #>> $5::text[] ASC, "docs".id ASC, (doc->>$6)::text ASC`
+		if safe {
+			want = ` ORDER BY hyrule_safe_timestamptz(doc->>$3) DESC, hyrule_safe_timestamptz(doc->>$4) ASC, doc #>> $5::text[] ASC, "docs".id ASC, (doc->>$6)::text ASC`
+		}
+		if got != want {
+			t.Fatalf("safe=%t: %s; want %s", safe, got, want)
+		}
+		if !reflect.DeepEqual(args, []any{"when", "odd'\\雪", []string{"nested", "when"}, "name"}) {
+			t.Fatalf("safe=%t args=%v", safe, args)
+		}
+	}
+}

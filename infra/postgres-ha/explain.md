@@ -248,3 +248,34 @@ an operator opt-in mitigation, with planning cost on each parameterized executio
 and scope across the entire pool. Defaults, SQL, bindings and transports are
 unchanged. Remove the URI option and recreate the pool to revert. This gate
 provides evidence, not a general policy recommendation or throughput guarantee.
+
+## Explicit safe datetime sort gate
+
+```sh
+make postgres-ha-datetime-sort-test POSTGRES_HA_PORT=5540
+```
+
+Enabled only by `POSTGRES_DATETIME_SORT_TEST=1` and `POSTGRES_EXPLAIN_URI`, with
+no provisioning or GitHub Actions changes. The adapter's default cast/error
+contract is preserved. Only `restpostgres.Options.SafeDateTimeSort: true` uses
+the existing datetime helper for top-level document sorts; the report Case
+must explicitly opt in as well. Legacy datetime index DDL and helper behavior
+are unchanged, and typed-sort mode still rejects datetime.
+
+The gate builds 20,000 documents and a real compound index with a legacy
+KindDateTime term plus a typed integer tie term. It runs valid and mixed corpora
+in UTC and America/Sao_Paulo with ASC/DESC, missing/JSON null, invalid and legacy
+values, equivalent instants and explicit tie ordering. Full result IDs match
+the helper reference; valid data also matches the strict adapter. Default
+queries still fail on bad values. The actual safe adapter SELECT is captured
+for all 48 plans; 24 checks demand the expected forward/backward index scan
+without Sort in auto/custom initial pages. Generic and offsets of 19990 remain
+observational. No scan is disabled. Normal integration tests also check values
+are returned unchanged, malformed JSON types and helper normalization cases.
+
+Reports under `.local/postgres-datetime-sort/` become complete only after
+fixture cleanup. The opt-in changes the treatment of values the helper rejects,
+including date-only/no-zone/infinity formats accepted by the direct cast: they
+sort as SQL NULL. The helper is not a new strict RFC3339 validator. NULLS order
+uses PostgreSQL defaults, and stable pages require an explicit unique tie term.
+No production index or application opt-in is installed by this gate.

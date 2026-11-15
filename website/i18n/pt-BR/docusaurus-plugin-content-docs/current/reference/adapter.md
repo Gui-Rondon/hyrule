@@ -111,6 +111,57 @@ nos próprios testes de `restpostgres`.
 `platform/server`, `/status`/`/healthcheck` e dry run
 (`postgres.Transactor.Rollback`) funcionam para serviços Postgres.
 
+## Ordenação datetime segura por opção explícita
+
+A ordenação datetime de documentos mantém o cast direto para `timestamptz`
+por padrão, incluindo falhas de consulta com valores inválidos armazenados.
+Para optar pelo helper já usado pelos filtros e índices datetime em um
+adapter/resource:
+
+```go
+opts := restpostgres.Options{
+    Schema: schema,
+    Retry: rest.DefaultRetryOptions(),
+    SafeDateTimeSort: true,
+}
+```
+
+A opção substitui apenas expressões de sort datetime de campo superior por
+`hyrule_safe_timestamptz(doc->>$N)`. Campos continuam como parâmetros vinculados.
+Caminhos aninhados mantêm ordenação textual; metacampos e outros tipos não mudam.
+É uma opção de registro em Go, não um parâmetro de query HTTP. Execute
+`postgres.EnsureFunctions` no setup; `app.Build` já faz isso para Postgres.
+
+Valores rejeitados pelo helper existente ordenam como SQL NULL, junto com campos
+ausentes e JSON null: no fim em ASC, no começo em DESC. Isso inclui valores
+malformados, strings vazias, datas de calendário inválidas e formatos legados
+como datas sem horário, timestamps sem fuso explícito e `infinity`, que o cast
+padrão pode aceitar. Audite os formatos armazenados antes de optar pelo modo.
+Os valores retornados são preservados; a opção não reescreve nem valida os dados.
+O helper mantém sua normalização atual pelo PostgreSQL (incluindo entradas
+24:00/leap second aceitas); não é um novo validador RFC3339 estrito.
+Timestamps válidos suportados preservam a ordem cronológica entre offsets
+explícitos, com a precisão já usada pelo PostgreSQL. Instantes iguais e grupos
+NULL exigem termo de sort único explícito para paginação estável; nenhum
+desempate é acrescentado automaticamente.
+
+Os índices datetime legados (`IndexField{Field: "published_at", Kind:
+postgres.KindDateTime}`) já usam esse helper. A opção pode alinhar a consulta
+a eles sem alterar o DDL. `IndexFieldTypedSort` continua rejeitando datetime.
+O índice segue sendo escolha do planner, especialmente em planos genéricos
+com campos parametrizados e offsets profundos. Nenhum índice ou migration
+é adicionado a recursos de produção. Remover a opção restaura o cast direto e
+seus erros sem alterar dados ou índices.
+
+`make postgres-ha-datetime-sort-test POSTGRES_HA_PORT=5540` é um gate manual/local
+com índices reais e SELECTs capturados do adapter. Verifica corpora de 20 mil
+linhas válidas e mistas em UTC e America/Sao_Paulo, ASC/DESC, desempates compostos
+explícitos e paginação: 48 planos e 24 verificações de índice sem Sort em
+auto/custom. Verifica o erro padrão e a paridade de resultados no modo seguro.
+Generic e offsets profundos são observacionais. Artefatos ficam em
+`.local/postgres-datetime-sort/` após cleanup do schema isolado. O gate não
+provisiona infraestrutura nem roda no GitHub Actions.
+
 ## Planos preparados e política explícita por pool
 
 O padrão atual do pgx mantém statements preparados em cache. O adapter usa

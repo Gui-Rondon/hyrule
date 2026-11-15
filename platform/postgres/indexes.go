@@ -36,7 +36,7 @@ const (
 
 // IndexField is a top-level document key. The zero-value Mode indexes doc->field;
 // KindDateTime in legacy mode uses hyrule_safe_timestamptz(doc->>field), matching
-// datetime filters (datetime sorting still uses a direct cast).
+// datetime filters (datetime sorting uses a direct cast by default).
 type IndexField struct {
 	Field string
 	Desc  bool

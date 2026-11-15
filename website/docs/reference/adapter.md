@@ -110,6 +110,55 @@ wiring, config loading, `/status`/`/healthcheck`, and dry run
 (`postgres.Transactor.Rollback`) all now work for a Postgres-backed
 service exactly as they do for a Mongo one.
 
+## Explicit safe datetime ordering
+
+Datetime document sorting keeps its direct `timestamptz` cast by default,
+including query failures on invalid stored values. To opt one adapter/resource
+into the helper already used by datetime filters and indexes:
+
+```go
+opts := restpostgres.Options{
+    Schema: schema,
+    Retry: rest.DefaultRetryOptions(),
+    SafeDateTimeSort: true,
+}
+```
+
+The option replaces only top-level datetime sort expressions with
+`hyrule_safe_timestamptz(doc->>$N)`. Field names remain bound parameters.
+Nested paths keep their text ordering; meta columns and other kinds are
+unchanged. It is a Go registration option, not an HTTP query parameter. Call
+`postgres.EnsureFunctions` during setup; `app.Build` already does so for Postgres.
+
+Values rejected by the existing helper sort as SQL NULL, alongside missing
+keys and JSON null: ASC places them last, DESC first. This includes malformed
+values, empty strings, invalid calendar dates, and legacy formats such as
+date-only strings, timestamps without an explicit zone and `infinity` that the
+default cast may accept. Audit stored formats before opting in. Returned field
+values are preserved; the option does not rewrite or validate stored data.
+The helper retains its existing PostgreSQL normalization (including accepted
+24:00/leap-second inputs); it is not a new strict RFC3339 validator.
+Valid supported timestamps retain chronological ordering across explicit zone
+offsets, with PostgreSQL's existing precision. Equal instants and NULL groups
+need an explicit unique sort term for stable pagination; no tie order is added.
+
+Existing legacy datetime indexes (`IndexField{Field: "published_at", Kind:
+postgres.KindDateTime}`) already use this helper. The option can align queries
+with them without changing their DDL. `IndexFieldTypedSort` still rejects
+datetime. An index remains a planner choice, especially for parameterized
+fields in generic plans or deep offsets. No index or migration is added to a
+production resource. Removing the option restores the direct cast and its
+errors without altering data or indexes.
+
+`make postgres-ha-datetime-sort-test POSTGRES_HA_PORT=5540` is a manual local
+gate with real indexes and captured adapter SELECTs. It checks valid and mixed
+20,000-row corpora in UTC and America/Sao_Paulo, ASC/DESC, explicit compound
+ties and pagination: 48 plans and 24 auto/custom index-without-Sort checks.
+The default error contract and safe result parity are verified. Generic and
+deep-offset choices remain observational. Artifacts are saved under
+`.local/postgres-datetime-sort/` after isolated-schema cleanup. The gate does
+not provision infrastructure or run in GitHub Actions.
+
 ## Prepared plans and an explicit pool policy
 
 The current pgx default caches prepared statements. The adapter binds document
