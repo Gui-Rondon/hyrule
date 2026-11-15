@@ -179,3 +179,39 @@ Missing/null/negation semantics and bindings are checked against CompileFilter
 using real database tests. CompileFilter retains its normalized scalar boolean.
 No implicit guards are added to comparisons. Index definitions, uniqueness,
 sorting and generic-plan policy are unchanged.
+
+## Typed sort index gate
+
+```sh
+make postgres-ha-typed-sort-test POSTGRES_HA_PORT=5540
+```
+
+Manual/local only; no infrastructure provisioning or GitHub Actions changes.
+Direct invocation requires `POSTGRES_TYPED_SORT_TEST=1` and
+`POSTGRES_EXPLAIN_URI`. Artifacts are saved under `.local/postgres-typed-sort/`;
+`report.json` is complete only after the matrix and schema cleanup succeed.
+
+The gate creates 20,000 documents and legacy JSONB indexes, records the real
+adapter's ordered results, then adds explicit `IndexFieldTypedSort` indexes
+through `EnsureIndexes`. It compares the full corpus before/after for each
+supported scalar kind and a single-field integer sort. All ties are resolved by
+an explicitly requested unique typed integer term. The corpus includes missing
+keys, JSON null, negative/decimal numbers, repeated booleans and accented text;
+database collation and planner settings are recorded. Compound numeric ordering
+uses mixed directions. No new tie ordering is imposed on application queries.
+
+Sixteen scenarios yield 48 captured-SELECT prepared plans: ASC/DESC for the four
+scalar kinds and the single-field sort, integer offsets 10/19990, and unaligned
+JSONB filter controls. Twenty-four checks require the expected forward/backward
+index scan without any Sort in auto/custom initial pages (including offset 10).
+Auto executes five warmups. Generic plans, deep offsets and unaligned filters
+remain observational; scans are never disabled. The sort index does not turn
+JSONB predicates into typed index conditions. Invalid existing values must fail
+index creation with 22P02 without leaving an index; invalid future writes must
+fail as well for integer/numeric/boolean. All fixtures use an isolated schema
+removed by cleanup, including on failures.
+
+Adoption requires a new explicit name and a data audit. Existing same-name
+indexes are not compared or migrated. Datetime, unique/sparse typed indexes,
+nested paths, planner policy and production comments-api indexes are outside
+this change. Existing WHERE, UUID and sparse gates remain separate regressions.

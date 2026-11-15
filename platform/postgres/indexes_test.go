@@ -277,3 +277,63 @@ func TestEnsureIndexesExplain(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildIndexSQLTypedSort(t *testing.T) {
+	for _, tc := range []struct {
+		kind Kind
+		cast string
+	}{
+		{KindString, "text"}, {KindInteger, "int8"}, {KindNumber, "numeric"}, {KindBoolean, "boolean"},
+	} {
+		spec := IndexSpec{Table: `a"b`, Name: `typed"sort`, Fields: []IndexField{
+			{Field: "a'b", Kind: tc.kind, Mode: IndexFieldTypedSort, Desc: true},
+			{Field: "tie", Kind: KindInteger, Mode: IndexFieldTypedSort},
+		}}
+		_, sql, err := buildIndexSQL(spec)
+		want := `CREATE INDEX IF NOT EXISTS "typed""sort" ON "a""b" (((doc->>'a''b')::` + tc.cast + `) DESC, ((doc->>'tie')::int8))`
+		if err != nil || sql != want {
+			t.Fatalf("kind %d: %s / %v; want %s", tc.kind, sql, err, want)
+		}
+		// Mode zero continues to generate exactly the legacy DDL for every kind.
+		spec.Fields = []IndexField{{Field: "value", Kind: tc.kind}}
+		_, sql, err = buildIndexSQL(spec)
+		if err != nil || sql != `CREATE INDEX IF NOT EXISTS "typed""sort" ON "a""b" ((doc->'value'))` {
+			t.Fatalf("legacy: %s / %v", sql, err)
+		}
+	}
+}
+
+func TestBuildIndexSQLTypedSortValidation(t *testing.T) {
+	valid := func() IndexSpec {
+		return IndexSpec{Table: "docs", Name: "new_typed", Fields: []IndexField{{Field: "v", Kind: KindInteger, Mode: IndexFieldTypedSort}}}
+	}
+	cases := map[string]IndexSpec{}
+	for _, kind := range []Kind{KindDateTime, KindArray, KindObject, Kind(-1), Kind(999)} {
+		s := valid()
+		s.Fields[0].Kind = kind
+		cases[fmt.Sprint("kind", kind)] = s
+	}
+	s := valid()
+	s.Name = ""
+	cases["no name"] = s
+	s = valid()
+	s.Unique = true
+	cases["unique"] = s
+	s = valid()
+	s.Sparse = true
+	cases["sparse"] = s
+	s = valid()
+	s.Fields[0].Mode = IndexFieldMode(255)
+	cases["unknown mode"] = s
+	s = valid()
+	s.Fields = append([]IndexField{{Field: "legacy"}}, s.Fields...)
+	s.Unique = true
+	cases["mixed unique"] = s
+	for name, spec := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, _, err := buildIndexSQL(spec); err == nil {
+				t.Fatal("expected rejection")
+			}
+		})
+	}
+}

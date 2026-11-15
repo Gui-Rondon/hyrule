@@ -109,6 +109,49 @@ text/hashed/2dsphere), chamado explicitamente por quem configura a
 tabela de uma resource, mesmo precedente do `EnsureFunctions` (ver
 [`adapter.md`](adapter.md#construindo-uma-resource-sobre-postgres)).
 
+### Índices Postgres explícitos para ordenação tipada
+
+`IndexField.Mode` tem `postgres.IndexFieldLegacy` como valor padrão: o DDL
+JSONB existente é preservado, incluindo o helper seguro de datetime. A ordem
+JSONB difere da ordenação tipada do `restpostgres`, especialmente para nulls
+e misturas de tipos JSON. Para indexar a expressão escalar atual, opte por campo:
+
+```go
+postgres.IndexSpec{
+    Table: "items", Name: "items_rank_typed_v1",
+    Fields: []postgres.IndexField{{
+        Field: "rank", Kind: postgres.KindInteger,
+        Mode: postgres.IndexFieldTypedSort,
+    }},
+}
+```
+
+Isso gera `((doc->>'rank')::int8)`. Os tipos suportados são `KindString`
+(`text`), `KindInteger` (`int8`), `KindNumber` (`numeric`) e `KindBoolean`
+(`boolean`). Índices compostos e `Desc` são suportados; valem os padrões de
+NULLS e collation do banco. Para páginas estáveis entre empates, declare um
+termo de desempate na ordenação. Consultas, bindings e semântica não mudam.
+Datetime, array/object, tipos/modos desconhecidos e índices tipados com
+`Unique` ou `Sparse` são rejeitados. Caminhos aninhados e metacampos estão
+fora desse modo.
+
+Audite os dados antes da criação e valide futuras escritas: casts inválidos
+impedem criar o índice e rejeitam escritas depois. JSON null e campos ausentes
+viram SQL NULL; uma string numérica pode gerar o mesmo valor de um número JSON.
+Cada índice extra tem custo de armazenamento e escrita. Use um **nome novo**
+explícito; `EnsureIndexes`/`CREATE IF NOT EXISTS` não migram definições antigas
+nem provam equivalência do DDL de um índice existente com o mesmo nome.
+
+Campos parametrizados ainda podem impedir uso do índice em planos genéricos.
+Um índice de sort não transforma filtros JSONB em condições tipadas de índice,
+e offsets profundos ainda podem exigir Sort. O gate manual/local
+`make postgres-ha-typed-sort-test POSTGRES_HA_PORT=5540` usa `EnsureIndexes`
+real e o SELECT capturado de `restpostgres.Find`, verifica planos auto/custom
+e registra controles generic/offset profundo. Artefatos ficam em
+`.local/postgres-typed-sort/`. Não provisiona infraestrutura nem é habilitado
+no GitHub Actions. A adoção inicial fica nas fixtures do gate, sem novo índice
+ou migration de comments-api.
+
 ## Pontos que ainda usam Mongo direto, de propósito
 
 `outbox` grava na coleção `outbox` com `*mongo.Collection` direto

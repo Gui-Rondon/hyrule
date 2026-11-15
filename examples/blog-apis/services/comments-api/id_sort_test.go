@@ -116,7 +116,7 @@ func TestIDSortPlans(t *testing.T) {
 				// Deep OFFSET remains a result/order control: the optimizer
 				// may prefer a sequential scan plus Sort at that cost.
 				if skip < 19990 {
-					requireUUIDIndexOrder(t, result.Plan, pk, desc)
+					requireIndexOrder(t, result.Plan, pk, desc)
 					report.RegressionChecks = append(report.RegressionChecks, name+"/"+result.Mode+"/pk_without_sort")
 				}
 				t.Logf("%s %s: rows=%d indexes=%v buffers=%d/%d", name, result.Mode, result.Rows, result.UsedIndexes, result.SharedHits, result.SharedReads)
@@ -125,7 +125,7 @@ func TestIDSortPlans(t *testing.T) {
 	}
 }
 
-func requireUUIDIndexOrder(t *testing.T, raw json.RawMessage, index string, desc bool) {
+func requireIndexOrder(t *testing.T, raw json.RawMessage, index string, desc bool) {
 	t.Helper()
 	var plans []struct{ Plan json.RawMessage }
 	if err := json.Unmarshal(raw, &plans); err != nil || len(plans) != 1 {
@@ -144,7 +144,7 @@ func requireUUIDIndexOrder(t *testing.T, raw json.RawMessage, index string, desc
 			t.Fatal(err)
 		}
 		if strings.Contains(node.Type, "Sort") {
-			t.Fatalf("UUID ordering requires Sort: %s", raw)
+			t.Fatalf("index ordering requires Sort: %s", raw)
 		}
 		direction := "Forward"
 		if desc {
@@ -159,6 +159,6 @@ func requireUUIDIndexOrder(t *testing.T, raw json.RawMessage, index string, desc
 	}
 	walk(plans[0].Plan)
 	if !found {
-		t.Fatalf("missing %s UUID primary-key scan: %s", index, raw)
+		t.Fatalf("missing %s index scan: %s", index, raw)
 	}
 }

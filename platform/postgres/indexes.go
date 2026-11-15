@@ -21,22 +21,27 @@ import (
 // instead, before any SQL is sent.
 const maxIdentifierBytes = 63
 
-// IndexField is one field of an index's expression. Field is a
-// top-level key of the doc jsonb column -- nested/dotted paths are
-// out of scope (every index the plan ever needed, sections 4/5/10, is
-// a top-level field). Kind, when KindDateTime, wraps the expression
-// in hyrule_safe_timestamptz(doc->>field) -- the same function
-// query.go's compiler uses for a KindDateTime filter/sort/comparison
-// (dateTimeRef) -- so the index indexes the real instant, never the
-// stored text. Any other Kind (including the zero value) indexes
-// doc->field as-is, the same jsonb-ordering expression section 5's
-// unique index already uses; jsonb's own ordering already compares
-// numbers/strings/booleans correctly within their own type, so no
-// other Kind needs its own cast.
+// IndexFieldMode selects the indexed expression independently of the field kind.
+type IndexFieldMode uint8
+
+const (
+	// IndexFieldLegacy preserves JSONB ordering, or the safe datetime helper.
+	IndexFieldLegacy IndexFieldMode = iota
+	// IndexFieldTypedSort matches the adapter's scalar ORDER BY cast.
+	// Only String, Integer, Number and Boolean are supported. Adoption requires
+	// auditing existing and future values: invalid casts reject index creation
+	// and writes. Use a new explicit index name; existing indexes are not migrated.
+	IndexFieldTypedSort
+)
+
+// IndexField is a top-level document key. The zero-value Mode indexes doc->field;
+// KindDateTime in legacy mode uses hyrule_safe_timestamptz(doc->>field), matching
+// datetime filters (datetime sorting still uses a direct cast).
 type IndexField struct {
 	Field string
 	Desc  bool
 	Kind  Kind
+	Mode  IndexFieldMode
 }
 
 // IndexSpec is one index to ensure exists on Table -- the Postgres
@@ -130,6 +135,21 @@ func buildIndexSQL(spec IndexSpec) (name, sql string, err error) {
 		expr := fmt.Sprintf("(doc->%s)", sqlStringLiteral(f.Field))
 		if f.Kind == KindDateTime {
 			expr = fmt.Sprintf("(hyrule_safe_timestamptz(doc->>%s))", sqlStringLiteral(f.Field))
+		}
+		switch f.Mode {
+		case IndexFieldLegacy:
+		case IndexFieldTypedSort:
+			if spec.Name == "" || spec.Unique || spec.Sparse {
+				return "", "", fmt.Errorf("postgres: typed sort indexes require an explicit new name and cannot be Unique or Sparse")
+			}
+			switch f.Kind {
+			case KindString, KindInteger, KindNumber, KindBoolean:
+			default:
+				return "", "", fmt.Errorf("postgres: unsupported typed sort kind %d at field %d", f.Kind, i)
+			}
+			expr = fmt.Sprintf("((doc->>%s)::%s)", sqlStringLiteral(f.Field), f.Kind.SQLCast())
+		default:
+			return "", "", fmt.Errorf("postgres: unknown index field mode %d at field %d", f.Mode, i)
 		}
 		if f.Desc {
 			expr += " DESC"
