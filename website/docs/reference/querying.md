@@ -75,6 +75,12 @@ Three syntaxes, matching what Eve's client code historically sent:
 An empty list (`[]`) or dict (`{}`) means no sort. Anything else that
 doesn't match one of the three shapes is a `400`.
 
+For Postgres, `sort=_id` and `sort=-_id` order by the physical UUID
+column. The adapter still returns `_id` as a UUID; the text conversion
+used to read the row does not determine sorting. This lets the planner
+use the primary key for ordering, though filters and deep offsets can
+still favor a scan and Sort. No default ordering is added.
+
 ## `projection`
 
 A JSON object, passed straight through as the Mongo projection

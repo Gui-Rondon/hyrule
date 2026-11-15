@@ -56,6 +56,7 @@ type Case struct {
 	Schema         rest.Schema
 	Filter         any
 	Sort           []restpostgres.SortTerm
+	Skip           int64
 	Limit          int64
 	WantRows       int
 	Check          func([]rest.Doc) error
@@ -365,7 +366,7 @@ func (r *Report) Run(ctx context.Context, pool *pgxpool.Pool, c Case) (err error
 		return err
 	}
 	captured := &capture{}
-	docs, err := adapter.Find(context.WithValue(ctx, captureKey{}, captured), c.Filter, c.Sort, nil, 0, c.Limit)
+	docs, err := adapter.Find(context.WithValue(ctx, captureKey{}, captured), c.Filter, c.Sort, nil, c.Skip, c.Limit)
 	if err != nil {
 		return err
 	}
@@ -391,7 +392,7 @@ func (r *Report) Run(ctx context.Context, pool *pgxpool.Pool, c Case) (err error
 	warm := warmup{args: args, rows: c.WantRows, hash: wantHash}
 	if c.WarmupFilter != nil {
 		warmCapture := &capture{}
-		warmDocs, err := adapter.Find(context.WithValue(ctx, captureKey{}, warmCapture), c.WarmupFilter, c.Sort, nil, 0, c.Limit)
+		warmDocs, err := adapter.Find(context.WithValue(ctx, captureKey{}, warmCapture), c.WarmupFilter, c.Sort, nil, c.Skip, c.Limit)
 		if err != nil {
 			return err
 		}

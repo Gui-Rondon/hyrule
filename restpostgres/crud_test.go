@@ -545,3 +545,36 @@ func TestVersionOverflowIsInternalNeverMisclassified(t *testing.T) {
 		t.Fatalf("after failed overflow update, name = %v, want unchanged \"a\"", after["name"])
 	}
 }
+
+// A secondary _id sort must order tied document values by UUID while keeping
+// the normal hydrated ID type and pagination contract.
+func TestFindIDSortWithDocumentTies(t *testing.T) {
+	pool := testPool(t)
+	a := newTestAdapter(t, pool, "crud_find_id_sort_test", map[string]postgres.Kind{"rank": postgres.KindInteger})
+	ctx := context.Background()
+	ids := []string{"ffffffff-ffff-4fff-bfff-ffffffffffff", "00000000-0000-4000-8000-000000000000", "80000000-0000-4000-8000-000000000001"}
+	for _, id := range ids {
+		if _, err := pool.Exec(ctx, "INSERT INTO "+a.table+"(id,doc) VALUES ($1::uuid,'{\"rank\":7}')", id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, desc := range []bool{false, true} {
+		docs, err := a.Find(ctx, postgres.Query{"rank": 7}, []SortTerm{{Field: "rank"}, {Field: "_id", Desc: desc}}, nil, 1, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{ids[2], ids[0]}
+		if desc {
+			want = []string{ids[2], ids[1]}
+		}
+		if len(docs) != len(want) {
+			t.Fatalf("docs=%v", docs)
+		}
+		for i, doc := range docs {
+			id, ok := doc["_id"].(uuid.UUID)
+			if !ok || id.String() != want[i] {
+				t.Fatalf("desc=%v row=%d id=%v want=%s", desc, i, doc["_id"], want[i])
+			}
+		}
+	}
+}

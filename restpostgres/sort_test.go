@@ -97,3 +97,14 @@ func TestToSortTermsRejectsWrongType(t *testing.T) {
 		t.Fatalf("toSortTerms(nil) = %v, %v, want nil, nil", terms, err)
 	}
 }
+
+func TestOrderByIDQualifiesSanitizedTable(t *testing.T) {
+	a := &postgresAdapter{table: `"odd""table"`}
+	clause, args := a.orderByClause([]SortTerm{{Field: "_id", Desc: true}, {Field: "name"}}, 2)
+	if want := ` ORDER BY "odd""table".id DESC, (doc->>$3)::text ASC`; clause != want {
+		t.Fatalf("orderByClause = %q, want %q", clause, want)
+	}
+	if !reflect.DeepEqual(args, []any{"name"}) {
+		t.Fatalf("args = %v", args)
+	}
+}
