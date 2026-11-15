@@ -33,11 +33,14 @@ type member struct {
 	pool             *pgxpool.Pool
 }
 
-func compose(ctx context.Context, args ...string) ([]byte, error) {
+func composeCommand(ctx context.Context, args ...string) *exec.Cmd {
 	_, file, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
-	cmd := exec.CommandContext(ctx, "docker", append([]string{"compose", "--project-name", "hyrule-postgres-ha", "-f", filepath.Join(root, "infra/postgres-ha/compose.yml")}, args...)...)
-	return cmd.CombinedOutput()
+	return exec.CommandContext(ctx, "docker", append([]string{"compose", "--project-name", "hyrule-postgres-ha", "-f", filepath.Join(root, "infra/postgres-ha/compose.yml")}, args...)...)
+}
+
+func compose(ctx context.Context, args ...string) ([]byte, error) {
+	return composeCommand(ctx, args...).CombinedOutput()
 }
 
 func await(ctx context.Context, check func(context.Context) error) error {
