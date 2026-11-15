@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -33,6 +32,7 @@ import (
 	"github.com/Gui-Rondon/hyrule/platform/auth"
 	"github.com/Gui-Rondon/hyrule/platform/config"
 	"github.com/Gui-Rondon/hyrule/platform/health"
+	"github.com/Gui-Rondon/hyrule/platform/httppath"
 	"github.com/Gui-Rondon/hyrule/platform/metrics"
 	"github.com/Gui-Rondon/hyrule/platform/mongodb"
 	"github.com/Gui-Rondon/hyrule/platform/postgres"
@@ -441,8 +441,8 @@ func finishBuild(spec Spec, env *Env, dryRun bool) http.Handler {
 	for _, mw := range env.wrappers {
 		handler = mw(handler)
 	}
-	if spec.URLPrefix != "" {
-		handler = stripURLPrefix("/"+strings.Trim(spec.URLPrefix, "/"), handler)
+	if prefix := httppath.NormalizePrefix(spec.URLPrefix); prefix != "" {
+		handler = stripURLPrefix(prefix, handler)
 	}
 	// outermost: /metrics stays at the root whatever the URL prefix, and
 	// every request is measured
@@ -452,13 +452,10 @@ func finishBuild(spec Spec, env *Env, dryRun bool) http.Handler {
 // stripURLPrefix serves next under prefix; any other path is the Eve 404.
 func stripURLPrefix(prefix string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tail, ok := strings.CutPrefix(r.URL.Path, prefix)
-		if !ok || tail != "" && !strings.HasPrefix(tail, "/") {
+		tail, ok := httppath.StripPrefix(r.URL.Path, prefix)
+		if !ok {
 			rest.WriteError(w, r, rest.ErrNotFound)
 			return
-		}
-		if tail == "" {
-			tail = "/"
 		}
 		r2 := r.Clone(r.Context())
 		r2.URL.Path = tail
