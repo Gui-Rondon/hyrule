@@ -136,6 +136,21 @@ services:
     ports: ['127.0.0.1:5437:5432', '127.0.0.1:18010:8008']
     volumes: [pg3:/var/lib/postgresql/data]
 
+  # Opt-in restore sandbox: anonymous data volume, no Patroni, no source PGDATA.
+  # Started only by the manual A3 harness with a unique container name.
+  pitr:
+    profiles: [pitr]
+    image: hyrule-postgres-ha:dev
+    restart: 'no'
+    shm_size: 128mb
+    environment:
+      <<: *postgres-env
+    command: [sh, /opt/restore-pitr.sh]
+    volumes:
+      - /var/lib/postgresql/data
+      - ./scripts/restore-pitr.sh:/opt/restore-pitr.sh:ro
+    ports: ['127.0.0.1::5432']
+
   proxy:
     image: haproxy:3.2.8-alpine@sha256:8c6b55d891584afded3ab1b91063a703ecc8ff2481302b691773648ffa806226
     volumes: ['./config/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro']

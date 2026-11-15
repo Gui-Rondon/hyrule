@@ -88,7 +88,7 @@ standalone-example-test:
 # Opt-in local HA lab; never provisioned by make test or GitHub Actions.
 export POSTGRES_HA_PORT ?= 5434
 POSTGRES_HA_COMPOSE = docker compose --project-name hyrule-postgres-ha -f infra/postgres-ha/compose.yml
-.PHONY: postgres-ha-up postgres-ha-status postgres-ha-test postgres-ha-failover-test postgres-ha-logs postgres-ha-down postgres-ha-reset
+.PHONY: postgres-ha-up postgres-ha-status postgres-ha-test postgres-ha-failover-test postgres-ha-pitr-test postgres-ha-logs postgres-ha-down postgres-ha-reset
 postgres-ha-up:
 	$(POSTGRES_HA_COMPOSE) up -d --build --wait --wait-timeout 240
 
@@ -105,6 +105,10 @@ postgres-ha-test:
 # Destructive opt-in: SIGKILL the discovered primary, then recover that node.
 postgres-ha-failover-test:
 	POSTGRES_HA_FAILOVER_TEST=1 go test -race -count=1 -v -run '^TestPrimaryCrashApplicationRecovery$$' -timeout=8m ./internal/integration/postgresha
+
+# Isolated full-backup/PITR sandbox; never part of the normal test suite.
+postgres-ha-pitr-test:
+	POSTGRES_HA_PITR_TEST=1 go test -race -count=1 -v -run '^TestBaseBackupPointInTimeRecovery$$' -timeout=10m ./internal/integration/postgresha
 
 postgres-ha-logs:
 	$(POSTGRES_HA_COMPOSE) logs --no-color --tail=100

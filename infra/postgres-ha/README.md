@@ -1,4 +1,4 @@
-# Local Postgres HA lab (A1/A2)
+# Local Postgres HA lab (A1/A2/A3)
 
 This opt-in lab exercises real PostgreSQL streaming replication and WAL-G S3
 archiving. It is run **manually, locally**. It has no GitHub Actions workflow and
@@ -137,7 +137,7 @@ application's environment cannot redirect it away from the lab.
 ## Destructive failover test (A2)
 
 Run manually, locally, **one lab command/test at a time**. Do not run smoke,
-failover, up/down/reset or other writers concurrently. This target does not
+failover, PITR, up/down/reset or other writers concurrently. This target does not
 start infrastructure; missing or unhealthy infrastructure is a failure.
 
 ```sh
@@ -205,6 +205,88 @@ RTO/RPO under load. The HTTP resource exercises the shared application path;
 it does not run comments-api's Pub/Sub workflow. Base backup/PITR is A3,
 migrations A5 and query-plan analysis A6.
 
+## Full backup and point-in-time recovery (A3)
+
+Run this opt-in gate manually and locally, with no concurrent lab commands or
+writers. The existing HA cluster and S3 must already be healthy:
+
+```sh
+make postgres-ha-up POSTGRES_HA_PORT=5540
+make postgres-ha-pitr-test POSTGRES_HA_PORT=5540
+make postgres-ha-test POSTGRES_HA_PORT=5540
+make postgres-ha-status POSTGRES_HA_PORT=5540
+```
+
+`postgres-ha-pitr-test` sets `POSTGRES_HA_PITR_TEST=1` and selects only
+`TestBaseBackupPointInTimeRecovery`, with `-race -count=1`. It does not start
+or stop the HA cluster. Ordinary tests skip it without opt-in, and the A1/A2
+targets keep selecting their own tests. No GitHub Actions changes are involved.
+
+The gate creates a uniquely named source table with a baseline row, takes a
+real WAL-G **full** physical backup (`backup-push --full --verify`), and records
+the exact newly completed backup name from `backup-list --json`. It uses that
+name, never `LATEST`. Page checksum verification is requested during backup;
+the acceptance evidence is a successful restore and correct contents, not
+just a backup object or sentinel appearing in S3.
+
+After the backup completes, the test inserts and confirms another row. It
+then records the **source database's** UTC clock and WAL LSN, waits until that
+clock is strictly later than the target, and commits a destructive update plus
+a third row. The test closes the WAL segment containing that later commit and
+waits for archiving, ensuring the archive contains data beyond the target.
+The target is a timestamp with a numeric UTC offset, not a named restore point
+or the end of the available WAL. Leadership, system identifier and timeline
+must remain unchanged throughout this sequence.
+
+The `pitr` Compose service belongs to an **opt-in profile** and uses the existing
+lab image, a fresh anonymous data volume and a dynamically allocated port bound
+to `127.0.0.1`. The harness runs it with a unique container name and `--no-deps`;
+normal `postgres-ha-up` does not start it. No source data volume is mounted.
+The restore script runs as postgres, requires an empty PGDATA and fetches the
+explicit backup from S3. It replaces inherited configuration rather than
+starting Patroni: no primary connection or replication slot, no synchronous
+standby requirement, `archive_mode=off`, and only WAL-G `wal-fetch` for recovery.
+The restored copy cannot publish a divergent timeline into the shared archive.
+It uses the source database's development password; the dynamically published
+listener is never bound to a public interface.
+
+Recovery uses `recovery.signal`, the recorded `recovery_target_time`, an explicit
+source timeline, and `recovery_target_action=pause`. Acceptance requires:
+
+- Same system identifier, recovery actually paused, and replay at least through
+  the WAL LSN recorded after the post-backup insert.
+- No WAL receiver, empty `primary_conninfo`, and archiving disabled.
+- Baseline value intact and the post-backup row present: the latter requires
+  WAL replay beyond the base backup.
+- Destructive update and third row absent: recovery stopped at the chosen time,
+  even though their WAL is available in S3.
+- Explicit promotion of **only the restored copy**, followed by a confirmed
+  independent write. The source still has the later destructive state, lacks
+  the restored-only row, and retains its original healthy leader/timeline.
+
+The harness fails immediately if its sandbox exits during startup; merely
+accepting SQL connections is not proof that the recovery target was reached.
+It bounds the backup process inside Docker to 180 seconds (with forced
+termination after five additional seconds), uses bounded polling, and has a
+seven-minute overall budget and a ten-minute Go test timeout; these are local test budgets, not production RTO guarantees.
+
+Cleanup closes connections and removes only the generated sandbox container
+and its anonymous volume, plus the test's source table. On failure it prints
+bounded sandbox logs before removal. Full backups and WAL remain in the local
+S3 archive; there is no automatic backup deletion or retention policy. Repeated
+runs therefore grow storage until an explicit whole-lab reset. If the test
+process is forcibly terminated, cleanup cannot run: use the logged sandbox and
+table names to inspect/remove only those resources. `docker rm -f -v <sandbox>`
+removes its anonymous restore volume; never remove a pg1/pg2/pg3 volume to clean
+up a restore test. No failover or source-cluster reset is required.
+
+This proves restore of a physical full backup and timestamp-targeted WAL replay
+from this lab's S3. The recovery uses one source timeline per run; recovery
+across a failover during the backup is not claimed. It does not validate
+incremental backups, retention, encryption, off-host disaster recovery, backup
+scheduling, throughput under production load or the comments-api/Pub/Sub
+workflow. Migrations remain A5 and query-plan analysis A6.
+
 ## Persistence, reset and diagnosis
 
 `make postgres-ha-down` preserves Postgres, etcd and S3 volumes together. A
@@ -256,14 +338,15 @@ another real build and smoke run. Linux AMD64 is the locally verified platform;
 ARM64 has a pinned WAL-G artifact but is not claimed tested here.
 
 A1 proves healthy topology and WAL archival round-trip; the separate A2 test
-proves application recovery after a primary-container crash. Base backup and
-PITR restoration remain A3. The single-host lab has one proxy and one S3
-service: it does not prove host-failure tolerance or end-to-end production HA.
+proves application recovery after a primary-container crash. The separate A3
+gate proves a full physical backup can be restored to a chosen timestamp.
+The single-host lab has one proxy and one S3 service: it does not prove host-failure tolerance or end-to-end production HA.
 No migration, public Go API, ordinary development Compose or GitHub Actions
 workflow changes are made.
 
 Sources: [Patroni replication policy](https://patroni.readthedocs.io/en/latest/replication_modes.html),
 [Patroni REST API](https://patroni.readthedocs.io/en/latest/rest_api.html),
 [Postgres archiving](https://www.postgresql.org/docs/16/continuous-archiving.html),
+[Postgres recovery targets](https://www.postgresql.org/docs/16/runtime-config-wal.html#RUNTIME-CONFIG-WAL-RECOVERY-TARGET),
 [WAL-G storage](https://wal-g.readthedocs.io/STORAGES/),
 [SeaweedFS mini](https://github.com/seaweedfs/seaweedfs#quick-start).
