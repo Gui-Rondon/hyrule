@@ -13,6 +13,7 @@ export POSTGRES_TEST_URI ?= $(POSTGRES_URI)
 COVERAGE_MIN ?= 95
 COVERAGE_ALL_MIN ?= 85
 COVERAGE_PROFILE ?= .local/coverage.out
+COVERAGE_TEST_FLAGS ?=
 COVERAGE_PACKAGES ?= ./app/... ./behaviors/... ./declarative/... ./outbox/... ./outboxpostgres/... ./platform/... ./rest/... ./restpostgres/... ./restsqlite/...
 
 .PHONY: test unit vet cover cover-all build image env-up env-down example-env-up example-env-down run loadtest e2e e2e-down standalone-example-test
@@ -34,8 +35,9 @@ SERVICES_DIR ?= examples/blog-apis/services
 # CI's library-only gate; all normal package tests still execute.
 cover:
 	@mkdir -p .local
-	go test -coverpkg=$$(go list $(COVERAGE_PACKAGES) | paste -sd, -) \
-		-coverprofile=$(COVERAGE_PROFILE) ./... > /dev/null
+	@go test $(COVERAGE_TEST_FLAGS) -coverpkg=$$(go list $(COVERAGE_PACKAGES) | paste -sd, -) \
+		-coverprofile=$(COVERAGE_PROFILE) ./... > .local/coverage-test.log 2>&1 || \
+		{ cat .local/coverage-test.log; exit 1; }
 	@go tool cover -func=$(COVERAGE_PROFILE) | awk -v m=$(COVERAGE_MIN) \
 		'/^total:/ { sub("%", "", $$3); printf "coverage %s%% (minimum %s%%)\n", $$3, m; exit !($$3 + 0 >= m + 0) }'
 	@echo "HTML: go tool cover -html=$(COVERAGE_PROFILE)"
@@ -168,3 +170,11 @@ postgres-ha-reset:
 .PHONY: router-example-test
 router-example-test:
 	cd examples/router-composition && go test -race ./... && go vet ./...
+
+# Examples replace Hyrule with this checkout. A root dependency update can
+# change their effective module graph even when their own code is unchanged.
+# Explicit preparation refreshes only example go.mod/go.sum; root stays strict.
+.PHONY: examples-tidy
+examples-tidy:
+	cd examples/router-composition && go mod tidy
+	cd examples/standalone-tags-api && go mod tidy

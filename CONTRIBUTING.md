@@ -6,8 +6,9 @@ example, and acceptance criteria. Candidate tasks are in [the backlog](docs/good
 
 Use Go 1.26 or 1.27. `make unit` runs tests without databases. For the complete
 suite, install Docker, run `make env-up`, then `make test`, `make vet` and
-`make cover` (95% runtime-framework gate). `make router-example-test` exercises
-Gin/Chi/Echo in a separate module. From website/, `npm ci && npm run build`
+`make cover` (95% runtime-framework gate). `make examples-tidy router-example-test standalone-example-test` refreshes and
+checks the external example modules against the checkout. Preparation may update
+their manifests; review those diffs with dependency changes. See [CI responsibilities](docs/ci.md). From website/, `npm ci && npm run build`
 validates both documentation languages. SQLite tests need no Docker or C compiler.
 
 ## Pull requests and review

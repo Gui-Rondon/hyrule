@@ -9,6 +9,19 @@ the minor version instead.
 
 ## [Unreleased]
 
+### CI maintenance
+
+- Refresh external-example module graphs before integration and vulnerability
+  checks, since their local replace follows root dependency updates.
+- Run the Go 1.27 integration suite once with race and coverage instead of three
+  times; preserve full Go 1.26 and native Windows checks. Coverage failures now
+  retain their test output in .local/coverage-test.log.
+- Make the relay lease handoff test independent of a 300ms database timing window,
+  preserving real Mongo exclusivity/expiry checks under race and coverage.
+- Cancel superseded PR workflow runs and group Dependabot version updates by
+  ecosystem to reduce redundant checks. Existing dependency PRs are unchanged.
+
+
 ### Adoption, compatibility and supply chain
 
 - **Breaking (next minor):** `hyrule new` now defaults to a single SQLite API

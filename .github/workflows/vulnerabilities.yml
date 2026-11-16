@@ -7,6 +7,10 @@ on:
     - cron: '17 6 * * 1'
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   scan:
     name: Go vulnerabilities
@@ -20,6 +24,8 @@ jobs:
           go-version: '1.27.x'
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
       - run: govulncheck ./...
+      - name: Refresh example module graphs for this checkout
+        run: make examples-tidy
       - run: govulncheck ./...
         working-directory: examples/router-composition
       - run: govulncheck ./...

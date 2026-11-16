@@ -6,6 +6,10 @@ on:
   workflow_dispatch: {}
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     name: Go ${{ matrix.go }} integration
@@ -23,8 +27,6 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: ${{ matrix.go }}
-      - name: Tests without infrastructure (includes SQLite and CLI smoke test)
-        run: go test -race ./...
       - name: Start real backend integrations
         run: make env-up
       - name: Require ready databases and emulators
@@ -33,13 +35,20 @@ jobs:
           docker compose exec -T postgres pg_isready -U postgres
           curl --fail --retry 15 --retry-delay 2 --retry-connrefused http://localhost:8085/v1/projects/local-dev/topics
           docker compose exec -T redis redis-cli ping
-      - run: make test
+      - name: Tests with real backends, race detector and latest-Go coverage
+        env:
+          GO_VERSION: ${{ matrix.go }}
+        run: |
+          if [[ "$GO_VERSION" == '1.27.x' ]]; then
+            make cover COVERAGE_TEST_FLAGS=-race
+          else
+            make test
+          fi
       - run: make vet
+      - name: Refresh example module graphs for this checkout
+        run: make examples-tidy
       - run: make router-example-test
       - run: make standalone-example-test
-      - name: Framework coverage (95% minimum)
-        if: matrix.go == '1.27.x'
-        run: make cover
       - name: Upload coverage
         if: matrix.go == '1.27.x' && github.event_name != 'pull_request'
         uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
