@@ -68,6 +68,25 @@ Custom endpoints registered with `API.Handle`, health checks and metrics are
 not included. Resource registration and definitions are startup configuration;
 do not mutate them concurrently with HTTP requests.
 
+
+When `Resource.Validate` is configured, full-write and PATCH input components
+also carry `x-hyrule-custom-validation: true` at the object level. The same marker
+on a property identifies `Field.Check`. It describes additional server rules;
+it neither executes callbacks nor lets a JSON Schema validator reproduce them.
+The resource-level marker is not added to response components.
+
+### PATCH and nested required fields
+
+PATCH permits omitted required fields at the document root. When an object is
+supplied, its required fields still receive full validation, including objects
+inside lists. The generated schema preserves this distinction; required fields
+with defaults may still be omitted.
+
+`nullable` describes an accepted value, not permission to delete a key. On
+backends using RFC 7396 merge patch, `null` removes the key; deleting a required
+field can be rejected even if its type accepts null. Uniqueness and callbacks
+still depend on server-side validation.
+
 ## Deployment
 
 Swagger UI v5.35.0 and its license are embedded in the binary. Serving docs

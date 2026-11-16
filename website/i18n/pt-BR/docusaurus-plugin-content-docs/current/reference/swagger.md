@@ -65,6 +65,26 @@ Endpoints de `API.Handle`, verificações de saúde e métricas ficam fora desta
 Os registros e definições dos recursos são configuração de inicialização;
 não devem ser alterados simultaneamente com requisições HTTP.
 
+
+Quando `Resource.Validate` está definido, os componentes de entrada completa e
+PATCH também recebem `x-hyrule-custom-validation: true` no nível do objeto.
+O mesmo marcador em uma propriedade identifica `Field.Check`. Ele informa que
+há regras adicionais no servidor; não executa callbacks nem permite que um
+validador JSON Schema reproduza essas regras. O marcador de recurso não é
+adicionado aos componentes de resposta.
+
+### PATCH e campos obrigatórios aninhados
+
+PATCH permite omitir campos obrigatórios no primeiro nível do documento. Quando
+um objeto é enviado, seus campos obrigatórios continuam exigidos pela validação,
+inclusive em objetos dentro de listas. O schema gerado preserva essa distinção;
+campos obrigatórios com default continuam podendo ser omitidos.
+
+`nullable` descreve o valor aceito, não uma permissão de exclusão. Em backends
+com merge patch RFC 7396, `null` remove a chave; a exclusão de um campo obrigatório
+pode ser rejeitada mesmo quando seu tipo aceita null. Unicidade e callbacks
+continuam dependendo da validação no servidor.
+
 ## Implantação
 
 Swagger UI v5.35.0 e sua licença ficam embutidos no binário. Não há dependência
