@@ -33,7 +33,10 @@ jobs:
         run: |
           docker compose exec -T mongo mongosh --quiet --eval 'if (!rs.status().ok) quit(1)'
           docker compose exec -T postgres pg_isready -U postgres
-          curl --fail --retry 15 --retry-delay 2 --retry-connrefused http://localhost:8085/v1/projects/local-dev/topics
+          curl --fail --silent --show-error --output /dev/null \
+            --retry 15 --retry-delay 2 --retry-all-errors --retry-max-time 60 \
+            --connect-timeout 2 --max-time 3 \
+            http://127.0.0.1:8085/v1/projects/local-dev/topics
           docker compose exec -T redis redis-cli ping
       - name: Tests with real backends, race detector and latest-Go coverage
         env:
@@ -56,6 +59,14 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: .local/coverage.out
           fail_ci_if_error: true
+      - name: Pub/Sub healthcheck diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps --all
+          pubsub_container=$(docker compose ps --all --quiet pubsub)
+          if [ -n "$pubsub_container" ]; then
+            docker inspect "$pubsub_container" --format '{{json .State.Health}}'
+          fi
       - name: Backend logs on failure
         if: failure()
         run: docker compose logs --tail=100

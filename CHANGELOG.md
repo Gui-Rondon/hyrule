@@ -11,6 +11,12 @@ the minor version instead.
 
 ### CI maintenance
 
+- Wait for an actual Pub/Sub emulator HTTP response before Compose reports it
+  ready. Bound the CI readiness probe and retry connection resets (curl exit 56)
+  as well as refused connections, preventing a startup race before integration tests.
+  Use curl from the pinned emulator image and emit healthcheck diagnostics on failure;
+  the current image does not provide a system python3 executable.
+
 - Refresh external-example module graphs before integration and vulnerability
   checks, since their local replace follows root dependency updates.
 - Run the Go 1.27 integration suite once with race and coverage instead of three

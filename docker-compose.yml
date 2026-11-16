@@ -35,8 +35,15 @@ services:
       retries: 30
 
   pubsub:
-    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators@sha256:3989a42372d3b984bade6db02213d456d94a0ba3765e8b744b95c4188b6fcc89
     command: ["gcloud", "beta", "emulators", "pubsub", "start", "--host-port=0.0.0.0:8085", "--project=local-dev"]
+    # A running Java process does not yet mean the emulator accepts requests.
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "2", "http://127.0.0.1:8085/v1/projects/local-dev/topics"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
     ports:
       - "127.0.0.1:8085:8085"
 
