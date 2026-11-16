@@ -207,3 +207,10 @@ continua em Go. Um recurso construído a partir do YAML é um
 `*rest.Resource` normal, então nada impede anexar hooks nele em Go
 antes de registrar (`declarative/declarative_test.go`'s
 `TestBuiltResourceComposesWithConditionalOutbox` faz exatamente isso).
+
+## Visibilidade no Swagger
+
+O Swagger vem habilitado por padrão. Configure `disableSwagger: true`
+(alias: `disable_swagger`) no resource para ocultar somente sua documentação.
+Omitido ou `false` inclui o resource. Aliases conflitantes impedem a construção.
+Veja a [documentação Swagger automática](swagger.md).

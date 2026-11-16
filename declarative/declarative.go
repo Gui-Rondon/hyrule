@@ -37,7 +37,10 @@ type Resource struct {
 	Name string `yaml:"name"`
 	// Collection is the Mongo collection backing the resource (env.Store(Collection)).
 	Collection string `yaml:"collection"`
-	ItemTitle  string `yaml:"item_title"`
+	// DisableSwagger and its snake_case alias default to false.
+	DisableSwagger      *bool  `yaml:"disableSwagger"`
+	DisableSwaggerAlias *bool  `yaml:"disable_swagger"`
+	ItemTitle           string `yaml:"item_title"`
 
 	Schema       map[string]Field `yaml:"schema"`
 	AllowUnknown bool             `yaml:"allow_unknown"`
@@ -105,6 +108,13 @@ func Parse(r io.Reader) (*File, error) {
 // Build compiles r into an rest.Resource backed by store (typically
 // env.Store(r.Collection)); the caller still does env.API.Register(res).
 func (r Resource) Build(store rest.Store) (*rest.Resource, error) {
+	if r.DisableSwagger != nil && r.DisableSwaggerAlias != nil && *r.DisableSwagger != *r.DisableSwaggerAlias {
+		return nil, fmt.Errorf("resource %q: disableSwagger and disable_swagger conflict", r.Name)
+	}
+	disabled := r.DisableSwagger
+	if disabled == nil {
+		disabled = r.DisableSwaggerAlias
+	}
 	schema, err := buildSchema(r.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("resource %q: %w", r.Name, err)
@@ -122,6 +132,9 @@ func (r Resource) Build(store rest.Store) (*rest.Resource, error) {
 		SoftDelete:        r.SoftDelete,
 		CacheControl:      r.CacheControl,
 		CacheExpires:      r.CacheExpires,
+	}
+	if disabled != nil {
+		res.DisableSwagger = *disabled
 	}
 	if r.Pagination != nil {
 		res.Pagination = rest.Pagination{

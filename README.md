@@ -35,6 +35,14 @@ guided [Learn](https://gui-rondon.github.io/hyrule/docs/learn/intro)
 path plus a complete
 [Reference](https://gui-rondon.github.io/hyrule/docs/reference/architecture).
 
+## Automatic Swagger documentation
+
+Swagger is enabled by default for every Go/YAML resource: open `/api/docs`
+(or `/swagger`), with OpenAPI 3.1 at `/api/openapi.json`. Set
+`DisableSwagger: true` in Go or `disableSwagger: true` in YAML to hide a
+resource from documentation while keeping its routes active. Docs are public;
+protected operations require a token. See the [Swagger reference](website/docs/reference/swagger.md).
+
 ## Mongo and Postgres integration
 
 Both backends use `app.Main`/`app.Build`, the same HTTP resource contract and

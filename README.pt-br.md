@@ -35,6 +35,14 @@ seção Reference já está em português
 ([`/pt-BR/docs/reference/...`](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture));
 o guia Learn (passo a passo) ainda só existe em inglês.
 
+## Documentação Swagger automática
+
+O Swagger vem habilitado por padrão para todo resource Go/YAML: acesse
+`/api/docs` (ou `/swagger`), com OpenAPI 3.1 em `/api/openapi.json`. Use
+`DisableSwagger: true` em Go ou `disableSwagger: true` em YAML para ocultar
+um resource da documentação, mantendo suas rotas ativas. A documentação é
+pública; operações protegidas exigem token. Veja a [referência Swagger](website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/swagger.md).
+
 ## Integração Mongo e Postgres
 
 Ambos usam `app.Main`/`app.Build`, o mesmo contrato de recursos HTTP e hooks de

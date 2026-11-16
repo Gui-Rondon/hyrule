@@ -9,6 +9,13 @@ the minor version instead.
 
 ## [Unreleased]
 
+### Added
+
+- Automatic OpenAPI 3.1 and embedded Swagger UI at `/api/openapi.json` and
+  `/api/docs` (`/swagger` redirects). Enabled by default for Go/YAML resources
+  on both backends; `DisableSwagger`/`disableSwagger` hides individual resources
+  without changing their API routes. Documentation endpoints are public and reserved.
+
 ### Changed
 
 - Require 95% runtime framework coverage in `make cover` and CI, with all normal

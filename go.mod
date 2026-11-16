@@ -10,6 +10,7 @@ require (
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/redis/go-redis/v9 v9.23.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	go.mongodb.org/mongo-driver/v2 v2.9.2
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.58.0
