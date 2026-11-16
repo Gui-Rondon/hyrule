@@ -19,7 +19,7 @@ existing services. Equal support does not mean identical storage semantics.
 | Transactional events | `outbox.New(env.DB)` | `outboxpostgres.Outbox{Pool: env.Postgres}` |
 | Dry run | Replica set, rollback and WriteGuard | Same-pool transaction rollback |
 | Tests | `testkit.Service` / real Mongo | `app.Build` + isolated real Postgres + `testkit.NewClient` |
-| YAML / generated CLI resource | Supported | Use Go registration; YAML/scaffolding remains Mongo-specific |
+| YAML / generated CLI resource | Supported | Supported via `backend: postgres` in `resources.yaml` — see [Resource via YAML](resources-yaml.md) |
 
 ## Start local dependencies
 
@@ -234,5 +234,7 @@ legacy partial index usable in custom plans. No implicit presence guard is
 added: an earlier approach regressed UUID plans. Generic field parameters and
 deep offsets remain observational; an index declaration is not a guarantee of
 planner use or production latency. Nested datetime and typed Unique/Sparse
-remain separate extensions. YAML is Mongo-only; no backend conversion or data
-migration is performed by changing Spec.Backend.
+remain separate extensions. `resources.yaml`'s `backend:` field (see
+[Resource via YAML](resources-yaml.md)) picks which backend a declarative
+resource uses; no backend conversion or data migration is performed by
+changing it or Spec.Backend.

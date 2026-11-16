@@ -9,6 +9,14 @@ the minor version instead.
 
 ## [Unreleased]
 
+### Added
+
+- `resources.yaml`'s declarative resources now take an optional `backend:`
+  field (`mongo`, the default, `postgres` or `sqlite`), dispatched through a
+  small per-backend `declarative.Backend`/`Registry` seam; `hyrule-serve`
+  picks its own `BACKEND` env var accordingly. Existing files with no
+  `backend:` field keep working unchanged.
+
 ### Security
 
 - Resolve the latest Go security patches in CI while preserving the 1.26/1.27
