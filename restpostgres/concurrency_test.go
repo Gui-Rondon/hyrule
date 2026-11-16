@@ -362,3 +362,40 @@ func TestServiceIndependentHookContextErrorNeverReclassified(t *testing.T) {
 		t.Fatalf("err = %#v, must not be reclassified as max_duration/max_attempts", err)
 	}
 }
+
+// Delays the adapter read until the actual context expires, then delegates to
+// pgx. The database error is real; no backend result/error is fabricated.
+type expiredReadAdapter struct{ rest.Adapter }
+
+func (a expiredReadAdapter) FindOne(ctx context.Context, lookup, projection any) (rest.Doc, error) {
+	<-ctx.Done()
+	return a.Adapter.FindOne(ctx, lookup, projection)
+}
+
+func TestRetryBudgetExpiredDuringRealRead(t *testing.T) {
+	pool := testPool(t)
+	const table = "retry_read_deadline_test"
+	setupResourceTable(t, pool, table)
+	retry := rest.DefaultRetryOptions()
+	retry.MaxDuration = 30 * time.Millisecond
+	adapter, err := NewAdapter(postgres.NewStore(pool, table), postgres.Transactor{Pool: pool}, Options{Schema: defaultHTTPTestSchema, Retry: retry})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := rest.NewService(&rest.Resource{Adapter: expiredReadAdapter{adapter}, Schema: defaultHTTPTestSchema}, postgres.Transactor{Pool: pool})
+	docs, err := svc.Insert(context.Background(), []rest.Doc{{"name": "before"}}, rest.WriteOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	match, _ := rest.ParseIfMatch([]string{"*"})
+	_, err = svc.Patch(context.Background(), docs[0]["_id"], rest.Doc{"name": "after"}, rest.WriteOptions{IfMatch: match})
+	var classified *rest.Error
+	if !errors.As(err, &classified) || classified.Status != 503 || classified.RetryExhaustedReason != "max_duration" {
+		t.Fatalf("read deadline lost retry cause: %#v", err)
+	}
+	// The budget expired before any write: check persisted data through the real adapter.
+	stored, err := adapter.FindOne(context.Background(), docs[0]["_id"], nil)
+	if err != nil || stored["name"] != "before" {
+		t.Fatalf("unexpected persisted document: %v / %v", stored, err)
+	}
+}

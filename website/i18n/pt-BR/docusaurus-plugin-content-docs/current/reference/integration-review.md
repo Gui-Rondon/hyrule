@@ -184,3 +184,33 @@ Artefatos brutos ignorados ficam em .local/backend-consolidation/; o registro
 versionado traz comandos e critérios reproduzíveis. Dados locais, planos não
 versionados e credenciais não são dependências desta documentação. O merge em
 main permanece decisão separada.
+
+## Acompanhamento após o PR #45
+
+A preparação de merge na branch deste acompanhamento incorpora a ancestralidade
+de `main` (`4aa6195`), resolvendo os dois conflitos add/add com as versões da
+integração. A árvore dessa resolução é idêntica à integração `7e4f1bd`
+(`ec8ac29e6536a3111fd728fbefe2e490e5773a03`): nenhum cenário Mongo/Postgres
+foi removido. O PR continua contra `integration/postgres-portability`;
+o merge final em `main` continua decisão separada. Mudanças futuras nas bases
+exigem nova conferência.
+
+A limitação de retry descrita acima pertence à execução histórica do PR #45.
+Este acompanhamento reproduz o timeout durante uma leitura real: a classificação
+HTTP 503 descartava a causa de contexto antes de identificar `max_duration`.
+Agora a causa permanece acessível por `errors.Is` e o erro HTTP por `errors.As`;
+status e mensagem HTTP são preservados. Um timeout independente de query não
+é reclassificado como esgotamento de retry. Há regressão com pgx real e
+30 repetições com race do caso novo e do conflito existente.
+
+O gate padrão agora exige 95% exclusivamente do framework em ambos os backends,
+com todos os testes normais executados. Consulte [testkit](./testkit.md) para
+o escopo e o relatório agregado separado. Os 85,9% acima são evidência histórica
+do escopo agregado anterior, não o baseline comparável do novo gate.
+
+Cobertura deste acompanhamento: **95,1% framework** (baseline no mesmo escopo
+**92,6%**), **88,0% agregado**. Gate do framework: 95%; gate agregado separado: 85%.
+
+Validação final: race, vet, módulo externo, topologia/migrations, 216 planos,
+JMeter/PubSub (42 amostras, zero falhas) e build EN/PT aprovados. Zero schemas
+temporários restantes. Consulte o [snapshot deste acompanhamento](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/infra/postgres-ha/evidence/2026-11-15-retry-coverage.json).

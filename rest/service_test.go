@@ -810,3 +810,81 @@ func TestFormBody(t *testing.T) {
 		t.Errorf("multipart POST = %d %s", res.Status, res.Raw)
 	}
 }
+
+func TestRejectedWriteHooksPreserveStoredDocument(t *testing.T) {
+	for _, stage := range []string{"prepare", "update", "replace", "delete"} {
+		t.Run(stage, func(t *testing.T) {
+			res := items()
+			c, _ := newAPI(t, nil, res)
+			created := c.Do("POST", "/items", map[string]any{"name": "original"})
+			if created.Status != http.StatusCreated {
+				t.Fatalf("insert: %d", created.Status)
+			}
+			reject := func(context.Context, rest.Doc, rest.Doc) error { return rest.Abort(409, "write rejected") }
+			method := "PATCH"
+			switch stage {
+			case "prepare":
+				res.Hooks.OnPrepare = append(res.Hooks.OnPrepare, reject)
+			case "update":
+				res.Hooks.OnUpdate = append(res.Hooks.OnUpdate, reject)
+			case "replace":
+				method = "PUT"
+				res.Hooks.OnReplace = append(res.Hooks.OnReplace, reject)
+			case "delete":
+				method = "DELETE"
+				res.Hooks.OnDelete = append(res.Hooks.OnDelete, func(context.Context, rest.Doc) error { return rest.Abort(409, "write rejected") })
+			}
+			path := "/items/" + created.String("_id")
+			got := c.Do(method, path, map[string]any{"name": "changed"}, "If-Match", created.String("_etag"))
+			if got.Status != 409 {
+				t.Fatalf("%s: %d %s", method, got.Status, got.Raw)
+			}
+			stored := c.Do("GET", path, nil)
+			if stored.Status != 200 || stored.String("name") != "original" || stored.String("_etag") != created.String("_etag") {
+				t.Fatalf("rejected write mutated data: %s", stored.Raw)
+			}
+			if stage == "prepare" { // OnPrepare also protects creation, before a transaction is opened.
+				got = c.Do("POST", "/items", map[string]any{"name": "new"})
+				if got.Status != 409 {
+					t.Fatalf("prepare insert: %d", got.Status)
+				}
+			}
+		})
+	}
+}
+
+func TestMissingWriteTargetsAndReplacePreconditions(t *testing.T) {
+	c, _ := newAPI(t, nil, items())
+	path := "/items/" + bson.NewObjectID().Hex()
+	for _, method := range []string{"PATCH", "PUT", "DELETE"} {
+		got := c.Do(method, path, map[string]any{"name": "missing"}, "If-Match", "*")
+		if got.Status != 404 {
+			t.Fatalf("%s missing target: %d", method, got.Status)
+		}
+	}
+	created := c.Do("POST", "/items", map[string]any{"name": "original"})
+	got := c.Do("PUT", "/items/"+created.String("_id"), map[string]any{"name": "changed"})
+	if got.Status != 428 {
+		t.Fatalf("replace without ETag: %d", got.Status)
+	}
+}
+
+func TestUniqueValidationPropagatesDatabaseCancellation(t *testing.T) {
+	res := items()
+	f := res.Schema["name"]
+	f.Unique = true
+	res.Schema["name"] = f
+	_, svc := newAPI(t, nil, res)
+	docs, err := svc.Insert(context.Background(), []rest.Doc{{"name": "original"}}, rest.WriteOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := svc.Insert(ctx, []rest.Doc{{"name": "new"}}, rest.WriteOptions{}); err == nil {
+		t.Fatal("unique check ignored canceled database operation")
+	}
+	if _, err := svc.Replace(ctx, docs[0]["_id"], rest.Doc{"name": "changed"}, rest.WriteOptions{SkipConcurrency: true}); err == nil {
+		t.Fatal("replace ignored cancellation")
+	}
+}

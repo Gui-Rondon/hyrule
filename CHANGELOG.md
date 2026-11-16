@@ -11,6 +11,13 @@ the minor version instead.
 
 ### Changed
 
+- Require 95% runtime framework coverage in `make cover` and CI, with all normal
+  tests still executing against both real backends. `make cover-all` retains the
+  previous aggregate scope (examples/tools included) and 85% gate separately.
+- Preserve context causes when read timeouts become HTTP 503, so wildcard PATCH
+  recognizes retry budget exhaustion during a real database read. HTTP status
+  and message remain unchanged; use `errors.As` for the classified `*rest.Error`.
+
 - **Breaking:** per [ADR-0001](website/docs/reference/architecture-decisions.md#adr-0001--public-surface-of-the-framework),
   `app`, `behaviors/*`, `declarative`, `outbox`, `platform/*`, `rest`, and
   `testkit` moved from `internal/` to the module root. Import paths change

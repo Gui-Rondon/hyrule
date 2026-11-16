@@ -883,7 +883,13 @@ var clientQueryErrors = []int{2, 9, 51091, 51108}
 func (s *Service) queryError(err error) error {
 	if s.res.Adapter.IsTimeout(err) {
 		slog.Warn("query timed out", "error", err)
-		return Abort(http.StatusServiceUnavailable, "")
+		classified := Abort(http.StatusServiceUnavailable, "")
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			// Retain the original context cause for Patch's retry budget without
+			// changing the public HTTP mapping of ordinary reads.
+			return &queryContextError{classified: classified, cause: err}
+		}
+		return classified
 	}
 	if s.res.Adapter.IsClientError(err) {
 		return Abort(400, "")

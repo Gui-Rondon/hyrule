@@ -151,3 +151,56 @@ func TestOptionsFromEnv(t *testing.T) {
 		t.Errorf("options = %+v", o)
 	}
 }
+
+func TestLoadRejectsUnavailableAndMalformedConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"server failure", http.StatusServiceUnavailable, `{}`},
+		{"invalid JSON", http.StatusOK, `{`},
+		{"empty configuration", http.StatusOK, `{"propertySources":[]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(tc.status); w.Write([]byte(tc.body)) }))
+			defer srv.Close()
+			if _, err := Load(context.Background(), Options{Address: srv.URL}); err == nil {
+				t.Fatal("expected configuration error")
+			}
+		})
+	}
+	if _, err := Load(context.Background(), Options{Address: "http://[invalid"}); err == nil {
+		t.Fatal("expected invalid URL error")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := Load(ctx, Options{Address: "http://localhost"}); err == nil {
+		t.Fatal("expected canceled request error")
+	}
+	if got := (Config{"scalar": 1}).Sub("scalar"); len(got) != 0 {
+		t.Fatalf("scalar subtree = %v", got)
+	}
+}
+
+func TestLoadFromEnvRejectsMissingAndMalformedOverrides(t *testing.T) {
+	t.Setenv("CONFIG_FILE", t.TempDir()+"/missing.json")
+	if _, err := LoadFromEnv(context.Background(), "test"); err == nil {
+		t.Fatal("accepted missing base file")
+	}
+	base := t.TempDir() + "/base.json"
+	if err := os.WriteFile(base, []byte(`{"enabled":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CONFIG_FILE", base)
+	t.Setenv("CONFIG_OVERRIDES", base+".missing")
+	if _, err := LoadFromEnv(context.Background(), "test"); err == nil {
+		t.Fatal("accepted missing overrides")
+	}
+	if err := os.WriteFile(base, []byte(`{`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadFile(base); err == nil {
+		t.Fatal("accepted malformed configuration")
+	}
+}

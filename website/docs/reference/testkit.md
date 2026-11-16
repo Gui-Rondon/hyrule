@@ -146,3 +146,16 @@ Without those variables, database tests skip; a green no-infrastructure run is
 not integration evidence. Package concurrency is limited above because a real
 retry-budget test is sensitive to CPU contention. Coverage excludes manual HA
 gates unless explicitly enabled: see [gate evidence](integration-review.md).
+
+## Framework coverage
+
+After `make env-up`, run `make cover GOFLAGS=-p=1`: the gate requires **95%**
+of runtime code in `app`, `behaviors`, `declarative`, `outbox`, `outboxpostgres`,
+`platform`, `rest` and `restpostgres`, including both backends. All normal tests
+in `./...` run; examples, CLI, manual HA tools and `testkit` stay outside the
+denominator. This includes integration tests against real MongoDB and PostgreSQL.
+
+`make cover-all GOFLAGS=-p=1` preserves the previous aggregate scope, including
+examples and tooling, with an 85% gate. Profiles are `.local/coverage.out` and
+`.local/coverage-all.out`, respectively. Run them sequentially. Percentages
+from these scopes are not directly comparable.

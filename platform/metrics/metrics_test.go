@@ -122,3 +122,17 @@ func TestScrapeMethods(t *testing.T) {
 		}
 	}
 }
+
+func TestResponseControllerCanFlushThroughMetrics(t *testing.T) {
+	rec := httptest.NewRecorder()
+	h := New("stream", false).Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("event: ready\n\n"))
+		if err := http.NewResponseController(w).Flush(); err != nil {
+			t.Errorf("flush: %v", err)
+		}
+	}))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/stream", nil))
+	if !rec.Flushed || rec.Body.String() != "event: ready\n\n" {
+		t.Fatalf("stream not flushed: %+v", rec)
+	}
+}

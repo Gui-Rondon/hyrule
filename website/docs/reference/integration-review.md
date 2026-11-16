@@ -184,3 +184,32 @@ Full local raw artifacts remain ignored under `.local/backend-consolidation/`;
 the versioned record above provides commands and acceptance criteria for
 reproduction. Local data, uncommitted plans and credentials are not dependencies
 of this documentation. A future merge into main remains a separate decision.
+
+## Follow-up after PR #45
+
+The merge preparation on this follow-up branch incorporates main's ancestry
+(`4aa6195`), resolving both add/add conflicts with the integration versions.
+Its resolved tree is identical to integration `7e4f1bd`
+(`ec8ac29e6536a3111fd728fbefe2e490e5773a03`): all Mongo/Postgres scenarios remain.
+The PR still targets `integration/postgres-portability`; the final merge into
+`main` remains a separate decision. Future changes to either base require a new check.
+
+The retry limitation above describes the historical PR #45 run. This follow-up
+reproduces a timeout during a real read: HTTP 503 classification discarded the
+context cause before retry could recognize `max_duration`. The cause is now
+available through `errors.Is`, and the HTTP error through `errors.As`; HTTP
+status and message remain unchanged. An independent query timeout does not
+become retry exhaustion. Regression tests use real pgx, with 30 race repetitions
+of both the new case and the existing real-conflict test.
+
+The default gate now requires 95% of the framework across both backends, while
+all normal tests execute. See [testkit](./testkit.md) for scope and the separate
+aggregate report. The 85.9% above is historical evidence from the previous
+aggregate scope, not a directly comparable baseline for the new gate.
+
+Follow-up coverage: **95.1% framework** (same-scope baseline **92.6%**),
+**88.0% aggregate**. The framework gate is 95%; the separate aggregate gate is 85%.
+
+Final validation passed: race, vet, external module, topology/migrations,
+216 plans, JMeter/PubSub (42 samples, zero failures), and EN/PT build. No temporary
+gate schemas remain. See the [follow-up evidence snapshot](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/infra/postgres-ha/evidence/2026-11-15-retry-coverage.json).

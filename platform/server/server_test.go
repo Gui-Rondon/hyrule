@@ -125,3 +125,10 @@ func TestAccessLogQuiet(t *testing.T) {
 		}
 	}
 }
+
+func TestRunReportsStartupFailure(t *testing.T) {
+	t.Setenv("PORT", "not-a-port")
+	if err := Run(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("handler ran despite startup failure") })); err == nil {
+		t.Fatal("Run accepted invalid port")
+	}
+}

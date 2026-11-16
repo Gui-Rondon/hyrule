@@ -186,15 +186,24 @@ The full docs are at **https://gui-rondon.github.io/hyrule/**:
 
 Requires Go 1.27 and Docker.
 
-    make env-up               # generic infra: Mongo rs (27018), Pub/Sub (8085), Redis (6380)
-    make test                 # every test (uses the Mongo from env-up)
+    make env-up               # generic infra: Mongo (27018), Postgres (5433), Pub/Sub (8085), Redis (6380)
+    make test                 # every test (uses real Mongo/Postgres from env-up)
     make unit                 # only the ones that need no external service
-    make cover                # coverage, fails below 85%
+    make cover                # framework coverage, fails below 95%
+    make cover-all            # historical aggregate (framework + examples/tools), minimum 85%
     make build SERVICE=tags-api
     make run SERVICE=tags-api  # :8081, auth disabled
 
 To run the `blog-apis` example (which also needs Elasticsearch): see
 [`examples/blog-apis/README.md`](examples/blog-apis/README.md).
+
+Coverage uses all normal package tests (`./...`) with real MongoDB and PostgreSQL.
+`make cover` measures the runtime framework (`app`, `behaviors`, `declarative`,
+`outbox`, `outboxpostgres`, `platform`, `rest`, `restpostgres`); example services,
+CLI/manual HA tools and `testkit` do not enter its denominator. Tests for those
+packages still execute. `make cover-all` writes the historical aggregate scope
+separately to `.local/coverage-all.out`; the framework profile remains
+`.local/coverage.out`. Run these commands sequentially, after `make env-up`.
 
 ## License
 
