@@ -1,0 +1,18 @@
+{
+  "version.label": {
+    "message": "Em desenvolvimento",
+    "description": "The label for version current"
+  },
+  "sidebar.learnSidebar.category.Framework": {
+    "message": "Framework",
+    "description": "The label for category 'Framework' in sidebar 'learnSidebar'"
+  },
+  "sidebar.learnSidebar.category.Platform": {
+    "message": "Plataforma",
+    "description": "The label for category 'Platform' in sidebar 'learnSidebar'"
+  },
+  "sidebar.referenceSidebar.category.Reference": {
+    "message": "Referência",
+    "description": "The label for category 'Reference' in sidebar 'referenceSidebar'"
+  }
+}

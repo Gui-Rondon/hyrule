@@ -5,15 +5,15 @@ sidebar_position: 0
 # Integrando Mongo e Postgres
 
 Os dois backends usam `app.Main`/`app.Build`, `rest.Resource`, validação HTTP,
-ETags, hooks, autenticação, health checks, métricas e dry run com rollback.
+ETags, hooks, autenticação, verificações de saúde, métricas e dry run com rollback.
 Escolha o backend em Go; Mongo continua sendo o valor padrão dos serviços
 existentes. Suporte equivalente não significa semântica de armazenamento idêntica.
 
 | Ponto de integração | Mongo | Postgres |
 |---|---|---|
-| Bootstrap | `app.BackendMongo` (valor zero) | `app.BackendPostgres` |
+| Inicialização | `app.BackendMongo` (valor zero) | `app.BackendPostgres` |
 | Persistência | `Resource.Store = env.Store(collection)` | `Resource.Adapter = restpostgres.NewAdapter(...)` |
-| Conexão no Setup | `env.DB` | `env.Postgres`, `env.PostgresTx` |
+| Conexão no Configuração | `env.DB` | `env.Postgres`, `env.PostgresTx` |
 | Identidade | BSON ObjectID | UUID |
 | Índices | `Spec.Indexes` / `mongo.indexes` | `Spec.PostgresIndexes` |
 | Eventos transacionais | `outbox.New(env.DB)` | `outboxpostgres.Outbox{Pool: env.Postgres}` |
@@ -79,7 +79,7 @@ MONGO_CONNECTION_STRING='mongodb://localhost:27018/items_demo?directConnection=t
   go run .
 ```
 
-Declare índices no startup, independentemente da validação amigável de schema:
+Declare índices no processo de inicialização, independentemente da validação amigável de schema:
 
 ```go
 spec.Indexes = []byte("items name:1 name=items_name_idx\n")
@@ -90,11 +90,11 @@ spec.Indexes = []byte("items name:1 name=items_name_idx\n")
 `mongo.indexes_mode` aceita `create` (padrão), `check` e `off`; dry run troca
 create por check. O bootstrap combina `.indices.conf` embutido e overrides
 `mongo.indexes`. Veja [Store e índices](store.md). Para a alternativa YAML,
-siga [resources.yaml](resources-yaml.md).
+siga [recursos.yaml](resources-yaml.md).
 
 ## Postgres: migre, registre e execute o serviço
 
-Crie o banco uma vez e aplique o DDL como uma migration explícita:
+Crie o banco uma vez e aplique o DDL como uma migração explícita:
 
 ```sh
 docker compose exec -T postgres psql -U postgres -d postgres -c 'CREATE DATABASE items_demo'
@@ -148,12 +148,12 @@ func main() {
 ```
 
 Reutilize `env.PostgresTx`: ele carrega o pool e a política de dry run da
-requisição. `platform/postgres.Store` é um helper de colunas planas, **não**
+requisição. `platform/postgres.Store` é um utilitário de colunas planas, **não**
 uma implementação de `rest.Store`; recursos JSONB precisam de
 `restpostgres.NewAdapter`. O bootstrap instala funções compartilhadas antes
-do Setup e garante índices declarados depois dele. Não cria a tabela do
-recurso nem executa migrations. O exemplo comments usa runner explícito em
-etapas e checagem de schema no startup; veja o [runbook de migrations](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/examples/blog-apis/internal/commentsschema/README.md).
+do Configuração e garante índices declarados depois dele. Não cria a tabela do
+recurso nem executa migrações. O exemplo comments usa runner explícito em
+etapas e checagem de schema no processo de inicialização; veja o [guia operacional de migrações](https://github.com/Gui-Rondon/hyrule/blob/main/examples/blog-apis/internal/commentsschema/README.md).
 
 ```sh
 printf '%s\n' '{"auth":{"enable":false}}' > config.json
@@ -165,7 +165,7 @@ POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/items_de
 `postgres.indexes_mode` também aceita create/check/off; dry run troca create por
 check. Os índices são valores Go `IndexSpec`, não texto `.indices.conf` Mongo.
 `EnsureIndexes` verifica nomes, não equivalência das definições: use nome novo
-explícito ao adotar outra expressão; o startup não migra um índice existente.
+explícito ao adotar outra expressão; o processo de inicialização não migra um índice existente.
 
 ## Exercite qualquer um dos serviços
 
@@ -214,23 +214,23 @@ Autenticação continua sendo validação JWT, sem gerenciamento de sessão de u
 
 - [Outbox transacional](outbox.md): registro equivalente nos dois backends,
   entrega pelo menos uma vez, diferenças dos relays e replay de eventos mortos.
-- [Dry run](dry-run.md): transações, cuidados no setup e efeitos externos.
-- [Testes](testkit.md): isolamento de banco real e app.Build em ambos.
+- [Dry run](dry-run.md): transações, cuidados no código de inicialização e efeitos externos.
+- [Testes](testkit.md): isolamento de banco real e aplicação.Build em ambos.
 - [Revisão da integração e evidências](integration-review.md): comparação com main,
   mudanças de compatibilidade, medições e limites.
 
-## Adote os opt-ins Postgres explicitamente
+## Opções adicionais do Postgres {/* #adote-os-opt-ins-postgres-explicitamente */}
 
-| Opt-in | Onde configurar | Padrão preservado | Adoção e reversão |
+| Opção | Onde configurar | Padrão preservado | Adoção e reversão |
 |---|---|---|---|
 | Índice de sort tipado | `IndexField.Mode = postgres.IndexFieldTypedSort`, nome novo explícito | Expressão JSONB legada | Audite casts e custo de escrita; somente String/Integer/Number/Boolean, sem Unique/Sparse/datetime typed. Para reverter, remova a declaração e migre/remova explicitamente o novo índice se não for usado. |
 | Sort datetime seguro | `restpostgres.Options.SafeDateTimeSort = true` | Cast direto e erros de dados inválidos | Audite formatos; rejeitados ordenam como SQL NULL, sem mudar documentos. Índice legado datetime já pode corresponder. Remova a opção para restaurar cast direto. |
-| Política de planos custom | URI vencedora: `plan_cache_mode=force_custom_plan` | Política existente de servidor/role (normalmente auto) | Abrange o pool inteiro, inclusive escritas/outbox; custa planejamento por execução. Meça workload real. Remova o parâmetro e recrie o pool para reverter. |
+| Política de planos custom | URI vencedora: `plan_cache_mode=force_custom_plan` | Política existente de servidor/role (normalmente auto) | Abrange o pool inteiro, inclusive escritas/outbox; custa planejamento por execução. Meça carga de trabalho real. Remova o parâmetro e recrie o pool para reverter. |
 
 Presença sparse explícita (`{"slug":{"$eq":"value","$exists":true}}`) pode
 viabilizar o índice parcial legado em planos custom. Nenhuma guarda de presença
 é acrescentada implicitamente: a tentativa anterior regrediu planos UUID.
 Campos parametrizados no generic e offsets profundos continuam observacionais;
 declarar índice não garante uso nem latência de produção. Nested datetime e
-Unique/Sparse typed são extensões separadas. YAML continua Mongo-only; trocar
+Unique/Sparse typed são extensões separadas. YAML continua exclusivo do Mongo; trocar
 Spec.Backend não converte backend nem migra dados.

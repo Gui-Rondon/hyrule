@@ -157,7 +157,7 @@ only one importing `rest` and `platform/postgres` together, section 2
 of the portability plan) implements `Adapter` in full over a `jsonb`
 table plus relational metadata columns — see
 [`adapter.md`](adapter.md) for the full contract and
-[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/integration/postgres-portability/examples/blog-apis/services/comments-api)
+[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis/services/comments-api)
 for the first real resource served end to end over HTTP through this
 path (Fase 7). The `platform/postgres` scaffold this ADR already
 named keeps existing, still never importing `rest`, exactly as

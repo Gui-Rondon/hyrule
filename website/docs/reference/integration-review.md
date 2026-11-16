@@ -164,7 +164,7 @@ harness/runbooks remain in `infra/postgres-ha/`. They are historical evidence,
 not rerun by the consolidation's routine plan gates. Their commands kill a
 primary or create a restore sandbox and require deliberate manual execution.
 No HA provisioning/execution is added to GitHub Actions, and 5434 belongs to
-another local project. The linked [HA runbook](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/infra/postgres-ha/README.md)
+another local project. The linked [HA runbook](https://github.com/Gui-Rondon/hyrule/blob/main/infra/postgres-ha/README.md)
 records scope and operational limits; it is not a production deployment design.
 
 ## Consolidation execution
@@ -176,7 +176,7 @@ JMeter/PubSub (**42 samples, zero failures**). Coverage rose from **85.5% to
 85.9%** (85% gate); Connect coverage rose from 73.9% to 95.7%, and Env.Wrap /
 finishBuild are now 100% in the measured profile. EN/PT website build passed.
 
-The [versioned evidence snapshot](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/infra/postgres-ha/evidence/2026-11-15-consolidation.json)
+The [versioned evidence snapshot](https://github.com/Gui-Rondon/hyrule/blob/main/infra/postgres-ha/evidence/2026-11-15-consolidation.json)
 records per-gate counts, mode observations and hashes of the local reports.
 Failover/PITR are explicitly historical, not part of these fresh runs.
 
@@ -212,4 +212,4 @@ Follow-up coverage: **95.1% framework** (same-scope baseline **92.6%**),
 
 Final validation passed: race, vet, external module, topology/migrations,
 216 plans, JMeter/PubSub (42 samples, zero failures), and EN/PT build. No temporary
-gate schemas remain. See the [follow-up evidence snapshot](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/infra/postgres-ha/evidence/2026-11-15-retry-coverage.json).
+gate schemas remain. See the [follow-up evidence snapshot](https://github.com/Gui-Rondon/hyrule/blob/main/infra/postgres-ha/evidence/2026-11-15-retry-coverage.json).

@@ -153,7 +153,7 @@ Reuse `env.PostgresTx`: it carries the request's pool and dry-run policy.
 installs shared functions before Setup and ensures declared indexes after it.
 It does not create your resource table or run schema migrations. The runnable
 comments example uses an explicit staged migration runner and startup schema
-checks; see its [migration runbook](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/examples/blog-apis/internal/commentsschema/README.md).
+checks; see its [migration runbook](https://github.com/Gui-Rondon/hyrule/blob/main/examples/blog-apis/internal/commentsschema/README.md).
 
 ```sh
 printf '%s\n' '{"auth":{"enable":false}}' > config.json

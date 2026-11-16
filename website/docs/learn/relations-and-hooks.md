@@ -32,8 +32,9 @@ Schema: rest.Schema{
 },
 ```
 
-`author_id` is required (no `Nullable`), `category_id` is optional,
-`tags` is a list of up to 50 ids. That's it — hyrule validates that
+`author_id` accepts an ObjectID and rejects null, but is optional unless
+`Required: true` is set. `category_id` also accepts null; `tags` is a list
+of up to 50 IDs. That's it — hyrule validates that
 these look like ObjectIDs, nothing more. **It does not check that the
 author, category or tags actually exist.** If you need that, it's what
 `Field.Check` is for: a closure that runs after the built-in rules,

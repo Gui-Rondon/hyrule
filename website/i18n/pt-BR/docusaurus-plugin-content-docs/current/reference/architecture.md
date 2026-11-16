@@ -26,37 +26,32 @@ ciclo de import de verdade, e confundiria qualquer leitor futuro.
 
 Um `behaviors/*` (ex.: `events`, que liga `outbox` a `rest.Hooks`)
 pode depender tanto de `rest` quanto de `platform` — ele existe
-justamente pra ser a cola entre os dois.
+justamente para integrar os dois.
 
 Uma exceção, de propósito: `restpostgres` é o único pacote com
-permissão pra importar tanto `rest` quanto `platform/postgres` — ele é
+permissão para importar tanto `rest` quanto `platform/postgres` — ele é
 a ponte, não uma camada nova, implementando `rest.Adapter` (ver
 [`adapter.md`](adapter.md)) do mesmo jeito que `mongoAdapter` faz
-dentro do próprio `rest` pro `platform/mongodb`. Uma `Resource` escolhe
+dentro do próprio `rest` para o `platform/mongodb`. Uma `Resource` escolhe
 um dos dois definindo `Adapter` (`restpostgres.NewAdapter(...)`) ou
-`Store` (`platform/mongodb.NewStore(...)`, que `rest` embrulha num
+`Store` (`platform/mongodb.NewStore(...)`, que `rest` encapsula num
 `mongoAdapter` automaticamente) — nunca os dois.
 
 ## Decisões que moldam o framework
 
-- **Storage e eventos compartilham a transação local.** Recursos Mongo usam
+- **Armazenamento e eventos compartilham a transação local.** Recursos Mongo usam
   `outbox`; Postgres usa `outboxpostgres` com mesmo pool/contexto. Hooks dependem
-  do contrato Adder, mas a atomicidade não atravessa dois bancos nem publishers
+  do contrato Adder, mas a atomicidade não atravessa dois bancos nem publicadores
   externos. Veja [outbox](outbox.md).
-- **Portabilidade de storage é a interface, não a linguagem de query.**
-  `rest.Store` continuou exatamente `bson.M`/`bson.D`-tipado, no
-  formato do Mongo, nunca generificado (ADR-0002) — um segundo backend
-  de verdade precisou de um seam diferente na frente dele, não de uma
-  nova implementação de `Store`: `rest.Adapter` (ver
-  [`adapter.md`](adapter.md)), com `restpostgres` implementando ele
-  sobre `platform/postgres` pra primeira resource real com Postgres
-  (`examples/blog-apis/services/comments-api`). Cada backend continua
-  com sua própria linguagem de query e semântica de erro — `where=`/
-  `sort=` continuam `bson.M`/`bson.D` pro Mongo e um `postgres.Query`
-  compilado por `platform/postgres` pro Postgres, nunca uma AST de
-  filtro compartilhada.
-- **O YAML cobre dado, não código.** `declarative` expressa tudo
-  que já é plano em `rest.Schema`/`Field`/`Resource`; `Field.Check`,
+- **A interface de armazenamento não unifica a linguagem de consulta.**
+  `rest.Store` mantém os tipos `bson.M` e `bson.D` do Mongo, sem generics
+  (ADR-0002). Para integrar Postgres, foi criado `rest.Adapter`, implementado
+  por `restpostgres` sobre `platform/postgres`; veja [Adapter](adapter.md).
+  Cada backend mantém sua linguagem de consulta e classificação de erros:
+  Mongo usa os tipos BSON; Postgres usa `postgres.Query`, compilado por
+  `platform/postgres`. Não há uma árvore de filtros compartilhada.
+- **O YAML descreve dados, não código.** `declarative` representa as configurações de
+  `rest.Schema`, `Field` e `Resource`. `Field.Check`,
   `Resource.Validate`, `Resource.Datasource` e todos os `Hooks` carregam
   comportamento arbitrário e ficam de fora de propósito — ver
   [`docs/resources-yaml.md`](resources-yaml.md).

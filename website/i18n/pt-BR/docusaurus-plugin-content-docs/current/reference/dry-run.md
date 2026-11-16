@@ -20,20 +20,20 @@ reverter as escritas. Quem chama `app.Build` diretamente fornece `Mongo`, `DB`,
 `DryRun: true` e `WriteGuard` no cliente monitorado (veja `testkit.DryRun`).
 O monitor registra escritas fora de transações; não as bloqueia. Após violação,
 `/healthcheck` permanece falhando até reiniciar, mas `/status` continua
-respondendo. Escritas customizadas devem participar da transação da requisição.
+respondendo. Escritas personalizadas devem participar da transação da requisição.
 
 ## Integração Postgres
 
 `app.Build` configura `env.PostgresTx` como `postgres.Transactor{Pool: pool,
 Rollback: true}`. Passe esse mesmo valor a `restpostgres.NewAdapter`. Escritas
-customizadas devem usar `postgres.NewStore(env.Postgres, table).Querier(ctx)`
+personalizadas devem usar `postgres.NewStore(env.Postgres, table).Querier(ctx)`
 e o contexto da requisição para participar da mesma transação. Nos testes,
 use `Deps{Postgres: pool, DryRun: true}`; não precisa de cliente Mongo/WriteGuard.
 `pool.Exec` direto ignora a transação e pode persistir dados: Postgres não tem
 WriteGuard equivalente para detectar isso. Dry run protege o fluxo transacional
 da requisição, não chamadas arbitrárias ao banco nem DDL administrativo.
 
-## Comportamento compartilhado e limites do setup
+## Comportamento compartilhado e limites do código de inicialização
 
 - O cliente recebe a resposta da tentativa de escrita; dados de negócio e
   inserts do outbox transacional são revertidos juntos. Uma próxima requisição
@@ -44,11 +44,11 @@ da requisição, não chamadas arbitrárias ao banco nem DDL administrativo.
 - `DRY_RUN_TIMEOUT` limita cada requisição (padrão 3s). Timeouts HTTP/banco não
   revertem efeitos externos; o [outbox](outbox.md) é a fronteira de entrega.
 - Índices declarados usam check em vez de create, salvo mode já off.
-  Setup ainda executa: funções Postgres compartilhadas e DDL do aplicativo
+  Configuração ainda executa: funções Postgres compartilhadas e DDL do aplicativo
   podem escrever fora das transações de requisição. Prepare schemas compatíveis
-  explicitamente e mantenha efeitos externos irreversíveis fora do Setup.
+  explicitamente e mantenha efeitos externos irreversíveis fora do Configuração.
 - Sequences/identity Postgres podem deixar lacunas após rollback. Dry run
-  promete ausência de linhas de negócio commitadas, não metadados/contadores
+  promete ausência de linhas de negócio confirmadas, não metadados/contadores
   do servidor inalterados.
 - `Spec.NoDryRun` recusa serviços que não podem espelhar tráfego com segurança.
 
@@ -59,5 +59,5 @@ env.API.Handle("POST /items/{id}/notify", env.RefuseInDryRun(
     "calls another service, no rollback", http.HandlerFunc(notify)))
 ```
 
-Em dry run a resposta é 503 com o motivo. Veja [setup dos backends](backends.md)
+Em dry run a resposta é 503 com o motivo. Veja [código de inicialização dos backends](backends.md)
 e [testes com bancos reais](testkit.md) para os dois caminhos de registro.

@@ -48,7 +48,7 @@ um projeto criado por `hyrule new` faria.
 
 Este exemplo não é o framework — é só um *uso* dele. A documentação do
 próprio hyrule (interface `Store`, outbox condicional, resources via YAML)
-fica em **https://gui-rondon.github.io/hyrule/**.
+fica em **https://gui-rondon.github.io/hyrule/pt-BR/**.
 
 ## comments-api: Postgres + Pub/Sub
 
