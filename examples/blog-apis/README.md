@@ -3,7 +3,7 @@
 # blog-apis
 
 The hyrule framework's practices applied to a generic domain (a blog),
-instead of theory: 4 small services, each demonstrating a different set
+instead of theory: 5 small services, each demonstrating a different set
 of capabilities.
 
 | Service | Demonstrates |
@@ -11,12 +11,13 @@ of capabilities.
 | [`authors-api`](services/authors-api) | 100% generic CRUD: just a schema + `env.API.Register`, zero business Go |
 | [`tags-api`](services/tags-api) | generic CRUD with a `Unique` field and a slug lookup — the same schema, with nothing rewritten, is [`cmd/hyrule-serve/example.yaml`](../../cmd/hyrule-serve/example.yaml) |
 | [`categories-api`](services/categories-api) | a hierarchical resource: a materialized path recomputed on every write, a `GET /categories/tree` endpoint built straight from the `Store` interface (no `*mongo.Collection` anywhere) |
-| [`posts-api`](services/posts-api) | the most complete example: relations (`author_id`, `category_id`, `tags`), a transactional outbox, custom `/publish` and `/schedule` endpoints (the latter writes to a Redis hash and to the outbox in the same transaction), optional Elasticsearch indexing |
+| [`posts-api`](services/posts-api) | the most complete example: relations (`author_id`, `category_id`, `tags`), a transactional outbox, custom `/publish` and `/schedule` endpoints (the latter stores an outbox event transactionally; its relay updates Redis after commit), optional Elasticsearch indexing |
+| [`comments-api`](services/comments-api) | Postgres via `app.Main`/`restpostgres`, a declarative index and a transactional outbox publishing `comment.published` to Pub/Sub |
 
 ## Running locally
 
 ```bash
-# generic infra (mongo/pubsub/redis) + this example's Elasticsearch
+# generic infra (mongo/postgres/pubsub/redis) + this example's Elasticsearch
 docker compose -f examples/blog-apis/docker-compose.yml --profile debug up -d --wait
 
 SERVICES_DIR=examples/blog-apis/services make build SERVICE=posts-api
@@ -48,3 +49,30 @@ way a project scaffolded by `hyrule new` would.
 This example isn't the framework — it's just a *use* of it. hyrule's own
 documentation (the `Store` interface, the conditional outbox, resources
 via YAML) lives at **https://gui-rondon.github.io/hyrule/**.
+
+## comments-api: Postgres + Pub/Sub
+
+```bash
+make env-up
+curl -sf -X PUT http://localhost:8085/v1/projects/local-dev/topics/comments-to-publish
+POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
+  make comments-migrate MIGRATE_ARGS='-action prepare'
+make build SERVICE=comments-api
+printf '%s\n' '{"auth":{"enable":false},"pubsub":{"project_id":"local-dev","to_publish":"comments-to-publish"}}' > .local/comments-api.json
+POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
+  PUBSUB_EMULATOR_HOST=localhost:8085 CONFIG_FILE=.local/comments-api.json \
+  PORT=8082 .local/comments-api
+```
+
+A write that changes `status` to `published` (including creating an already
+published comment) adds `comment.published` in the same Postgres transaction.
+The event body is the comment document; its ordering key is the comment UUID.
+`pubsub.to_publish` defaults to `comments-to-publish`; provision the topic before
+running the relay. Delivery is at-least-once: consumers deduplicate by `event_id`.
+A dry run rolls back both writes and starts no relay. `/healthcheck` checks
+Postgres, the outbox backlog and the destination topic. The e2e harness verifies
+actual delivery to an isolated Pub/Sub subscription as well as HTTP behavior.
+
+Schema migrations run explicitly before startup; see the [A5 migration runbook](internal/commentsschema/README.md).
+
+Mongo (`posts-api`) and Postgres (`comments-api`) share bootstrap, event hooks and dry run. The event and resource commit in the local database; Redis/PubSub are updated by the relay after commit, without a distributed transaction. See the [backend guide](../../website/docs/reference/backends.md).

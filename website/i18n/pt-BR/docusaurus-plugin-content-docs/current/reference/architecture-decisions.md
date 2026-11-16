@@ -66,11 +66,15 @@ construir um resource mínimo usando `rest`, `app`, `declarative` e
 
 ## ADR-0002 — Portabilidade do contrato `rest.Store`
 
-**Status:** Aceito — implementação adiada
+**Status:** Aceito, depois revisado (ver Revisão abaixo) — o rework
+com generics continua adiado, exatamente como decidido; um seam
+diferente (`Adapter`) é o que de fato foi construído.
 
-**Implementado em:** não se aplica; a própria decisão é adiar o
-rework com generics (ver Decisão abaixo). O `rest.Store` continua
-inalterado no PR #6, conforme decidido.
+**Implementado em:** não se aplica na época em que este ADR foi
+escrito (a decisão era adiar o rework com generics, ver Decisão
+abaixo); o `rest.Store` continuou inalterado no PR #6, conforme
+decidido. Ver Revisão pro que foi implementado em vez disso, a partir
+do PR #10.
 
 **Contexto.** Os métodos de `rest.Store` são tipados em
 `bson.M`/`bson.D`, e a tradução de erro de `rest.Service` checa tipos
@@ -120,9 +124,67 @@ quanto de um store que não seja Mongo.
 **Critério de validação.** Nenhuma documentação descreve um resource
 Postgres passando por `rest.Store`.
 
+### Revisão — 2026-11, Fase 8 da portabilidade Postgres
+
+**O que mudou.** Uma resource Postgres real acabou sendo necessária
+antes do gap de generics ser revisitado por conta própria — o próprio
+gatilho de revisão deste ADR ("o primeiro resource real que precise
+tanto da maquinaria HTTP do `rest` quanto de um store que não seja
+Mongo"). Nenhuma das três alternativas originais foi seguida como
+estava escrita: nem o rework com generics (`Store[F, U any]`), nem
+contornar `rest` completamente (a recomendação original), nem um
+segundo caminho HTTP independente (rejeitado desde o início). O que
+de fato foi construído, aprovado explicitamente pelo usuário ("Eu
+concordo que esse desenho — um núcleo compartilhado via Adapter — é o
+caminho certo") antes do início da Fase 0: uma quarta opção, um novo
+seam de interface — `rest.Adapter` (`rest/adapter.go`) — que
+`rest.Service` passou a usar em vez de `rest.Store` diretamente.
+
+**Por que não generics.** `Adapter` não parametriza `Store` por
+tipo — é uma interface comum que cada backend implementa à sua
+própria maneira (`mongoAdapter` em `rest/mongoadapter.go`, o
+`postgresAdapter` de `restpostgres`), cobrindo exatamente a
+superfície que `rest.Service` precisa: parsear/combinar
+`where`/`sort`/`projection` (`QueryAdapter`), geração/parsing de id
+(`IDCodec`), classificação de erro (`ErrorClassifier`), e
+CRUD/merge-patch/unicidade. As três primeiras foram extraídas de
+dentro de `rest/service.go`/`query.go`/`http.go` ainda na Fase 0 (zero
+mudança de comportamento do Mongo, confirmada por uma regressão
+completa) como interfaces separadas e testáveis de forma
+independente; a Fase 4a as uniu num só `Adapter`, junto com os
+métodos de escrita. **`rest.Store` continua exatamente o que este ADR
+decidiu** — ainda tipado em `bson.M`/`bson.D`, ainda só implementado
+por `platform/mongodb.Store` — porque `Adapter` fica na frente dele,
+não no lugar dele: uma `Resource` com `Adapter` definido nunca toca
+`Store` (`Resource.setDefaults`, `rest/resource.go`, só constrói um
+`mongoAdapter` envolvendo `Store` quando `Adapter` é `nil` — o
+caminho padrão de uma resource Mongo que nunca precisou mudar nada).
+
+**O que isso habilitou.** `restpostgres.NewAdapter` (um pacote novo,
+o único importando `rest` e `platform/postgres` juntos, seção 2 do
+plano de portabilidade) implementa `Adapter` por completo sobre uma
+tabela `jsonb` mais colunas relacionais de metadado — ver
+[`adapter.md`](adapter.md) pro contrato completo e
+[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/integration/postgres-portability/examples/blog-apis/services/comments-api)
+pra primeira resource real servida de ponta a ponta sobre HTTP por
+esse caminho (Fase 7). O scaffold `platform/postgres` que este ADR já
+citava continua existindo, ainda sem importar `rest`, exatamente como
+decidido — `restpostgres` é a única ponte entre os dois, nunca o
+contrário.
+
+**Consequência pra documentação.** A frase original ("o caminho de
+contorno continua sendo a forma suportada de usar `postgres.Store`")
+não é mais verdade — desatualizada por este próprio ADR, não ignorada
+silenciosamente. [`store.md`](store.md) e
+[`postgres-rfc.md`](postgres-rfc.md) foram atualizados pra apontar pra
+[`adapter.md`](adapter.md) como o caminho atual; `postgres-rfc.md` em
+si passa a ser um registro histórico do desenho original (a maioria
+dos pontos "Decided" lá se confirmou; os marcados "open" foram
+resolvidos durante a implementação em si, não revisitados aqui).
+
 ## ADR-0003 — Outbox e Postgres
 
-**Status:** Aceito — implementação adiada
+**Status:** Implementado — adiamento original cumprido (2026-11-15)
 
 **Implementado em:** não se aplica; a própria decisão é esperar por um
 resource real com Postgres (ver Decisão abaixo). O `outbox` (movido de
@@ -162,6 +224,15 @@ a versão genérica antes do ADR-0002 desbloquear isso.
 **Critério de validação.** Nenhuma documentação ou ADR afirma que
 existe um outbox Postgres funcionando até que um resource de fato use
 um.
+
+**Revisão — 2026-11-15.** O adiamento histórico acima foi cumprido nas Streams
+C1–C5 (PRs #29–#31). `outboxpostgres` grava eventos na transação do mesmo pool
+do recurso; `comments-api` o utiliza e verifica entrega Pub/Sub real. Hooks
+de eventos aceitam Adder; publishers/conditions permanecem em `outbox`.
+Mongo mantém implementação separada. Postgres usa SKIP LOCKED, sem ordem por
+Key entre workers, e implementa dead_at/replay; Mongo preserva lease de líder
+e retry sem limite. Não há interface genérica de storage nem transação
+distribuída. Veja [outbox](outbox.md) e [evidências consolidadas](integration-review.md).
 
 ## ADR-0004 — Escopo inicial do CLI / Platform
 

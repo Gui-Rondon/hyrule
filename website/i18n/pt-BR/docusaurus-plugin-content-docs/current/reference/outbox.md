@@ -2,83 +2,97 @@
 sidebar_position: 3
 ---
 
-# Outbox transacional
+# Outbox transacional com Mongo e Postgres
 
-`outbox` implementa o padrão outbox: um write guarda seus eventos
-na coleção `outbox`, na mesma transação Mongo do write — os dois são
-gravados juntos ou nenhum dos dois é. Depois do commit, um `Relay`
-publica os eventos pendentes (pelo menos uma vez; cada mensagem carrega o
-atributo `event_id` para quem consome deduplicar).
+Ambos commitam a escrita do recurso e o evento pendente na **mesma transação
+local do banco**. O relay publica após commit, pelo menos uma vez. Consumidores
+deduplicam por `outbox.AttrEventID` (`event_id`); perda de acknowledgement pode
+publicar novamente. Não há transação distribuída com Pub/Sub, Redis ou outro
+serviço.
+
+## Integração Mongo
 
 ```go
 box := outbox.New(env.DB)
-res.Hooks.Use(events.Hooks(box))          // flush dos eventos anexados ao ctx
+res.Hooks.Use(events.Hooks(box))
+relay := &outbox.Relay{Outbox: box, Publisher: publisher}
+env.Go("outbox-relay", relay.Run)
+check, err := outbox.CheckFromConfig(env.Config, relay)
+if err != nil { return err }
+env.AddCheck(check)
 ```
 
-## Dois jeitos de decidir o que publicar
+Use transação em replica set. `outbox.New` define o checker transacional. `relay.Run` garante os índices
+pending/TTL; quem chama Drain diretamente deve executar
+`relay.EnsureIndexes(ctx)` no setup. `Add` rejeita contexto fora da
+transação com `outbox.ErrNoTransaction`. `AllowNoTransaction` serve para
+standalone de desenvolvimento e elimina atomicidade. O relay Mongo usa lease
+de líder único e ordena pendentes por esse relay; falhas têm backoff e retry
+sem limite integrado de dead-letter/replay. Publicados têm retenção/TTL.
+Veja `posts-api` para a integração Mongo completa.
 
-**`events.With`** — o código de negócio decide explicitamente, antes do
-hook, que este write específico deve emitir um evento:
+## Integração Postgres
 
 ```go
-ctx := events.With(r.Context(), outbox.Event{Topic: "posts-to-unpublish", Key: id, Body: id})
-svc.Patch(ctx, lookup, changes, opts)
+if err := outboxpostgres.EnsureTable(ctx, env.Postgres, "outbox"); err != nil { return err }
+box := &outboxpostgres.Outbox{Pool: env.Postgres, Table: "outbox"}
+res.Hooks.Use(events.Hooks(box))
+relay := &outboxpostgres.Relay{Outbox: box, Publisher: publisher, Workers: 1}
+env.Go("outbox-relay", relay.Run)
+check, err := outbox.CheckFromConfig(env.Config, relay)
+if err != nil { return err }
+env.AddCheck(check)
 ```
 
-Use quando a condição não é "um campo chegou neste valor" — por exemplo
-`examples/blog-apis/services/posts-api`'s `/unpublish`: "draft" também é o
-status padrão de um post novo, então não dá para expressar "deixou de
-estar published" só olhando o valor final.
+Use o **mesmo pool** do adapter e de `env.PostgresTx`. `Add` usa a transação do
+contexto, rejeita contexto ausente/de outro pool com o mesmo
+`outbox.ErrNoTransaction` e não inicia outra transação silenciosamente.
+`EnsureTable` é DDL de setup, não requisição do recurso nem motor de migrations;
+gerencie explicitamente mudanças incompatíveis em instalações existentes.
 
-**`events.ConditionalHooks` + `outbox.Condition`** — o próprio write
-decide, sem `if` no código de negócio:
+O relay Postgres usa `FOR UPDATE SKIP LOCKED`. Vários workers/processos podem
+publicar em paralelo; **não há ordem por Key entre workers**. MaxAttempts padrão
+é 10; eventos esgotados recebem `dead_at`, permanecem armazenados e saem da
+busca de pendentes. `relay.Replay(ctx, id)` recoloca somente um ID bigint morto
+na fila, limpando estado de retry/dead; os demais retornam `ErrNotReplayable`.
+Publicados não têm TTL Mongo equivalente: defina retenção separadamente.
+Veja `comments-api` para testes reais de HTTP, transação e entrega Pub/Sub.
+
+`outbox.CheckFromConfig` funciona com ambos (`outbox.max_delay`, padrão 5m).
+Mede a idade do backlog pendente; linhas mortas Postgres são excluídas.
+Monitore/opere o backlog morto separadamente: pending verde não prova ausência
+de eventos que falharam.
+
+## Hooks e publishers compartilhados
+
+O negócio pode anexar um evento antes da escrita:
 
 ```go
-cond := outbox.OnFieldChange("status", []string{"published"}, func(doc map[string]any) outbox.Event {
-	return outbox.Event{Topic: "posts-to-publish", Type: "post.published", Key: doc["_id"].(bson.ObjectID).Hex()}
+ctx = events.With(ctx, outbox.Event{Topic: "items-changed", Type: "item.changed", Key: id, Body: payload})
+// Passe ctx à escrita do Service. events.Hooks grava no hook anterior à escrita.
+```
+
+Ou registrar condição de transição com qualquer box:
+
+```go
+condition := outbox.OnFieldChange("status", []string{"published"}, func(doc map[string]any) outbox.Event {
+    return outbox.Event{Topic: "items-published", Type: "item.published", Key: fmt.Sprint(doc["_id"]), Body: doc}
 })
-res.Hooks.Use(events.ConditionalHooks(box, cond))
+res.Hooks.Use(events.ConditionalHooks(box, condition))
 ```
 
-`OnFieldChange` cobre o caso comum: dispara quando o valor efetivo do
-campo (depois do write) é um dos valores-alvo e — fora de um insert —
-representa uma transição real (o valor anterior era diferente). Uma vez
-registrado, **qualquer** caminho de escrita que resulte nesse valor
-dispara o evento, não só um endpoint dedicado:
-`examples/blog-apis/services/posts-api/posts.go` usa exatamente essa
-condição para `/publish`, e um `PATCH /posts/{id}` comum que também setar
-`status: published` dispara o mesmo jeito
-(`TestPlainPatchAlsoPublishes` em `posts_test.go`).
+Use a formatação de ID do contrato de mensagem (ObjectID.Hex no Mongo quando
+necessário; UUID.String no Postgres). PATCH comum que produz a mesma transição
+efetiva também dispara a condição. Evite emitir o mesmo evento de negócio
+involuntariamente pelas duas estratégias de hooks.
 
-Os dois convivem no mesmo `Resource` — `events.Hooks` e
-`events.ConditionalHooks` são bundles de hooks independentes, combinados
-com `res.Hooks.Use(...)`.
+`publisher` implementa `outbox.Publisher`; `outbox.PubSub` e `outbox.Dispatcher`
+funcionam com ambos. Provisione tópicos/subscriptions separadamente. Destinos
+locais também executam **após commit**: atualização Redis não é atômica com a
+escrita original Mongo/Postgres. Falhas locais são retentadas pelo relay;
+handlers precisam de idempotência como consumidores remotos.
 
-## Destinos locais (sem Pub/Sub real)
-
-`outbox.Dispatcher` roteia por tópico antes de chegar no `Publisher` real:
-
-```go
-outbox.Dispatcher{
-	Local: map[string]outbox.PublisherFunc{
-		"local:posts-schedule": func(ctx context.Context, m outbox.Message) error {
-			// grava num hash do Redis, por exemplo — não sai pro Pub/Sub
-		},
-	},
-	Next: &outbox.PubSub{Client: ps}, // tudo que não é "local:*" cai aqui
-}
-```
-
-`examples/blog-apis/services/posts-api` usa isso no `/schedule`: o evento
-de agendamento escreve num hash do Redis (pra um scheduler escanear) na
-mesma transação do write, sem nunca tocar o Pub/Sub.
-
-## `Outbox.InTransaction`
-
-`Outbox.Add` recusa gravar fora de uma transação (`ErrNoTransaction`) —
-checagem feita por `Outbox.InTransaction func(ctx) bool`, que `outbox.New`
-preenche com o checker do driver Mongo (`mongo.SessionFromContext`). Não
-está hardcoded dentro de `Add`: um backend diferente de Mongo trocaria
-esse campo por seu próprio jeito de saber "estou numa transação".
-`Outbox.AllowNoTransaction` desliga a checagem (só para Mongo standalone
-em desenvolvimento — nunca em produção).
+Hooks anteriores ficam na transação de banco. `env.Go` suprime relays em dry
+run; dados e eventos pendentes sofrem rollback juntos. Build sem `Deps.Start`
+não inicia relays: testes chamam Drain ou executam worker ao verificar entrega.
+[Setup](backends.md), [dry run](dry-run.md) e [testes](testkit.md) detalham o entorno.

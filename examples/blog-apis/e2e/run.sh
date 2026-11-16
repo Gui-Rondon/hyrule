@@ -2,9 +2,13 @@
 # Functional/concurrency e2e checks (CRUD, hooks, outbox, auth, optimistic
 # concurrency) for the blog-apis example: a real JMeter instance (in
 # Docker) drives real containers of tags-api/authors-api/categories-api/
-# posts-api, talking to the same Mongo/Redis/Pub-Sub `make env-up` starts
-# for the framework's own tests, plus Elasticsearch (best effort) -- no
-# mocks anywhere in this path. Complements loadtest/ (read-only perf):
+# posts-api/comments-api, talking to the same Mongo/Redis/Pub-Sub/Postgres
+# `make env-up` starts for the framework's own tests, plus Elasticsearch
+# (best effort) -- no mocks anywhere in this path. comments-api is the
+# Postgres path (app.Main with app.BackendPostgres, same bootstrap and
+# CONFIG_FILE/auth/status/healthcheck convention as the other four,
+# since B3 of the "postgres em produção" plan -- the only difference is
+# which database it talks to). Complements loadtest/ (read-only perf):
 # this plan asserts correctness, and its loop count doubles as a light
 # load knob.
 #
@@ -21,7 +25,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 here="$root/examples/blog-apis/e2e"
 net=hyrule-e2e
-services="tags-api authors-api categories-api posts-api"
+services="tags-api authors-api categories-api posts-api comments-api"
 
 teardown() {
 	# shellcheck disable=SC2086
@@ -40,6 +44,13 @@ if [ "${1:-}" = down ]; then
 	exit 0
 fi
 loops=${1:-1}
+comments_topic="comments-e2e-$(date +%s)-$$"
+comments_subscription="$comments_topic"
+cleanup_comments() {
+ curl --max-time 5 -sf -X DELETE "http://localhost:8085/v1/projects/local-dev/subscriptions/$comments_subscription" >/dev/null || true
+ curl --max-time 5 -sf -X DELETE "http://localhost:8085/v1/projects/local-dev/topics/$comments_topic" >/dev/null || true
+}
+trap cleanup_comments EXIT
 
 echo "==> starting shared infra (make env-up)"
 make -C "$root" env-up
@@ -54,7 +65,7 @@ docker network create "$net" >/dev/null 2>&1 || true
 # it (so this works whatever the checkout directory -- and so the
 # compose project name -- is called), then joined to $net under the
 # plain alias the e2e config files expect ("mongo", "redis"...).
-for entry in "docker-compose.yml:mongo" "docker-compose.yml:redis" "docker-compose.yml:pubsub" "examples/blog-apis/docker-compose.yml:elasticsearch"; do
+for entry in "docker-compose.yml:mongo" "docker-compose.yml:redis" "docker-compose.yml:pubsub" "docker-compose.yml:postgres" "examples/blog-apis/docker-compose.yml:elasticsearch"; do
 	file=${entry%%:*}
 	svc=${entry##*:}
 	cid=$(docker compose -f "$root/$file" ps -q "$svc" 2>/dev/null || true)
@@ -74,7 +85,14 @@ for svc in $services; do
 	docker build --build-arg SERVICE="$svc" -t "hyrule-e2e/${svc}:dev" "$root" >/dev/null
 done
 
-echo "==> starting e2e-{tags,authors,categories,posts}-api"
+echo "==> provisioning isolated comments topic and subscription"
+curl --max-time 10 -sf -X PUT "http://localhost:8085/v1/projects/local-dev/topics/$comments_topic" >/dev/null
+curl --max-time 10 -sf -X PUT -H 'Content-Type: application/json' \
+ -d "{\"topic\":\"projects/local-dev/topics/$comments_topic\",\"enableMessageOrdering\":true}" \
+ "http://localhost:8085/v1/projects/local-dev/subscriptions/$comments_subscription" >/dev/null
+sed "s/comments-to-publish/$comments_topic/" "$here/config/comments-api.json" > "$here/.keys/comments-api.json"
+
+echo "==> starting e2e-{tags,authors,categories,posts,comments}-api"
 # shellcheck disable=SC2086
 docker rm -f $(printf 'e2e-%s ' $services) >/dev/null 2>&1 || true
 
@@ -104,11 +122,21 @@ docker run -d --name e2e-posts-api --network "$net" \
 	-v "$here/.keys/legacy.pub:/keys/legacy.pub:ro" \
 	"hyrule-e2e/posts-api:dev" >/dev/null
 
-echo "==> waiting for the 4 services to answer /status"
+echo "==> applying comments-api migrations explicitly"
+(cd "$root" && POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
+ go run ./examples/blog-apis/cmd/comments-migrate -action prepare)
+
+docker run -d --name e2e-comments-api --network "$net" \
+	-e PORT=8080 -e POSTGRES_CONNECTION_STRING="postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable" \
+	-e CONFIG_FILE=/cfg/comments-api.json -e PUBSUB_EMULATOR_HOST=pubsub:8085 \
+	-v "$here/.keys/comments-api.json:/cfg/comments-api.json:ro" \
+	"hyrule-e2e/comments-api:dev" >/dev/null
+
+echo "==> waiting for the 5 services to answer"
 docker run --rm --network "$net" curlimages/curl:8.10.1 sh -c '
 	for i in $(seq 1 30); do
 		ok=1
-		for svc in e2e-tags-api e2e-authors-api e2e-categories-api e2e-posts-api; do
+		for svc in e2e-tags-api e2e-authors-api e2e-categories-api e2e-posts-api e2e-comments-api; do
 			curl -sf "http://$svc:8080/status" >/dev/null || ok=0
 		done
 		[ "$ok" = 1 ] && exit 0
@@ -128,7 +156,10 @@ rm -f "$here"/results/*
 docker run --rm --network "$net" \
 	-v "$here/jmeter:/jmx:ro" -v "$here/results:/results" \
 	justb4/jmeter:latest -n -t /jmx/hyrule-e2e.jmx -l /results/results.jtl -j /results/jmeter.log \
-	-Jauth_token="$token" -Jloops="$loops"
+	-Jauth_token="$token" -Jloops="$loops" -Jcomments_subscription="$comments_subscription"
+
+# JMeter can exit zero despite failed assertions. Check the actual samples.
+(cd "$root" && go run ./examples/blog-apis/e2e/check-results "$here/results/results.jtl")
 
 echo
 echo "Results: $here/results/results.jtl ($here/results/jmeter.log for the full JMeter log)"

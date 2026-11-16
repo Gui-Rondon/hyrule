@@ -35,14 +35,19 @@ building the wrapper by hand.
 
 `platform/postgres.Store` follows the same `NewStore`-wraps-a-
 client, `Find`/`FindOne`/... shape, for a relational database — it just
-isn't an implementation of the interface above (see
-[Postgres backend](postgres-rfc.md) for why), so nothing here wires it
-to a `rest.Resource` yet:
+isn't an implementation of the interface above, on purpose (see
+[Postgres backend](postgres-rfc.md) for why):
 
 ```go
 store := postgres.NewStore(pool, "tags")
 docs, err := store.Find(ctx, postgres.Filter{"status": "draft"}, 0, 10, nil, nil)
 ```
+
+This `Store` is lower-level than what a Postgres-backed `Resource`
+actually registers, though: `restpostgres.NewAdapter` wraps it (plus
+a `Transactor` and a `Schema`) into a `rest.Adapter` — see
+[`adapter.md`](adapter.md) for the seam `Resource.Adapter` is, and why
+a Postgres resource sets that instead of `Store`.
 
 ## What this decouples — and what it doesn't
 
@@ -60,11 +65,13 @@ In practice that means:
   interface.
 - Moving from Mongo to another database takes more than implementing
   `Store`: the queries (`bson.M`) and the errors checked in
-  `rest/service.go` (`queryError`, `duplicateKey`) still
-  assume Mongo. `platform/postgres` has a first scaffold (its
-  own `Store`-shaped type, not an implementation of this interface —
-  see [Postgres backend](postgres-rfc.md) for why and for what's still
-  open), but no resource is wired to it yet.
+  `rest/service.go` assumed Mongo until `rest.Adapter` (see
+  [`adapter.md`](adapter.md)) gave each backend its own
+  implementation of that instead. `platform/postgres.Store` (its own
+  `Store`-shaped type, not an implementation of this interface — see
+  [Postgres backend](postgres-rfc.md) for why) stays the low-level
+  piece `restpostgres.postgresAdapter` is built on, not something a
+  `Resource` ever sees directly.
 
 ## Query performance today
 
@@ -92,13 +99,57 @@ the right index is the whole optimization story for a Mongo-backed
 resource.
 
 This is Mongo-shaped end to end (the index directions above, `ttl=`, the
-`indices.conf` format itself) and won't carry over to Postgres as-is:
+`indices.conf` format itself) and doesn't carry over to Postgres as-is:
 Postgres' default index is a btree, with `gin` for `jsonb`/array/full-text
 columns, `gist` for geometric/range types and `brin` for large,
 naturally-ordered tables; there's no native `ttl` (it needs a cron job or
 trigger), and `EXPLAIN ANALYZE` gives a real query plan where Mongo's
-`where=` gives none. See [Postgres backend](postgres-rfc.md) for where
-that's headed.
+`where=` gives none. `platform/postgres.EnsureIndexes`/`IndexSpec` is the
+Postgres equivalent — its own format, deliberately narrower (no TTL/
+text/hashed/2dsphere), called explicitly by whoever sets up a resource's
+table, same precedent as `EnsureFunctions` (see
+[`adapter.md`](adapter.md#building-a-postgres-backed-resource)).
+
+### Explicit Postgres typed sort indexes
+
+`IndexField.Mode` defaults to `postgres.IndexFieldLegacy`: existing JSONB DDL
+is preserved, including the safe datetime helper. JSONB ordering differs from
+`restpostgres`'s typed ordering, especially for nulls and mixed JSON types.
+To index the current scalar sort expression, opt in per field:
+
+```go
+postgres.IndexSpec{
+    Table: "items", Name: "items_rank_typed_v1",
+    Fields: []postgres.IndexField{{
+        Field: "rank", Kind: postgres.KindInteger,
+        Mode: postgres.IndexFieldTypedSort,
+    }},
+}
+```
+
+This produces `((doc->>'rank')::int8)`. Supported kinds are `KindString`
+(`text`), `KindInteger` (`int8`), `KindNumber` (`numeric`) and `KindBoolean`
+(`boolean`). Compound indexes and `Desc` are supported; the database's default
+NULLS order and collation apply. Ties require an explicit sort term if a stable
+page order is needed. Queries, bindings and their ordering semantics do not change.
+Datetime, array/object, unknown kinds/modes, and typed indexes with `Unique` or
+`Sparse` are rejected. Nested paths and meta fields are outside this mode.
+
+Audit existing data before creation and validate future writes: invalid casts
+prevent index creation and reject writes afterward. JSON null and missing keys
+become SQL NULL; a numeric string may cast to the same value as a JSON number.
+Each additional index costs storage and write work. Use an explicit **new name**;
+`EnsureIndexes`/`CREATE IF NOT EXISTS` neither migrate old definitions nor prove
+that an existing index with the same name has equivalent DDL.
+
+Parameterized field names can still prevent index use with generic plans.
+A typed sort index does not turn a JSONB filter into a typed index condition,
+and deep offsets may still require a Sort. The manual local gate
+`make postgres-ha-typed-sort-test POSTGRES_HA_PORT=5540` uses real `EnsureIndexes`
+and the SELECT captured from `restpostgres.Find`, checks auto/custom plans and
+records generic/deep-offset controls. Artifacts are in `.local/postgres-typed-sort/`.
+It provisions no infrastructure and is not enabled in GitHub Actions. Initial
+adoption is limited to gate fixtures; no comments-api index or migration is added.
 
 ## Places that still go straight to Mongo, on purpose
 
@@ -110,3 +161,5 @@ that needs a query `Store` doesn't expose uses `Store` anyway —
 (`examples/blog-apis/services/categories-api/categories.go`) only needs
 `Find`/`FindOne` for that — but a more complex aggregation would still
 require extending the interface or dropping down to the driver.
+
+The Mongo outbox package remains backend-specific; `outboxpostgres` supplies the transactional Postgres counterpart. See [integration](backends.md) and [outbox](outbox.md).

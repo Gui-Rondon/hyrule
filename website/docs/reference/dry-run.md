@@ -2,63 +2,62 @@
 sidebar_position: 5
 ---
 
-# Dry run: run everything, write nothing
+# Dry run with Mongo and Postgres
 
-Dry run lets a service take real traffic (writes included) without
-actually persisting anything — useful to validate a new version against
-production traffic before it gets the final word. It's turned on by the
-`DRY_RUN` environment variable (never by the configuration — `app.Build`
-refuses to start if it finds a `dry_run` key in the config, on purpose:
-it's a deployment switch, not something that could be left on by
-accident in a shared config).
+`DRY_RUN=1` runs requests with database writes rolled back. It is a deployment
+switch, not shared configuration: `app.Build` rejects a `dry_run` config key.
+Both `app.BackendMongo` and `app.BackendPostgres` support it.
 
-```bash
+```sh
 DRY_RUN=1 DRY_RUN_TIMEOUT=10s ./my-api
 ```
 
-## How it works
+## Mongo integration
 
-- Every write runs inside a Mongo transaction that always rolls back
-  (`mongodb.Transactor{Rollback: true}`, built by `app.Build` when
-  `DRY_RUN=1`): the client gets the response as if the write happened,
-  but nothing lands in the database.
-- Post-write hooks (`OnInserted`, `OnUpdated`, `OnReplaced`,
-  `OnDeleted`) don't run — they reach systems outside the transaction
-  (ES, Pub/Sub...), which have no rollback. See `runPost` in
-  `rest/service.go`.
-- Background tasks registered with `env.Go` (the outbox relay, for
-  instance) don't start.
-- `DRY_RUN_TIMEOUT` caps every request (default 3s,
-  `app/app.go`'s `defaultDryRunTimeout`); without it, a dry run
-  could hold the client's next request longer than the real thing would
-  take to answer.
-- Dry run needs a replica set (no transaction to roll back without one)
-  and a `*mongodb.WriteGuard` on the Mongo client — `app.Run` builds
-  both; whoever calls `app.Build` directly (tests) needs to pass both in.
+`app.Run` installs `mongodb.Transactor{Rollback: true}` and a
+`mongodb.WriteGuard` command monitor. A replica set is required; standalone
+Mongo cannot roll writes back. Direct `app.Build` callers supply `Mongo`, `DB`,
+`DryRun: true` and `WriteGuard` on the monitored client (see `testkit.DryRun`).
+The monitor records writes outside transactions; it does not block them.
+After a violation `/healthcheck` remains failed until restart, while `/status`
+continues answering. Custom writes must still join the request transaction.
 
-## The write-outside-a-transaction tripwire
+## Postgres integration
 
-Not every write goes through the normal `rest.Service` path — a
-custom endpoint can write straight to the `Store`. If that write isn't
-inside a transaction, the automatic rollback never reaches it: it would
-actually be stored, even in dry run.
+`app.Build` sets `env.PostgresTx` to `postgres.Transactor{Pool: pool,
+Rollback: true}`. Pass that same value to `restpostgres.NewAdapter`. Custom
+writes must use `postgres.NewStore(env.Postgres, table).Querier(ctx)` and the
+request context so they join the same transaction. Use `Deps{Postgres: pool,
+DryRun: true}` when building in tests; no Mongo client/WriteGuard is required.
+A raw `pool.Exec` bypasses the transaction and can persist writes: Postgres
+has no WriteGuard-equivalent to detect it. Dry run protects the transactional
+request path, not arbitrary database calls or administrative DDL.
 
-`mongodb.WriteGuard` (`platform/mongodb/guard.go`) is a driver
-command monitor: it can't stop the write (the driver gives no such
-hook), but it counts and logs every write it sees outside a transaction.
-`/healthcheck` fails permanently from the first violation on
-(`dryRunCheck` in `app/dryrun.go`) — it stays red until the pod
-restarts, but `/status` keeps answering, so the pod doesn't drop out of
-rotation because of it.
+## Shared behavior and setup limits
 
-## Routes with no way back
+- The client receives the response from the attempted write; business data
+  and transactional outbox inserts are rolled back together. A later request
+  does not see those attempted changes.
+- Post-write hooks (`OnInserted`, `OnUpdated`, `OnReplaced`, `OnDeleted`) are
+  suppressed. Pre-write hooks still execute and must limit effects to the
+  transaction. `env.Go` background tasks (including relays) are not started.
+- `DRY_RUN_TIMEOUT` caps each request (default 3s). HTTP/database timeouts do
+  not undo external effects; [outbox](outbox.md) is the delivery boundary.
+- Declared indexes use check instead of create, unless mode is already off.
+  Setup still runs: shared Postgres functions and application setup DDL can
+  write outside request transactions. Prepare compatible schemas explicitly
+  and keep Setup free of irreversible external effects.
+- Postgres sequences/identity allocation may leave gaps even after rollback.
+  Dry run promises no committed transactional business rows, not unchanged
+  server metadata or counters.
+- `Spec.NoDryRun` refuses a service that cannot safely mirror traffic.
 
-A route whose effect leaves Mongo and has no rollback (an HTTP call to
-another service, for instance) uses `Env.RefuseInDryRun`:
+A route that calls another service or has an effect without rollback uses:
 
 ```go
-env.API.Handle("POST /posts/{id}/notify", env.RefuseInDryRun(
-	"calls another service, no rollback", http.HandlerFunc(e.notify)))
+env.API.Handle("POST /items/{id}/notify", env.RefuseInDryRun(
+    "calls another service, no rollback", http.HandlerFunc(notify)))
 ```
 
-In dry run that answers 503 with the reason, instead of running.
+It answers 503 with the reason in dry run. See [backend setup](backends.md)
+and [real database tests](testkit.md) for both registration paths.

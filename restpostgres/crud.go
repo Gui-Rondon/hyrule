@@ -1,0 +1,346 @@
+package restpostgres
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/Gui-Rondon/hyrule/platform/postgres"
+	"github.com/Gui-Rondon/hyrule/rest"
+)
+
+// postgresLookup is the CAS lookup WriteLookup builds: id = ID AND
+// version = Version. FindOne/UpdateOne/ReplaceOne/DeleteOne also
+// accept a bare uuid.UUID lookup (id = value, no version check), for a
+// plain "find/write by id" with no optimistic-concurrency condition.
+type postgresLookup struct {
+	ID      any // uuid.UUID
+	Version int64
+}
+
+// equalsFilter is what EqualsFilter returns: a jsonb field equals
+// value, optionally excluding one document by id -- id isn't a doc
+// field, so this can't be expressed as a plain postgres.Query.
+type equalsFilter struct {
+	query     postgres.Query
+	excludeID *uuid.UUID
+}
+
+// compileFilter renders filter as a boolean SQL expression, starting
+// placeholders at startAt (as postgres.CompileWhere's own startAt
+// does). filter is whatever this adapter's own methods produced:
+// nil/postgres.Query/map[string]any (matches every row, or a direct
+// jsonb condition -- CombineFilter also accepts these, so a caller
+// that bypasses it works too), an equalsFilter (EqualsFilter's
+// result), a combinedFilter (CombineFilter's result, query.go), a
+// bare uuid.UUID (a plain "by id" lookup, no version check), or a
+// postgresLookup (WriteLookup's result, a CAS condition). rest.Adapter's
+// FindOne/UpdateOne/ReplaceOne/DeleteOne all funnel through this one
+// function, since each can be called equally with a CombineFilter
+// result (Service's read path) or a WriteLookup result (Service's own
+// write-then-reread, or a direct id for a test/custom caller) -- two
+// shapes that used to be split across this function and the now
+// removed, narrower lookupWhere.
+// idEquals renders "id = $N::uuid" matching the physical id column
+// against id, starting placeholders at startAt -- the one id-equality
+// predicate compileFilter's combinedFilter.id and bare uuid.UUID cases
+// both need, kept in one place so they can never drift apart.
+func idEquals(id uuid.UUID, startAt int) (string, []any) {
+	return fmt.Sprintf("id = $%d::uuid", startAt+1), []any{id.String()}
+}
+
+func (a *postgresAdapter) compileFilter(filter any, startAt int) (string, []any, error) {
+	switch f := filter.(type) {
+	case nil:
+		return "TRUE", nil, nil
+	case postgres.Query:
+		return postgres.CompileWhere(f, a.schema, startAt)
+	case map[string]any:
+		return postgres.CompileWhere(postgres.Query(f), a.schema, startAt)
+	case equalsFilter:
+		where, args, err := postgres.CompileWhere(f.query, a.schema, startAt)
+		if err != nil {
+			return "", nil, err
+		}
+		if f.excludeID == nil {
+			return where, args, nil
+		}
+		args = append(args, f.excludeID.String())
+		return fmt.Sprintf("(%s) AND id != $%d::uuid", where, startAt+len(args)), args, nil
+	case combinedFilter:
+		var where string
+		var args []any
+		var err error
+		if f.id != nil {
+			where, args = idEquals(*f.id, startAt)
+		} else if where, args, err = postgres.CompileWhere(f.query, a.schema, startAt); err != nil {
+			return "", nil, err
+		}
+		if !f.excludeDeleted {
+			return where, args, nil
+		}
+		// "deleted" is a physical column, never part of the jsonb doc --
+		// CompileWhere has no way to express this, so it's ANDed in
+		// here as raw SQL instead, no bind parameter needed (a literal
+		// boolean, never client input).
+		return fmt.Sprintf("(%s) AND deleted = false", where), args, nil
+	case uuid.UUID:
+		where, args := idEquals(f, startAt)
+		return where, args, nil
+	case postgresLookup:
+		id, ok := f.ID.(uuid.UUID)
+		if !ok {
+			return "", nil, fmt.Errorf("restpostgres: lookup.ID must be a uuid.UUID, got %T", f.ID)
+		}
+		return fmt.Sprintf("id = $%d::uuid AND version = $%d", startAt+1, startAt+2), []any{id.String(), f.Version}, nil
+	default:
+		return "", nil, fmt.Errorf("restpostgres: filter must be a postgres.Query, EqualsFilter's result, CombineFilter's result, a uuid.UUID, or WriteLookup's result, got %T", filter)
+	}
+}
+
+const selectColumns = "id::text, doc, created_at, updated_at, version, deleted"
+
+func (a *postgresAdapter) scanDoc(row pgx.Rows) (rest.Doc, error) {
+	var idText string
+	var rawDoc []byte
+	var createdAt, updatedAt time.Time
+	var version int64
+	var deleted bool
+	if err := row.Scan(&idText, &rawDoc, &createdAt, &updatedAt, &version, &deleted); err != nil {
+		return nil, err
+	}
+	fields, err := decodeDoc(rawDoc)
+	if err != nil {
+		return nil, fmt.Errorf("restpostgres: stored doc is not valid JSON: %w", err)
+	}
+	id, err := uuid.Parse(idText)
+	if err != nil {
+		return nil, fmt.Errorf("restpostgres: stored id %q is not a valid uuid: %w", idText, err)
+	}
+	return a.hydrate(id, fields, createdAt, updatedAt, version, deleted), nil
+}
+
+// decodeDoc decodes raw (the doc jsonb column's bytes, scanned as
+// []byte instead of straight into map[string]any) with UseNumber() --
+// a declared TypeInteger field's exact value, already written byte
+// for byte by json.Marshal (businessFieldsOnly below), needs to come
+// back exact too. Scanning straight into map[string]any instead (what
+// this used to do) routes through pgx's own jsonb codec, which decodes
+// with the standard library's plain json.Unmarshal -- the same float64
+// rounding readBody used to have before Fase 0b, confirmed empirically
+// against a real Postgres: 9007199254740993 round-tripped to
+// 9007199254740992 before this fix, same corruption on the read side
+// this whole phase exists to close on the write side.
+func decodeDoc(raw []byte) (map[string]any, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var fields map[string]any
+	if err := dec.Decode(&fields); err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+
+// Find lists documents matching filter; limit <= 0 means no
+// LIMIT/OFFSET (skip is then ignored too, matching platform/postgres.
+// Store.Find's documented behavior). Postgres always hydrates the full
+// Doc from the row before applying projection -- see Projection's doc
+// comment on why.
+func (a *postgresAdapter) Find(ctx context.Context, filter, sort, projection any, skip, limit int64) ([]rest.Doc, error) {
+	where, args, err := a.compileFilter(filter, 0)
+	if err != nil {
+		return nil, err
+	}
+	sortTerms, err := toSortTerms(sort)
+	if err != nil {
+		return nil, err
+	}
+	proj, err := toProjection(projection)
+	if err != nil {
+		return nil, err
+	}
+	orderBy, sortArgs := a.orderByClause(sortTerms, len(args))
+	args = append(args, sortArgs...)
+
+	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s%s", selectColumns, a.table, where, orderBy)
+	if limit > 0 {
+		q += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, skip)
+	}
+	rows, err := a.store.Querier(ctx).Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var docs []rest.Doc
+	for rows.Next() {
+		doc, err := a.scanDoc(rows)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, applyProjection(doc, proj))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
+// CountDocuments counts rows matching filter.
+func (a *postgresAdapter) CountDocuments(ctx context.Context, filter any) (int64, error) {
+	where, args, err := a.compileFilter(filter, 0)
+	if err != nil {
+		return 0, err
+	}
+	q := fmt.Sprintf("SELECT count(*) FROM %s WHERE %s", a.table, where)
+	var n int64
+	if err := a.store.Querier(ctx).QueryRow(ctx, q, args...).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// FindOne reads one document by lookup; pgx.ErrNoRows if none match.
+func (a *postgresAdapter) FindOne(ctx context.Context, lookup, projection any) (rest.Doc, error) {
+	where, args, err := a.compileFilter(lookup, 0)
+	if err != nil {
+		return nil, err
+	}
+	proj, err := toProjection(projection)
+	if err != nil {
+		return nil, err
+	}
+	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s LIMIT 1", selectColumns, a.table, where)
+	rows, err := a.store.Querier(ctx).Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return nil, pgx.ErrNoRows
+	}
+	doc, err := a.scanDoc(rows)
+	if err != nil {
+		return nil, err
+	}
+	return applyProjection(doc, proj), nil
+}
+
+// InsertMany inserts docs in one statement (atomic by construction --
+// all rows or none). Each doc must already carry _id/_created/_updated
+// (rest.Service.Insert sets these before the OnInsert hooks run) --
+// InsertMany reads them, never recomputes them, and sets _etag to
+// "1" (the only metadata it defines itself): every new document starts
+// at version 1. No RETURNING is needed -- Go already knows, with
+// certainty, the values it just sent as literal parameters.
+func (a *postgresAdapter) InsertMany(ctx context.Context, docs []rest.Doc) error {
+	if len(docs) == 0 {
+		return nil
+	}
+	values := make([]string, len(docs))
+	args := make([]any, 0, len(docs)*4)
+	for i, doc := range docs {
+		id, err := requiredMeta[uuid.UUID](doc, "_id", i)
+		if err != nil {
+			return err
+		}
+		createdAt, err := requiredMeta[time.Time](doc, "_created", i)
+		if err != nil {
+			return err
+		}
+		updatedAt, err := requiredMeta[time.Time](doc, "_updated", i)
+		if err != nil {
+			return err
+		}
+		fieldsJSON, err := json.Marshal(businessFieldsOnly(doc))
+		if err != nil {
+			return fmt.Errorf("restpostgres: InsertMany: docs[%d]: %w", i, err)
+		}
+		n := len(args)
+		values[i] = fmt.Sprintf("($%d::uuid, $%d::jsonb, $%d, $%d, 1)", n+1, n+2, n+3, n+4)
+		args = append(args, id.String(), fieldsJSON, createdAt, updatedAt)
+		doc["_etag"] = "1"
+	}
+	q := fmt.Sprintf("INSERT INTO %s (id, doc, created_at, updated_at, version) VALUES %s", a.table, strings.Join(values, ", "))
+	_, err := a.store.Querier(ctx).Exec(ctx, q, args...)
+	return err
+}
+
+// UpdateOne overwrites the whole doc column at lookup (the CAS
+// condition WriteLookup built, or a bare id with no version check) and
+// bumps version/updated_at in the same statement -- never a partial
+// $set, since doc is an opaque jsonb blob here. When the resource is
+// SoftDelete and updated carries a _deleted key, the physical deleted
+// column is set too (rest.Service.Delete's soft-delete branch and
+// Replace both always set it) -- deleted can never live inside doc
+// (businessFieldsOnly strips it, like every other meta field), so it
+// needs its own SET term, not a fold into the jsonb blob. On success
+// (matched == 1), updated["_etag"]/["_updated"] are set from what
+// RETURNING confirms the database actually wrote. changes is accepted
+// for interface parity with mongoAdapter (which needs it to build a
+// $set) but unused here. matched == 0 without an error is not a
+// failure -- the caller (checkMatched) decides 404 vs 412 by
+// re-reading.
+func (a *postgresAdapter) UpdateOne(ctx context.Context, lookup any, updated, changes rest.Doc) (int64, error) {
+	fieldsJSON, err := json.Marshal(businessFieldsOnly(updated))
+	if err != nil {
+		return 0, fmt.Errorf("restpostgres: UpdateOne: %w", err)
+	}
+	sets := []string{"doc = $1::jsonb", "version = version + 1", "updated_at = now()"}
+	args := []any{fieldsJSON}
+	if deleted, ok := updated["_deleted"].(bool); a.softDelete && ok {
+		args = append(args, deleted)
+		sets = append(sets, fmt.Sprintf("deleted = $%d", len(args)))
+	}
+	where, whereArgs, err := a.compileFilter(lookup, len(args))
+	if err != nil {
+		return 0, err
+	}
+	args = append(args, whereArgs...)
+	q := fmt.Sprintf("UPDATE %s SET %s WHERE %s RETURNING version, updated_at", a.table, strings.Join(sets, ", "), where)
+	var version int64
+	var updatedAt time.Time
+	if err := a.store.Querier(ctx).QueryRow(ctx, q, args...).Scan(&version, &updatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	updated["_etag"] = strconv.FormatInt(version, 10)
+	updated["_updated"] = updatedAt
+	return 1, nil
+}
+
+// ReplaceOne is UpdateOne under another name: a full-document jsonb
+// overwrite is already what UpdateOne does, so a PUT (no merge, "last
+// writer wins") needs no SQL of its own.
+func (a *postgresAdapter) ReplaceOne(ctx context.Context, lookup any, replacement rest.Doc) (int64, error) {
+	return a.UpdateOne(ctx, lookup, replacement, nil)
+}
+
+// DeleteOne deletes the row at lookup. Hard delete only -- a
+// SoftDelete resource's rest.Service.Delete never calls this, it goes
+// through UpdateOne instead (setting the deleted column there).
+func (a *postgresAdapter) DeleteOne(ctx context.Context, lookup any) (int64, error) {
+	where, args, err := a.compileFilter(lookup, 0)
+	if err != nil {
+		return 0, err
+	}
+	q := fmt.Sprintf("DELETE FROM %s WHERE %s", a.table, where)
+	tag, err := a.store.Querier(ctx).Exec(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}

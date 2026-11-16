@@ -1,0 +1,175 @@
+# Local opt-in HA lab; independent of the root development Compose project.
+name: hyrule-postgres-ha
+
+x-postgres: &postgres
+  image: hyrule-postgres-ha:dev
+  build: .
+  restart: 'no'
+  stop_grace_period: 30s
+  shm_size: 128mb
+  environment: &postgres-env
+    PGDATA: /var/lib/postgresql/data/pgdata
+    PATRONI_SUPERUSER_USERNAME: postgres
+    PATRONI_SUPERUSER_PASSWORD: postgres-ha-local
+    WALG_S3_PREFIX: s3://hyrule-postgres-ha/cluster
+    AWS_ENDPOINT: http://s3:8333
+    AWS_REGION: us-east-1
+    AWS_S3_FORCE_PATH_STYLE: 'true'
+    AWS_ACCESS_KEY_ID: hyrule-local
+    AWS_SECRET_ACCESS_KEY: hyrule-local-secret
+    AWS_EC2_METADATA_DISABLED: 'true'
+  healthcheck:
+    test: [CMD-SHELL, 'curl -fsS http://localhost:8008/health >/dev/null']
+    interval: 2s
+    timeout: 3s
+    retries: 90
+    start_period: 10s
+  depends_on:
+    etcd1: {condition: service_healthy}
+    etcd2: {condition: service_healthy}
+    etcd3: {condition: service_healthy}
+    s3: {condition: service_healthy}
+
+services:
+  etcd1:
+    image: gcr.io/etcd-development/etcd:v3.6.16@sha256:b29d816b546a1966fe7034a33b34e231fa98c47ce4d2883f70b0555020b22132
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd1
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd1:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd1:2380
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - --initial-cluster-token=hyrule-ha
+      - --initial-cluster-state=new
+    volumes: [etcd1:/etcd-data]
+    healthcheck:
+      test: [CMD, /usr/local/bin/etcdctl, --endpoints=http://localhost:2379, endpoint, health]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  etcd2:
+    image: gcr.io/etcd-development/etcd:v3.6.16@sha256:b29d816b546a1966fe7034a33b34e231fa98c47ce4d2883f70b0555020b22132
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd2
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd2:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd2:2380
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - --initial-cluster-token=hyrule-ha
+      - --initial-cluster-state=new
+    volumes: [etcd2:/etcd-data]
+    healthcheck:
+      test: [CMD, /usr/local/bin/etcdctl, --endpoints=http://localhost:2379, endpoint, health]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  etcd3:
+    image: gcr.io/etcd-development/etcd:v3.6.16@sha256:b29d816b546a1966fe7034a33b34e231fa98c47ce4d2883f70b0555020b22132
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd3
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd3:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd3:2380
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - --initial-cluster-token=hyrule-ha
+      - --initial-cluster-state=new
+    volumes: [etcd3:/etcd-data]
+    healthcheck:
+      test: [CMD, /usr/local/bin/etcdctl, --endpoints=http://localhost:2379, endpoint, health]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  s3:
+    image: chrislusf/seaweedfs:4.53@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0
+    command: [mini, -dir=/data]
+    environment:
+      AWS_ACCESS_KEY_ID: hyrule-local
+      AWS_SECRET_ACCESS_KEY: hyrule-local-secret
+      S3_BUCKET: hyrule-postgres-ha
+    volumes: [s3:/data]
+    ports: ['127.0.0.1:8334:8333']
+    healthcheck:
+      test: [CMD-SHELL, 'wget -qO- http://localhost:9333/cluster/status >/dev/null']
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  pg1:
+    <<: *postgres
+    environment:
+      <<: *postgres-env
+      PATRONI_NAME: pg1
+      PATRONI_RESTAPI_CONNECT_ADDRESS: pg1:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: pg1:5432
+    ports: ['127.0.0.1:5435:5432', '127.0.0.1:18008:8008']
+    volumes: [pg1:/var/lib/postgresql/data]
+
+  pg2:
+    <<: *postgres
+    environment:
+      <<: *postgres-env
+      PATRONI_NAME: pg2
+      PATRONI_RESTAPI_CONNECT_ADDRESS: pg2:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: pg2:5432
+    ports: ['127.0.0.1:5436:5432', '127.0.0.1:18009:8008']
+    volumes: [pg2:/var/lib/postgresql/data]
+
+  pg3:
+    <<: *postgres
+    environment:
+      <<: *postgres-env
+      PATRONI_NAME: pg3
+      PATRONI_RESTAPI_CONNECT_ADDRESS: pg3:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: pg3:5432
+    ports: ['127.0.0.1:5437:5432', '127.0.0.1:18010:8008']
+    volumes: [pg3:/var/lib/postgresql/data]
+
+  # Opt-in restore sandbox: anonymous data volume, no Patroni, no source PGDATA.
+  # Started only by the manual A3 harness with a unique container name.
+  pitr:
+    profiles: [pitr]
+    image: hyrule-postgres-ha:dev
+    restart: 'no'
+    shm_size: 128mb
+    environment:
+      <<: *postgres-env
+    command: [sh, /opt/restore-pitr.sh]
+    volumes:
+      - /var/lib/postgresql/data
+      - ./scripts/restore-pitr.sh:/opt/restore-pitr.sh:ro
+    ports: ['127.0.0.1::5432']
+
+  proxy:
+    image: haproxy:3.2.8-alpine@sha256:8c6b55d891584afded3ab1b91063a703ecc8ff2481302b691773648ffa806226
+    volumes: ['./config/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro']
+    ports: ['127.0.0.1:${POSTGRES_HA_PORT:-5434}:5432']
+    depends_on:
+      pg1: {condition: service_healthy}
+      pg2: {condition: service_healthy}
+      pg3: {condition: service_healthy}
+    healthcheck:
+      test: [CMD-SHELL, 'nc -z 127.0.0.1 5432']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pg1:
+  pg2:
+  pg3:
+  etcd1:
+  etcd2:
+  etcd3:
+  s3:

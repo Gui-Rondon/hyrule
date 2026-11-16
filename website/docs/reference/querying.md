@@ -75,6 +75,12 @@ Three syntaxes, matching what Eve's client code historically sent:
 An empty list (`[]`) or dict (`{}`) means no sort. Anything else that
 doesn't match one of the three shapes is a `400`.
 
+For Postgres, `sort=_id` and `sort=-_id` order by the physical UUID
+column. The adapter still returns `_id` as a UUID; the text conversion
+used to read the row does not determine sorting. This lets the planner
+use the primary key for ordering, though filters and deep offsets can
+still favor a scan and Sort. No default ordering is added.
+
 ## `projection`
 
 A JSON object, passed straight through as the Mongo projection
@@ -109,12 +115,37 @@ a `SoftDelete` resource — Eve's own convention.
 
 ## On a relational backend
 
-None of the above is Mongo-agnostic — `where=` *is* Mongo's query
-language, operators included. `platform/postgres.Filter`
-doesn't carry any of this over: it's equality-only (`column: value`,
-ANDed together, a `nil` value meaning `IS NULL`), no `$gt`/`$in`/denylist
-to speak of, because there's no JSON query language to parse in the
-first place:
+A `where=` against a Postgres-backed `rest.Resource` does carry
+operators over — `restpostgres`'s `ParseWhere` decodes it into a
+`postgres.Query`, and `platform/postgres.CompileWhere` compiles the
+same operator set `$eq/$ne/$gt/$gte/$lt/$lte/$in/$nin/$exists/
+$has/$hasSome/$hasEvery/$not/$and/$or` carries against the resource's
+`jsonb` document column, for any field the resource's `Schema`
+declares a `Kind` for. See [`adapter.md`](adapter.md) for how a
+Postgres-backed resource is registered.
+
+`CompileWhere` is specifically for SQL `WHERE` clauses: positive comparisons
+may yield SQL NULL, which WHERE rejects. DSL `$not` uses `IS NOT TRUE` to
+preserve missing/JSON-null and nested-negation behavior. Do not concatenate
+`NOT` around its output; use the DSL. `CompileFilter` remains available with
+its original normalized scalar boolean. Both share validation and bindings,
+keeping field names and values parameterized.
+
+This lets selective predicates become `Index Cond` in custom plans and, in the
+measured cases, `auto`. Generic plans with parameterized field names may still
+not use expression indexes. For sparse indexes, explicitly request key presence,
+e.g. `{"slug":{"$eq":"slug-15001","$exists":true}}`. In `CompileWhere`,
+positive top-level `$exists` exposes `doc ? $N`, allowing custom plans to prove
+the partial-index predicate. Equality alone does not expose that predicate.
+The field remains a binding. No guards are added implicitly to comparisons;
+index declarations and planner settings are unchanged.
+
+That's a different, higher-level thing than `platform/postgres.Filter`
+below, which stays deliberately equality-only (`column: value`, ANDed
+together, a `nil` value meaning `IS NULL`), no `$gt`/`$in`/denylist to
+speak of — it's for `Store`'s own flat-column CRUD, the piece
+`restpostgres` is built on top of, not something a `where=` request
+ever reaches directly:
 
 ```go
 docs, err := store.Find(ctx, postgres.Filter{"status": "published"}, 0, 10,
@@ -122,8 +153,8 @@ docs, err := store.Find(ctx, postgres.Filter{"status": "published"}, 0, 10,
 ```
 
 Same shape as `Find`'s skip/limit/sort/columns above, a narrower filter
-language on purpose — see [Postgres backend](postgres-rfc.md) for why a
-richer one isn't decided yet.
+language on purpose: a richer one exists, just as `postgres.Query`
+above, never as an extension of this `Filter` type itself.
 
 ## Optimizing these queries
 

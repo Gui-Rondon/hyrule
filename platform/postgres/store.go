@@ -1,9 +1,16 @@
-// Package postgres is a scaffold: a Store-shaped type that proves the
-// pattern platform/mongodb.Store already follows (its own types,
-// not an implementation of rest.Store) works for a second backend. See
-// the "Adding a Postgres backend" design notes
-// (website/docs/reference/postgres-rfc.md) for what's still open —
-// most notably, no resource is wired to this yet.
+// Package postgres is the Postgres counterpart to platform/mongodb:
+// Store here follows the same pattern platform/mongodb.Store does
+// (its own types, not an implementation of rest.Store), but stays
+// deliberately narrow -- an equality-only Filter over flat columns
+// (see Filter's own doc comment below). It is not, itself, what a
+// Postgres-backed resource is built on: CompileFilter (query.go) is
+// the real DSL compiler over a jsonb document column, and
+// restpostgres.NewAdapter (website/docs/reference/adapter.md) is what
+// a service actually registers to a rest.Resource -- see
+// examples/blog-apis/services/comments-api for a resource served end
+// to end over HTTP through that path. "Adding a Postgres backend"
+// (website/docs/reference/postgres-rfc.md) is the original design
+// record, kept for history, not a description of current behavior.
 package postgres
 
 import (
@@ -13,11 +20,51 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Querier is the subset of *pgxpool.Pool and pgx.Tx needed to run
+// parameterized SQL -- Store's own CRUD methods use it internally, and
+// a caller running its own SQL against the same table (e.g.
+// restpostgres's resource queries, which need jsonb operations Store's
+// generic Filter can't express) uses Store.Querier the same way, so
+// its statements join whatever transaction Store's methods would.
+type Querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
+}
+
+// Querier returns the ambient transaction carried by ctx if it was
+// opened on s.Pool (via Transactor.WithTransaction), falling back to
+// s.Pool itself -- a ctx with no transaction behaves exactly as if
+// this method didn't exist.
+func (s Store) Querier(ctx context.Context) Querier {
+	if e, ok := ctx.Value(txKey{}).(txEntry); ok && e.pool == s.Pool {
+		return e.tx
+	}
+	return s.Pool
+}
+
+// InTransaction reports whether ctx carries a transaction opened by a
+// Transactor on pool (via WithTransaction) -- the same check Querier
+// makes above, exported for code outside this package that needs to
+// tell a request-scoped write transaction apart from an autocommit
+// call on the same pool without going through a Store (e.g.
+// outboxpostgres.Outbox.Add, mirroring outbox.Outbox's own
+// mongoInTransaction check).
+func InTransaction(ctx context.Context, pool *pgxpool.Pool) bool {
+	e, ok := ctx.Value(txKey{}).(txEntry)
+	return ok && e.pool == pool
+}
+
 // Store wraps a *pgxpool.Pool and one table. Unlike mongodb.Store, this
-// does not implement rest.Store — see postgres-rfc.md's point 1.
+// does not implement rest.Store, on purpose -- see
+// website/docs/reference/adapter.md for what a Postgres-backed
+// resource registers instead (restpostgres.NewAdapter, built on top
+// of this Store, never a direct implementation of rest.Store itself).
 type Store struct {
 	Pool  *pgxpool.Pool
 	Table string
@@ -26,9 +73,14 @@ type Store struct {
 // NewStore wraps pool for table.
 func NewStore(pool *pgxpool.Pool, table string) Store { return Store{Pool: pool, Table: table} }
 
-// Filter is equality only — column: value, ANDed together. No Mongo-style
-// operators; a richer filter language is explicitly not decided yet
-// (postgres-rfc.md's point 1).
+// Filter is equality only — column: value, ANDed together. No
+// Mongo-style operators here, on purpose: this Filter is for a flat-
+// column table (Store's own CRUD methods), not the jsonb resource
+// document a Postgres-backed rest.Resource actually stores. That
+// richer filter language exists as Query/CompileFilter (query.go)
+// instead of an extension of this type -- restpostgres builds its own
+// SQL against doc directly (Store.Pool/Table/Querier), it never
+// widens Filter to reach it.
 type Filter map[string]any
 
 // SortField is one ORDER BY term.
@@ -98,7 +150,7 @@ func (s Store) Find(ctx context.Context, filter Filter, skip, limit int64, order
 	if limit > 0 {
 		q += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, skip)
 	}
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.Querier(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +167,7 @@ func (s Store) CountDocuments(ctx context.Context, filter Filter) (int64, error)
 	where, args := whereClause(filter, 0)
 	q := fmt.Sprintf("SELECT count(*) FROM %s WHERE %s", s.table(), where)
 	var n int64
-	if err := s.Pool.QueryRow(ctx, q, args...).Scan(&n); err != nil {
+	if err := s.Querier(ctx).QueryRow(ctx, q, args...).Scan(&n); err != nil {
 		return 0, err
 	}
 	return n, nil
@@ -125,7 +177,7 @@ func (s Store) CountDocuments(ctx context.Context, filter Filter) (int64, error)
 func (s Store) FindOne(ctx context.Context, filter Filter, columns []string) (map[string]any, error) {
 	where, args := whereClause(filter, 0)
 	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s LIMIT 1", columnList(columns), s.table(), where)
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.Querier(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +221,7 @@ func (s Store) InsertMany(ctx context.Context, docs []map[string]any) error {
 		}
 		batch.Queue(q, args...)
 	}
-	return s.Pool.SendBatch(ctx, batch).Close()
+	return s.Querier(ctx).SendBatch(ctx, batch).Close()
 }
 
 // UpdateOne sets the columns in update on at most one row matching filter
@@ -194,7 +246,7 @@ func (s Store) UpdateOne(ctx context.Context, filter, update Filter) (int64, err
 	where, whereArgs := whereClause(filter, len(cols))
 	q := fmt.Sprintf("UPDATE %s SET %s WHERE ctid = (SELECT ctid FROM %s WHERE %s LIMIT 1)",
 		s.table(), strings.Join(sets, ", "), s.table(), where)
-	tag, err := s.Pool.Exec(ctx, q, append(args, whereArgs...)...)
+	tag, err := s.Querier(ctx).Exec(ctx, q, append(args, whereArgs...)...)
 	if err != nil {
 		return 0, err
 	}
@@ -214,7 +266,7 @@ func (s Store) DeleteOne(ctx context.Context, filter Filter) (int64, error) {
 	where, args := whereClause(filter, 0)
 	q := fmt.Sprintf("DELETE FROM %s WHERE ctid = (SELECT ctid FROM %s WHERE %s LIMIT 1)",
 		s.table(), s.table(), where)
-	tag, err := s.Pool.Exec(ctx, q, args...)
+	tag, err := s.Querier(ctx).Exec(ctx, q, args...)
 	if err != nil {
 		return 0, err
 	}

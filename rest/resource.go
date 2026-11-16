@@ -35,8 +35,15 @@ type Resource struct {
 	// ResourceTitle without trailing "s", as Eve does.
 	ItemTitle string
 
-	Store  Store
-	Schema Schema
+	// Store is the Mongo-shaped persistence seam. A resource that sets
+	// Adapter directly (a Postgres resource, via restpostgres) leaves
+	// this nil -- setDefaults only builds a mongoAdapter wrapping Store
+	// when Adapter is nil, never the reverse.
+	Store Store
+	// Adapter is the full backend seam (see Adapter's doc comment).
+	// Nil defaults to a mongoAdapter wrapping Store.
+	Adapter Adapter
+	Schema  Schema
 	// AllowUnknown accepts fields outside Schema (Eve's allow_unknown).
 	AllowUnknown bool
 
@@ -82,6 +89,13 @@ type Resource struct {
 	// still accepts: the hooks put there the etags replaced by writes that
 	// did not touch what the client edits (Eve has no such field).
 	CompatibleEtags string
+	// RequireMergePatchContentType enforces RFC 7396 §A's requirement
+	// that a PATCH request use "application/merge-patch+json" -- an
+	// opt-in capability a resource whose Adapter.MergePatch is RFC 7396
+	// end to end (a Postgres resource) turns on. Eve/Mongo resources,
+	// whose MergePatch is a deep merge, not RFC 7396, leave it off and
+	// keep accepting any Content-Type, as Eve itself always did.
+	RequireMergePatchContentType bool
 
 	Hooks Hooks
 }
@@ -125,6 +139,12 @@ type Pagination struct {
 }
 
 func (r *Resource) setDefaults() {
+	if r.Adapter == nil {
+		if r.Store == nil {
+			panic("rest: Resource needs a Store or an Adapter")
+		}
+		r.Adapter = &mongoAdapter{store: r.Store, res: r}
+	}
 	if r.URL == "" {
 		r.URL = r.Name
 	}

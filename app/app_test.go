@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -398,5 +399,37 @@ func TestStripURLPrefixEdgeCases(t *testing.T) {
 	// under it — must not be treated as a prefix match.
 	if res := c.Do("GET", "/authzzz", nil); res.Status != http.StatusNotFound {
 		t.Errorf("GET /authzzz = %d, want 404 (not actually under /auth)", res.Status)
+	}
+}
+
+func TestWarnEmbeddedPreservesRequests(t *testing.T) {
+	var logs bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	calls := 0
+	h := app.WarnEmbedded(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path != "/items" {
+			t.Error("path changed")
+		}
+		w.WriteHeader(202)
+	}))
+	for _, path := range []string{"/items", "/items?embedded={}"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != 202 {
+			t.Fatal("response changed")
+		}
+	}
+	if calls != 2 || strings.Count(logs.String(), "Embedded is deprecated") != 1 {
+		t.Fatalf("calls=%d logs=%s", calls, logs.String())
+	}
+	env := &app.Env{}
+	allowed := env.RefuseInDryRun("external effect", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+	rec := httptest.NewRecorder()
+	allowed.ServeHTTP(rec, httptest.NewRequest("POST", "/effect", nil))
+	if rec.Code != 204 {
+		t.Fatal("normal route refused")
 	}
 }

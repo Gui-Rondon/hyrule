@@ -16,6 +16,122 @@ logic, it stays a small Go binary with `app.Main`, like
 RESOURCES_FILE=resources.yaml PORT=8080 go run ./cmd/hyrule-serve
 ```
 
+## A complete example
+
+This `resources.yaml` is the YAML equivalent of
+`examples/blog-apis/services/tags-api` (hand-written in Go today) —
+every request/response below is real output from running it, not
+invented for these docs:
+
+```yaml
+resources:
+  - name: tags
+    collection: tags
+    item_title: tag
+    schema:
+      name: {type: string, required: true}
+      slug: {type: string, required: true, unique: true}
+      enabled: {type: boolean, default: true}
+    additional_lookup:
+      field: slug
+      pattern: '^[\w-]+$'
+    resource_methods: [get, post]
+    item_methods: [get, patch, put]
+    public_methods: [get]
+    public_item_methods: [get]
+```
+
+Auth defaults to on (`app.Env`'s `auth.enable` config), which would
+401/403 the `POST`s below since they're not in `public_methods` — the
+run below disables it, the same `CONFIG_FILE` trick every other
+example in this repo uses:
+
+```bash
+echo '{"auth": {"enable": false}}' > config.json
+RESOURCES_FILE=resources.yaml CONFIG_FILE=config.json PORT=8080 go run ./cmd/hyrule-serve
+```
+
+Creating one — the response is `WriteResult`'s envelope (meta fields
+only, Eve's `BANDWIDTH_SAVER`), not the document itself:
+
+```bash
+curl -X POST localhost:8080/tags -H 'Content-Type: application/json' \
+  -d '{"name":"Go","slug":"go"}'
+```
+
+```json
+{
+  "_created": "Sat, 14 Nov 2026 21:38:49 GMT",
+  "_etag": "2db9a568b830ed8c6e0f00e6e5e432e52f3bed03",
+  "_id": "6af8d4e9e54b1d88e572d5e8",
+  "_links": {"self": {"href": "tags/6af8d4e9e54b1d88e572d5e8", "title": "tag"}},
+  "_status": "OK",
+  "_updated": "Sat, 14 Nov 2026 21:38:49 GMT"
+}
+```
+
+`additional_lookup` lets the same item route resolve by `slug`, not
+just `_id` — and (`public_item_methods: [get]`) with no token:
+
+```bash
+curl localhost:8080/tags/go
+```
+
+```json
+{
+  "_created": "Sat, 14 Nov 2026 21:38:49 GMT",
+  "_etag": "2db9a568b830ed8c6e0f00e6e5e432e52f3bed03",
+  "_id": "6af8d4e9e54b1d88e572d5e8",
+  "_links": {
+    "collection": {"href": "tags", "title": "tags"},
+    "parent": {"href": "/", "title": "home"},
+    "self": {"href": "tags/6af8d4e9e54b1d88e572d5e8", "title": "tag"}
+  },
+  "_updated": "Sat, 14 Nov 2026 21:38:49 GMT",
+  "enabled": true,
+  "name": "Go",
+  "slug": "go"
+}
+```
+
+`unique: true` on `slug` turns a repeat into a validation issue, not a
+raw duplicate-key error:
+
+```bash
+curl -X POST localhost:8080/tags -H 'Content-Type: application/json' \
+  -d '{"name":"Golang","slug":"go"}'
+```
+
+```json
+{
+  "_error": {"code": 422, "message": "Insertion failure: 1 document(s) contain(s) error(s)"},
+  "_issues": {"slug": "value 'go' is not unique"},
+  "_status": "ERR"
+}
+```
+
+Listing combines `where=` (see [`querying.md`](querying.md)) with
+`pagination` — `_links` is always there, but `_meta` (`page`/
+`max_results`/`total`) only appears when pagination isn't `disabled`.
+One more tag first, this one disabled, so there's something for
+`where=` to actually narrow down:
+
+```bash
+curl -X POST localhost:8080/tags -H 'Content-Type: application/json' \
+  -d '{"name":"Rust","slug":"rust","enabled":false}'
+curl -G localhost:8080/tags --data-urlencode 'where={"enabled":false}'
+```
+
+```json
+{
+  "_items": [
+    {"_id": "6af8d4ede54b1d88e572d5ea", "name": "Rust", "slug": "rust", "enabled": false, "...": "..."}
+  ],
+  "_links": {"parent": {"href": "/", "title": "home"}, "self": {"href": "tags?where={\"enabled\":false}", "title": "tags"}},
+  "_meta": {"max_results": 25, "page": 1, "total": 1}
+}
+```
+
 ## Reference
 
 ```yaml
@@ -65,6 +181,13 @@ resources:
 ```
 
 Method names accept either case (`get` or `GET`).
+
+`resource_methods`/`item_methods` decide which HTTP methods exist at
+all (an unlisted one is a `405`); `public_methods`/`public_item_methods`
+only narrow that further, from "needs a token" to "doesn't" — a method
+in `public_methods` but not `resource_methods` is still a `405`, never
+a public hole into something unlisted. In the example above, `GET` is
+public on both routes, `POST`/`PATCH`/`PUT` always need a token.
 
 ## What has no YAML equivalent
 

@@ -22,7 +22,16 @@ const (
 	msgConflict         = "A conflict happened while processing the request. The resource might have been modified while the request was being processed."
 )
 
-// Doc is a document as stored in Mongo.
+// Doc is a stored document, from either backend. A business field's
+// concrete Go type for a number read back from storage depends on
+// which: Mongo's own driver decodes BSON straight into int64/float64;
+// Postgres' decodeDoc (restpostgres/crud.go) decodes the stored jsonb
+// with UseNumber() instead, into a json.Number, deliberately -- the
+// whole reason restpostgres/crud.go exists is so a value beyond what
+// float64 can hold exactly (Fase 0b of the Postgres portability plan)
+// comes back exact too. A hook written against one backend that reads
+// a numeric field with value.(float64) needs value.(json.Number) (or
+// both) to work against the other.
 type Doc = map[string]any
 
 // Render converts a stored document into Eve's JSON representation:
@@ -129,6 +138,20 @@ func withEpochDates(doc Doc) Doc {
 		out["_updated"] = bson.DateTime(0)
 	}
 	return out
+}
+
+// asTime extracts a time.Time out of a Doc's _created/_updated value --
+// bson.DateTime for a Mongo document, a plain time.Time for a Postgres
+// one (restpostgres/doc.go's hydrate never stores a bson.DateTime). ok
+// is false when the key is absent or neither type.
+func asTime(v any) (time.Time, bool) {
+	switch t := v.(type) {
+	case bson.DateTime:
+		return t.Time(), true
+	case time.Time:
+		return t, true
+	}
+	return time.Time{}, false
 }
 
 func etagOf(doc Doc) string {

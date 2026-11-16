@@ -11,6 +11,11 @@ import (
 type Error struct {
 	Status  int
 	Message string
+	// RetryExhaustedReason names why patchOnce's retry loop gave up
+	// (section 9.7/9.8 of the Postgres portability plan): "max_attempts"
+	// or "max_duration". Empty for every error that isn't that -- an
+	// additive field, not a new status code.
+	RetryExhaustedReason string
 }
 
 func (e *Error) Error() string {

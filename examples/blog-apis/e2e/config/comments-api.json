@@ -1,0 +1,9 @@
+{
+  "auth": {
+    "enable": false
+  },
+  "pubsub": {
+    "project_id": "local-dev",
+    "to_publish": "comments-to-publish"
+  }
+}

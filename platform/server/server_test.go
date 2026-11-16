@@ -65,6 +65,28 @@ func TestAccessLogKeepsTheStatus(t *testing.T) {
 	}
 }
 
+type flushRecorder struct {
+	*httptest.ResponseRecorder
+	flushed bool
+}
+
+func (w *flushRecorder) Flush() {
+	w.flushed = true
+	w.ResponseRecorder.Flush()
+}
+
+func TestAccessLogPreservesResponseControllerFlush(t *testing.T) {
+	rec := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+	AccessLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := http.NewResponseController(w).Flush(); err != nil {
+			t.Errorf("flush through access log: %v", err)
+		}
+	})).ServeHTTP(rec, httptest.NewRequest("GET", "/events", nil))
+	if !rec.flushed {
+		t.Fatal("underlying ResponseWriter was not flushed")
+	}
+}
+
 // The requests of a Quiet handler (probes, healthchecks) are logged only
 // when they fail: 4xx as a warning, 5xx as an error. The others are logged
 // as before.
@@ -101,5 +123,12 @@ func TestAccessLogQuiet(t *testing.T) {
 		if err := json.Unmarshal(buf.Bytes(), &rec); err != nil || rec["level"] != c.level || rec["path"] != c.path {
 			t.Errorf("%s %d: %s", c.path, c.status, buf.String())
 		}
+	}
+}
+
+func TestRunReportsStartupFailure(t *testing.T) {
+	t.Setenv("PORT", "not-a-port")
+	if err := Run(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("handler ran despite startup failure") })); err == nil {
+		t.Fatal("Run accepted invalid port")
 	}
 }

@@ -7,18 +7,31 @@ sidebar_position: 1
 hyrule is a Go framework for scaffolding microservices fast, and
 testing their flows just as fast. You describe a **resource** — its
 fields, its validation rules, which HTTP methods it answers to — and
-hyrule gives you a working API: CRUD, request validation, ETags for
-optimistic concurrency, pagination, and a transactional outbox for
-emitting events exactly once per write. Backed by MongoDB today
-(Postgres support in progress — see the
-[Postgres backend](/docs/reference/postgres-rfc) page).
+get a working REST API for it. What that buys you, specifically:
 
-Speed doesn't stop at scaffolding: `testkit` gives every test an
-isolated database and an HTTP client with no service to stand up, and
-dry run lets a whole service run against real traffic with every write
-rolled back — so a resource's actual flows, including the ones that
-span several writes and an outbox event, get tested as themselves, not
-as a mock of themselves.
+- **Full CRUD, validation and pagination** from a schema, with no
+  hand-written handler.
+- **Optimistic concurrency built in** — ETags and `If-Match`, not
+  something you wire up yourself.
+- **Mongo or Postgres, same HTTP contract** — a resource with its own
+  Go code picks either backend through `rest.Adapter` for CRUD,
+  validation, ETags and querying; see the
+  [Adapter](/docs/reference/adapter) reference page.
+- **A transactional outbox**: a write and the event it causes commit
+  together, in the same transaction, or neither does. No separate job
+  that can drift from what actually got written.
+- **Dry run**: a whole service runs against real traffic with every
+  write rolled back — so you exercise actual flows, including ones
+  that span several writes and an outbox event, without faking any of
+  it.
+- **`testkit`**: an isolated database and an HTTP client per test, no
+  service to stand up, no mocks of your own storage.
+
+Mongo and Postgres both support the Go bootstrap, transactional outbox and dry
+run. YAML/scaffolding and testkit's database provisioner remain Mongo-specific;
+Postgres uses Go registration and a real isolated pool with the shared HTTP
+helpers. Start with [Integrating Mongo and Postgres](/docs/reference/backends)
+for equally detailed setup, runnable programs and test guidance for either.
 
 You can describe that resource two ways. In Go:
 
@@ -68,7 +81,8 @@ only for the parts that genuinely need code.
 This guide builds toward **blog-apis**, the small example that ships
 with the framework: `authors-api` and `tags-api` are plain CRUD,
 `categories-api` is a hierarchy, and `posts-api` ties them together with
-relations, hooks, and an outbox-driven publish flow. Every snippet in
+relations, hooks, and an outbox-driven publish flow. `comments-api` demonstrates
+Postgres with the same bootstrap and transactional Pub/Sub publishing. Every snippet in
 this guide is real code from that example or from the framework
 itself — nothing here is invented for the docs.
 

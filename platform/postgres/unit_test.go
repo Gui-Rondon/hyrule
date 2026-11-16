@@ -126,3 +126,28 @@ func TestIsTimeout(t *testing.T) {
 // errFmt wraps err the way context/network code typically does, to check
 // IsTimeout unwraps rather than only matching the exact error value.
 func errFmt(err error) error { return fmt.Errorf("wrapped: %w", err) }
+
+func TestIsTransientConflict(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"plain error", errors.New("boom"), false},
+		{"deadlock detected", &pgconn.PgError{Code: deadlockDetected}, true},
+		{"serialization failure", &pgconn.PgError{Code: serializationFailure}, true},
+		{"wrapped deadlock detected", errFmt(&pgconn.PgError{Code: deadlockDetected}), true},
+		// query_canceled (a real timeout) is its own, distinct
+		// category -- IsTransientConflict must not also claim it.
+		{"query canceled", &pgconn.PgError{Code: queryCanceled}, false},
+		{"other pg error", &pgconn.PgError{Code: "42703"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := IsTransientConflict(c.err); got != c.want {
+				t.Errorf("IsTransientConflict(%v) = %v, want %v", c.err, got, c.want)
+			}
+		})
+	}
+}

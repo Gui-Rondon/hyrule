@@ -246,6 +246,7 @@ func (e *endpoints) schedule(w http.ResponseWriter, r *http.Request) {
 		rest.WriteError(w, r, err)
 		return
 	}
+	match, _ := rest.ParseIfMatch([]string{ifMatch})
 	body, err := readJSONObject(r)
 	if err != nil || len(body) == 0 && r.ContentLength == 0 {
 		rest.WriteError(w, r, rest.Abort(http.StatusBadRequest, ""))
@@ -267,7 +268,7 @@ func (e *endpoints) schedule(w http.ResponseWriter, r *http.Request) {
 		Body: scheduleEntry{ID: id, PublishAt: &iso},
 	})
 	changes := rest.Doc{"status": "scheduled"}
-	if _, err := e.svc.Patch(ctx, lookup, changes, rest.WriteOptions{IfMatch: ifMatch}); err != nil {
+	if _, err := e.svc.Patch(ctx, lookup, changes, rest.WriteOptions{IfMatch: match}); err != nil {
 		rest.WriteError(w, r, err)
 		return
 	}
@@ -285,12 +286,13 @@ func (e *endpoints) unschedule(w http.ResponseWriter, r *http.Request) {
 		rest.WriteError(w, r, err)
 		return
 	}
+	match, _ := rest.ParseIfMatch([]string{ifMatch})
 	ctx := events.With(r.Context(), outbox.Event{
 		Topic: topicSchedule, Type: "post.unscheduled", Key: id,
 		Body: scheduleEntry{ID: id},
 	})
 	changes := rest.Doc{"status": "draft"}
-	doc, err := e.svc.Patch(ctx, lookup, changes, rest.WriteOptions{IfMatch: ifMatch})
+	doc, err := e.svc.Patch(ctx, lookup, changes, rest.WriteOptions{IfMatch: match})
 	if err != nil {
 		rest.WriteError(w, r, err)
 		return

@@ -36,7 +36,10 @@ const sidebars = {
       label: 'Reference',
       collapsible: false,
       items: [
+        'reference/backends',
+        'reference/integration-review',
         'reference/store',
+        'reference/adapter',
         'reference/querying',
         'reference/outbox',
         'reference/resources-yaml',

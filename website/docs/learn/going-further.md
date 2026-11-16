@@ -20,7 +20,8 @@ building something of your own.
 
 The rule is simpler than it sounds: **if a resource's `setup` function
 would contain nothing but a `Resource` literal and one `Register` call,
-it can be YAML.** `authors-api` and `tags-api` both qualify — you saw
+it can be YAML on Mongo.** Postgres registration uses Go; see the
+[backend guide](/docs/reference/backends). `authors-api` and `tags-api` both qualify — you saw
 `authors-api`'s full `setup` in [Your First Resource](./your-first-resource.md);
 it's a schema and a `Register`, nothing else.
 

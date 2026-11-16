@@ -8,9 +8,14 @@ export PUBSUB_EMULATOR_HOST ?= localhost:8085
 export REDIS_TEST_ADDR ?= localhost:6380
 export POSTGRES_TEST_URI ?= $(POSTGRES_URI)
 
-COVERAGE_MIN ?= 85
+# Runtime libraries only; examples/CLI/manual HA tooling do not define this gate.
+# Their tests still run through ./... and can exercise framework code.
+COVERAGE_MIN ?= 95
+COVERAGE_ALL_MIN ?= 85
+COVERAGE_PROFILE ?= .local/coverage.out
+COVERAGE_PACKAGES ?= ./app/... ./behaviors/... ./declarative/... ./outbox/... ./outboxpostgres/... ./platform/... ./rest/... ./restpostgres/...
 
-.PHONY: test unit vet cover build image env-up env-down example-env-up example-env-down run loadtest e2e e2e-down standalone-example-test
+.PHONY: test unit vet cover cover-all build image env-up env-down example-env-up example-env-down run loadtest e2e e2e-down standalone-example-test
 
 # All tests; the ones that need Mongo/Postgres use MONGO_TEST_URI/
 # POSTGRES_TEST_URI (make env-up).
@@ -26,14 +31,19 @@ vet:
 
 SERVICES_DIR ?= examples/blog-apis/services
 
-# Same gate as the CI: fails below COVERAGE_MIN % (testkit excluded).
+# CI's library-only gate; all normal package tests still execute.
 cover:
 	@mkdir -p .local
-	go test -coverpkg=$$(go list ./app/... ./behaviors/... ./declarative/... ./outbox/... ./platform/... ./rest/... ./testkit/... ./internal/... ./$(SERVICES_DIR)/... | grep -v /testkit | paste -sd, -) \
-		-coverprofile=.local/coverage.out ./... > /dev/null
-	@go tool cover -func=.local/coverage.out | awk -v m=$(COVERAGE_MIN) \
+	go test -coverpkg=$$(go list $(COVERAGE_PACKAGES) | paste -sd, -) \
+		-coverprofile=$(COVERAGE_PROFILE) ./... > /dev/null
+	@go tool cover -func=$(COVERAGE_PROFILE) | awk -v m=$(COVERAGE_MIN) \
 		'/^total:/ { sub("%", "", $$3); printf "coverage %s%% (minimum %s%%)\n", $$3, m; exit !($$3 + 0 >= m + 0) }'
-	@echo "HTML: go tool cover -html=.local/coverage.out"
+	@echo "HTML: go tool cover -html=$(COVERAGE_PROFILE)"
+
+# Historical aggregate scope, reported separately without diluting the library gate.
+cover-all:
+	$(MAKE) cover COVERAGE_MIN=$(COVERAGE_ALL_MIN) COVERAGE_PROFILE=.local/coverage-all.out \
+		COVERAGE_PACKAGES='./app/... ./behaviors/... ./declarative/... ./outbox/... ./outboxpostgres/... ./platform/... ./rest/... ./restpostgres/... ./internal/... ./examples/blog-apis/internal/... ./examples/blog-apis/cmd/... ./$(SERVICES_DIR)/...'
 
 build:
 	go build -o .local/$(SERVICE) ./$(SERVICES_DIR)/$(SERVICE)
@@ -84,3 +94,73 @@ e2e-down:
 # root doesn't descend into it, hence this separate target.
 standalone-example-test:
 	cd examples/standalone-tags-api && go test -race ./...
+
+# Opt-in local HA lab; never provisioned by make test or GitHub Actions.
+export POSTGRES_HA_PORT ?= 5434
+POSTGRES_HA_COMPOSE = docker compose --project-name hyrule-postgres-ha -f infra/postgres-ha/compose.yml
+.PHONY: comments-migrate postgres-ha-up postgres-ha-status postgres-ha-test postgres-ha-failover-test postgres-ha-pitr-test postgres-ha-migrations-test postgres-ha-explain-test postgres-ha-where-test postgres-ha-id-sort-test postgres-ha-sparse-test postgres-ha-typed-sort-test postgres-ha-plan-policy-test postgres-ha-datetime-sort-test postgres-ha-logs postgres-ha-down postgres-ha-reset
+postgres-ha-up:
+	$(POSTGRES_HA_COMPOSE) up -d --build --wait --wait-timeout 240
+
+postgres-ha-status:
+	$(POSTGRES_HA_COMPOSE) ps -a
+	$(POSTGRES_HA_COMPOSE) exec -T --user postgres pg1 patronictl -c /etc/patroni.yml list
+	@set -e; for node in pg1 pg2 pg3; do \
+		$(POSTGRES_HA_COMPOSE) exec -T --user postgres $$node psql -U postgres -d postgres -c 'SELECT pg_is_in_recovery(), archived_count, failed_count, last_archived_wal, last_failed_wal FROM pg_stat_archiver'; \
+	done
+
+postgres-ha-test:
+	POSTGRES_HA_TEST=1 go test -race -count=1 -v -run '^TestTopologyReplicationAndWALArchive$$' -timeout=5m ./internal/integration/postgresha
+
+# Destructive opt-in: SIGKILL the discovered primary, then recover that node.
+postgres-ha-failover-test:
+	POSTGRES_HA_FAILOVER_TEST=1 go test -race -count=1 -v -run '^TestPrimaryCrashApplicationRecovery$$' -timeout=8m ./internal/integration/postgresha
+
+# Isolated full-backup/PITR sandbox; never part of the normal test suite.
+postgres-ha-pitr-test:
+	POSTGRES_HA_PITR_TEST=1 go test -race -count=1 -v -run '^TestBaseBackupPointInTimeRecovery$$' -timeout=10m ./internal/integration/postgresha
+
+# Manual real-schema migration gate; does not provision infrastructure.
+postgres-ha-migrations-test:
+	POSTGRES_MIGRATIONS_TEST=1 POSTGRES_MIGRATIONS_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestMigrationLifecycle$$' -timeout=5m ./examples/blog-apis/services/comments-api
+
+# Manual plans/report gate; no provisioning and no failure for planner non-use.
+postgres-ha-explain-test:
+	POSTGRES_EXPLAIN_TEST=1 POSTGRES_EXPLAIN_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestDeclaredIndexExplain$$' -timeout=8m ./examples/blog-apis/services/comments-api
+
+# Focused regression assertions; the general A6 report remains observational.
+postgres-ha-where-test:
+	POSTGRES_WHERE_TEST=1 POSTGRES_EXPLAIN_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestWherePredicatePlans$$' -timeout=8m ./examples/blog-apis/services/comments-api
+
+# Physical UUID ordering and primary-key plans; manual and local only.
+postgres-ha-id-sort-test:
+	POSTGRES_ID_SORT_TEST=1 POSTGRES_EXPLAIN_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestIDSortPlans$$' -timeout=5m ./examples/blog-apis/services/comments-api
+
+# Partial-index implication regression; manual and local only.
+postgres-ha-sparse-test:
+	POSTGRES_SPARSE_TEST=1 POSTGRES_EXPLAIN_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestSparsePredicatePlans$$' -timeout=8m ./examples/blog-apis/services/comments-api
+
+# Explicit typed sort indexes; manual local adapter/planner gate only.
+postgres-ha-typed-sort-test:
+	POSTGRES_TYPED_SORT_TEST=1 POSTGRES_EXPLAIN_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestTypedSortPlans$$' -timeout=8m ./examples/blog-apis/services/comments-api
+
+# Observe actual cached adapter plans and explicit URI policy; manual/local only.
+postgres-ha-plan-policy-test:
+	POSTGRES_PLAN_POLICY_TEST=1 POSTGRES_EXPLAIN_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestPlanPolicy$$' -timeout=8m ./examples/blog-apis/services/comments-api
+
+# Opt-in safe datetime sorting and legacy helper indexes; manual/local only.
+postgres-ha-datetime-sort-test:
+	POSTGRES_DATETIME_SORT_TEST=1 POSTGRES_EXPLAIN_URI='postgres://postgres:postgres-ha-local@127.0.0.1:$(POSTGRES_HA_PORT)/postgres?sslmode=disable' go test -race -count=1 -v -run '^TestDateTimeSortPlans$$' -timeout=8m ./examples/blog-apis/services/comments-api
+
+comments-migrate:
+	go run ./examples/blog-apis/cmd/comments-migrate $(MIGRATE_ARGS)
+
+postgres-ha-logs:
+	$(POSTGRES_HA_COMPOSE) logs --no-color --tail=100
+
+postgres-ha-down:
+	$(POSTGRES_HA_COMPOSE) down --timeout 30
+
+# Explicitly destroys only this lab's database, etcd and S3 volumes together.
+postgres-ha-reset:
+	$(POSTGRES_HA_COMPOSE) down --volumes --timeout 30

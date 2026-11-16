@@ -1,5 +1,6 @@
 // Package app is the bootstrap shared by the services: configuration,
-// Mongo, authentication, the Eve API, /status and /healthcheck.
+// Mongo or Postgres (Spec.Backend), authentication, the Eve API,
+// /status and /healthcheck.
 //
 // A service only describes its resources:
 //
@@ -20,28 +21,63 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/Gui-Rondon/hyrule/platform/auth"
 	"github.com/Gui-Rondon/hyrule/platform/config"
 	"github.com/Gui-Rondon/hyrule/platform/health"
+	"github.com/Gui-Rondon/hyrule/platform/httppath"
 	"github.com/Gui-Rondon/hyrule/platform/metrics"
 	"github.com/Gui-Rondon/hyrule/platform/mongodb"
+	"github.com/Gui-Rondon/hyrule/platform/postgres"
 	"github.com/Gui-Rondon/hyrule/platform/server"
 	"github.com/Gui-Rondon/hyrule/rest"
 )
+
+// Backend selects which database a Spec's Env wires up. The zero value,
+// BackendMongo, keeps every existing service (which never sets this
+// field) exactly as it behaved before Backend existed.
+type Backend string
+
+const (
+	// BackendMongo wires Env.DB/mongodb.Connect, as every service did
+	// before Backend existed -- also the zero value, so an unset
+	// Spec.Backend means this.
+	BackendMongo Backend = ""
+	// BackendPostgres wires Env.Postgres/platform/postgres.Connect
+	// instead. Dry run is implemented via postgres.Transactor.Rollback
+	// -- no WriteGuard-equivalent exists (or is needed): every
+	// production write already goes through Store.Querier(ctx), which
+	// only ever runs inside the ambient transaction Rollback discards.
+	BackendPostgres Backend = "postgres"
+)
+
+// validate rejects typos before either bootstrap can select a database.
+func (b Backend) validate() error {
+	switch b {
+	case BackendMongo, BackendPostgres:
+		return nil
+	default:
+		return fmt.Errorf("app: unknown backend %q (use BackendMongo or BackendPostgres)", b)
+	}
+}
 
 // Spec describes a service.
 type Spec struct {
 	// Name is the APP_NAME in properties-api, e.g. "tags-api".
 	Name string
-	// DefaultDB is used when the Mongo URI has no database.
+	// Backend selects Env.DB/mongodb (BackendMongo, the default) or
+	// Env.Postgres/platform/postgres (BackendPostgres).
+	Backend Backend
+	// DefaultDB is used when building a URI from individual connection settings.
+	// Mongo also falls back to it for a URI without a database. Specify the
+	// database explicitly in Postgres URIs (pgx otherwise resolves its default).
 	DefaultDB string
 	Version   string
 	// Setup registers the resources, custom endpoints and checkers.
@@ -57,8 +93,14 @@ type Spec struct {
 	CacheControl string
 	CacheExpires int
 	// Indexes is the service's <service>.indices.conf (go:embed); config-files
-	// adds or replaces entries with mongo.indexes (D-27).
+	// adds or replaces entries with mongo.indexes (D-27). BackendMongo only.
 	Indexes []byte
+	// PostgresIndexes declares a BackendPostgres service's indexes,
+	// ensured at boot the same moment Indexes/mongo.indexes are for
+	// Mongo. Go-typed values, not text: platform/postgres.IndexSpec has
+	// no .indices.conf-equivalent parser to mirror mongodb.ParseIndexes
+	// with.
+	PostgresIndexes []postgres.IndexSpec
 	// URLPrefix is Eve's URL_PREFIX (e.g. "auth"): every route, /status and
 	// /healthcheck included, is served under /<prefix>, and anything else is
 	// a 404. Routes are registered without it, and the links leave it out,
@@ -80,9 +122,20 @@ const defaultQueryTimeout = 10 * time.Second
 // Env is what Setup receives.
 type Env struct {
 	Config config.Config
-	DB     *mongo.Database
-	API    *rest.API
-	Info   health.Info
+	// DB is set for BackendMongo, nil for BackendPostgres.
+	DB *mongo.Database
+	// Postgres is set for BackendPostgres, nil for BackendMongo.
+	Postgres *pgxpool.Pool
+	// PostgresTx is the Transactor already wired into API's Options --
+	// a BackendPostgres Setup passes this same value to
+	// restpostgres.NewAdapter, so a resource's own transaction (e.g. an
+	// optimistic-concurrency retry) joins the same Rollback/pool
+	// configuration as the request-level one, instead of a second,
+	// independently-constructed Transactor silently diverging from it.
+	// Zero value for BackendMongo.
+	PostgresTx postgres.Transactor
+	API        *rest.API
+	Info       health.Info
 	// DryRun: the writes are rolled back, the post-write hooks and the
 	// background tasks do not run. A service whose routes have other
 	// effects refuses them with RefuseInDryRun.
@@ -96,7 +149,14 @@ type Env struct {
 // Store builds the rest.Store of a collection, for Setup to assign to
 // rest.Resource.Store. DB stays available directly for anything that
 // needs the raw *mongo.Database (health checks, indexes, a custom query).
+// BackendMongo only -- a BackendPostgres Setup builds postgres.NewStore(e.Postgres, table)
+// directly and assigns it to rest.Resource.Adapter via
+// restpostgres.NewAdapter, since platform/postgres.Store does not
+// implement rest.Store (see store.go's own doc comment).
 func (e *Env) Store(collection string) rest.Store {
+	if e.DB == nil {
+		panic("app: Env.Store is BackendMongo only -- this Setup's Spec.Backend is BackendPostgres")
+	}
 	return mongodb.NewStore(e.DB.Collection(collection))
 }
 
@@ -124,9 +184,13 @@ func (e *Env) Go(name string, task func(ctx context.Context) error) {
 // Deps are the external dependencies of Build.
 type Deps struct {
 	Config config.Config
-	Mongo  *mongo.Client
+	// Mongo/DB are for BackendMongo; Run connects them via mongodb.Connect.
+	Mongo *mongo.Client
 	// DB overrides the database from the configuration (tests).
 	DB *mongo.Database
+	// Postgres is the pool for BackendPostgres; Run connects it via
+	// platform/postgres.Connect.
+	Postgres *pgxpool.Pool
 	// Auth overrides the authenticator from the configuration (tests).
 	Auth *auth.Authenticator
 	// Start runs the tasks registered with Env.Go; nil skips them.
@@ -154,8 +218,11 @@ func Main(spec Spec) {
 }
 
 // Run loads the configuration (CONFIG_FILE or properties-api), connects to
-// Mongo and serves until ctx is done.
+// the database (Spec.Backend) and serves until ctx is done.
 func Run(ctx context.Context, spec Spec) error {
+	if err := spec.Backend.validate(); err != nil {
+		return err
+	}
 	startCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -173,6 +240,37 @@ func Run(ctx context.Context, spec Spec) error {
 			return err
 		}
 	}
+
+	tasksCtx, stopTasks := context.WithCancel(ctx)
+	var tasks sync.WaitGroup
+	// the tasks stop before the database connection is closed (deferred below)
+	defer tasks.Wait()
+	defer stopTasks()
+	start := func(name string, task func(ctx context.Context) error) {
+		tasks.Go(func() {
+			if err := task(tasksCtx); err != nil && tasksCtx.Err() == nil {
+				slog.Error("background task stopped", "app", spec.Name, "task", name, "error", err)
+			}
+		})
+	}
+
+	if spec.Backend == BackendPostgres {
+		pool, err := postgres.Connect(startCtx, cfg, spec.DefaultDB)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			stopTasks()
+			tasks.Wait()
+			pool.Close()
+		}()
+		handler, err := Build(startCtx, spec, Deps{Config: cfg, Postgres: pool, Start: start, DryRun: dryRun, DryRunTimeout: dryRunTimeout})
+		if err != nil {
+			return err
+		}
+		return server.Serve(ctx, handler)
+	}
+
 	var extra []*options.ClientOptions
 	var guard *mongodb.WriteGuard
 	if dryRun {
@@ -184,20 +282,11 @@ func Run(ctx context.Context, spec Spec) error {
 	if err != nil {
 		return err
 	}
-	defer client.Disconnect(context.Background())
-
-	tasksCtx, stopTasks := context.WithCancel(ctx)
-	var tasks sync.WaitGroup
-	// the tasks stop before Mongo is closed (deferred above)
-	defer tasks.Wait()
-	defer stopTasks()
-	start := func(name string, task func(ctx context.Context) error) {
-		tasks.Go(func() {
-			if err := task(tasksCtx); err != nil && tasksCtx.Err() == nil {
-				slog.Error("background task stopped", "app", spec.Name, "task", name, "error", err)
-			}
-		})
-	}
+	defer func() {
+		stopTasks()
+		tasks.Wait()
+		client.Disconnect(context.Background())
+	}()
 
 	handler, err := Build(startCtx, spec, Deps{Config: cfg, Mongo: client, DB: db, Start: start, DryRun: dryRun, DryRunTimeout: dryRunTimeout, WriteGuard: guard})
 	if err != nil {
@@ -208,6 +297,9 @@ func Run(ctx context.Context, spec Spec) error {
 
 // Build wires the service and returns its HTTP handler.
 func Build(ctx context.Context, spec Spec, deps Deps) (http.Handler, error) {
+	if err := spec.Backend.validate(); err != nil {
+		return nil, err
+	}
 	authn := deps.Auth
 	if authn == nil {
 		var err error
@@ -215,18 +307,27 @@ func Build(ctx context.Context, spec Spec, deps Deps) (http.Handler, error) {
 			return nil, err
 		}
 	}
-	tx, replicaSet, err := mongodb.TransactorFor(ctx, deps.Mongo)
-	if err != nil {
-		return nil, err
-	}
 	if err := checkNoDryRunKey(deps.Config); err != nil {
 		return nil, err
 	}
-	dryRun := deps.DryRun
 	dryRunTimeout := deps.DryRunTimeout
 	if dryRunTimeout == 0 {
 		dryRunTimeout = defaultDryRunTimeout
 	}
+	if spec.Backend == BackendPostgres {
+		return buildPostgres(ctx, spec, deps, authn, dryRunTimeout)
+	}
+	return buildMongo(ctx, spec, deps, authn, dryRunTimeout)
+}
+
+// buildMongo is Build's BackendMongo path, as it existed before Backend
+// did.
+func buildMongo(ctx context.Context, spec Spec, deps Deps, authn *auth.Authenticator, dryRunTimeout time.Duration) (http.Handler, error) {
+	tx, replicaSet, err := mongodb.TransactorFor(ctx, deps.Mongo)
+	if err != nil {
+		return nil, err
+	}
+	dryRun := deps.DryRun
 	queryTimeout, err := time.ParseDuration(deps.Config.String("mongo.query_timeout", defaultQueryTimeout.String()))
 	if err != nil {
 		return nil, fmt.Errorf("mongo.query_timeout: %w", err)
@@ -280,6 +381,69 @@ func Build(ctx context.Context, spec Spec, deps Deps) (http.Handler, error) {
 		return nil, err
 	}
 
+	slog.Info("service ready", "app", spec.Name, "version", spec.Version, "branch", env.Info.Branch,
+		"auth", authn.Enabled(), "transactions", replicaSet, "dry_run", dryRun)
+	return finishBuild(spec, env, dryRun), nil
+}
+
+// buildPostgres is Build's BackendPostgres path.
+func buildPostgres(ctx context.Context, spec Spec, deps Deps, authn *auth.Authenticator, dryRunTimeout time.Duration) (http.Handler, error) {
+	if deps.Postgres == nil {
+		return nil, errors.New("app: Deps.Postgres must not be nil for the Postgres backend")
+	}
+	if err := postgres.EnsureFunctions(ctx, deps.Postgres); err != nil {
+		return nil, err
+	}
+	dryRun := deps.DryRun
+	if dryRun && spec.NoDryRun != "" {
+		return nil, fmt.Errorf("%s does not run in dry run: %s", spec.Name, spec.NoDryRun)
+	}
+	queryTimeout, err := time.ParseDuration(deps.Config.String("postgres.query_timeout", defaultQueryTimeout.String()))
+	if err != nil {
+		return nil, fmt.Errorf("postgres.query_timeout: %w", err)
+	}
+	indexesMode, err := postgres.IndexesModeFromConfig(deps.Config)
+	if err != nil {
+		return nil, err
+	}
+	if dryRun && indexesMode == postgres.IndexesCreate {
+		// building an index is a write too
+		indexesMode = postgres.IndexesCheck
+	}
+
+	tx := postgres.Transactor{Pool: deps.Postgres, Rollback: dryRun}
+	info := health.LoadInfo(spec.Version)
+	info.DryRun = dryRun
+	env := &Env{
+		Config:     deps.Config,
+		Postgres:   deps.Postgres,
+		PostgresTx: tx,
+		API: rest.New(rest.Options{
+			Auth: authn, Transactor: tx, Messages: spec.Messages, HTMLForbidden: spec.HTMLForbidden,
+			CacheControl: spec.CacheControl, CacheExpires: spec.CacheExpires,
+			QueryTimeout: queryTimeout, DryRun: dryRun, DryRunTimeout: dryRunTimeout,
+		}),
+		Info:   info,
+		DryRun: dryRun,
+		start:  deps.Start,
+	}
+	env.checkers = append(env.checkers, health.Postgres(deps.Postgres))
+	if err := spec.Setup(ctx, env); err != nil {
+		return nil, err
+	}
+	if _, err := postgres.EnsureIndexes(ctx, deps.Postgres, spec.PostgresIndexes, indexesMode); err != nil {
+		return nil, err
+	}
+
+	slog.Info("service ready", "app", spec.Name, "version", spec.Version, "branch", env.Info.Branch,
+		"auth", authn.Enabled(), "backend", "postgres", "dry_run", dryRun)
+	return finishBuild(spec, env, dryRun), nil
+}
+
+// finishBuild registers /status and /healthcheck, applies Env.Wrap and
+// Spec.URLPrefix, and wraps everything in /metrics -- the part of Build
+// identical for every backend.
+func finishBuild(spec Spec, env *Env, dryRun bool) http.Handler {
 	// status.py registers /status for the first resource and eve-healthcheck
 	// /healthcheck for every resource
 	// probes and monitoring call them every few seconds: logged only when
@@ -295,30 +459,25 @@ func Build(ctx context.Context, spec Spec, deps Deps) (http.Handler, error) {
 		env.API.Handle("/"+url+"/healthcheck", hc)
 	}
 
-	slog.Info("service ready", "app", spec.Name, "version", spec.Version, "branch", env.Info.Branch,
-		"auth", authn.Enabled(), "transactions", replicaSet, "dry_run", dryRun)
 	var handler http.Handler = env.API
 	for _, mw := range env.wrappers {
 		handler = mw(handler)
 	}
-	if spec.URLPrefix != "" {
-		handler = stripURLPrefix("/"+strings.Trim(spec.URLPrefix, "/"), handler)
+	if prefix := httppath.NormalizePrefix(spec.URLPrefix); prefix != "" {
+		handler = stripURLPrefix(prefix, handler)
 	}
 	// outermost: /metrics stays at the root whatever the URL prefix, and
 	// every request is measured
-	return metrics.New(spec.Name, dryRun).Handler(handler), nil
+	return metrics.New(spec.Name, dryRun).Handler(handler)
 }
 
 // stripURLPrefix serves next under prefix; any other path is the Eve 404.
 func stripURLPrefix(prefix string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tail, ok := strings.CutPrefix(r.URL.Path, prefix)
-		if !ok || tail != "" && !strings.HasPrefix(tail, "/") {
+		tail, ok := httppath.StripPrefix(r.URL.Path, prefix)
+		if !ok {
 			rest.WriteError(w, r, rest.ErrNotFound)
 			return
-		}
-		if tail == "" {
-			tail = "/"
 		}
 		r2 := r.Clone(r.Context())
 		r2.URL.Path = tail

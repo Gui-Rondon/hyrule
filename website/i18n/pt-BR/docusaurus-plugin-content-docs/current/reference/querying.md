@@ -76,6 +76,12 @@ mandava:
 Uma lista (`[]`) ou dict (`{}`) vazio significa sem sort. Qualquer outra
 coisa que não bate com uma das três formas é `400`.
 
+No Postgres, `sort=_id` e `sort=-_id` ordenam pela coluna UUID física.
+O adapter continua retornando `_id` como UUID; a conversão textual usada
+na leitura da linha não determina a ordenação. Isso permite usar a chave
+primária, mas filtros e offsets altos ainda podem favorecer scan e Sort.
+Nenhuma ordenação padrão é adicionada.
+
 ## `projection`
 
 Um objeto JSON, passado direto como a projection do Mongo
@@ -110,12 +116,39 @@ recurso com `SoftDelete` — convenção do próprio Eve.
 
 ## Num backend relacional
 
-Nada do que foi dito acima é agnóstico de Mongo — `where=` **é** a
-linguagem de query do Mongo, operadores incluídos.
-`platform/postgres.Filter` não carrega nada disso: é só
-igualdade (`coluna: valor`, combinados com AND, um valor `nil`
-significando `IS NULL`), sem `$gt`/`$in`/denylist pra falar, porque não
-há linguagem de query em JSON pra parsear, pra começo de conversa:
+Um `where=` contra uma `rest.Resource` com Postgres carrega os
+operadores sim — o `ParseWhere` de `restpostgres` decodifica ele num
+`postgres.Query`, e `platform/postgres.CompileWhere` compila o mesmo
+conjunto de operadores `$eq/$ne/$gt/$gte/$lt/$lte/$in/$nin/$exists/
+$has/$hasSome/$hasEvery/$not/$and/$or` contra a coluna `jsonb` do
+documento da resource, pra qualquer campo que o `Schema` da resource
+declare um `Kind`. Ver [`adapter.md`](adapter.md) pra como uma
+resource com Postgres é registrada.
+
+`CompileWhere` é específico para cláusulas SQL `WHERE`: comparações positivas
+podem produzir SQL NULL, tratado como não correspondência. A DSL `$not` usa
+`IS NOT TRUE` para preservar ausência/JSON null e negações aninhadas. Não
+concatene `NOT` ao SQL retornado; use a DSL. `CompileFilter` continua disponível
+com seu booleano normalizado e comportamento anterior. Os dois compartilham
+validação e bindings, mantendo campos e valores parametrizados.
+
+Esse caminho permite que filtros seletivos virem `Index Cond` em planos
+customizados e, nos cenários medidos, em `auto`. Planos genéricos com nome de
+campo parametrizado ainda podem não aproveitar o índice de expressão. Para
+índices sparse, peça presença explícita, por exemplo:
+`{"slug":{"$eq":"slug-15001","$exists":true}}`. Em `CompileWhere`, `$exists`
+positivo no nível superior expõe `doc ? $N`, permitindo provar o predicado
+parcial em planos customizados. Igualdade sozinha não expõe esse predicado.
+O campo continua parametrizado. Nenhuma guarda é acrescentada implicitamente
+às comparações; as declarações de índices e configurações do planner são iguais.
+
+Isso é uma coisa diferente, de nível mais alto, que o
+`platform/postgres.Filter` abaixo, que continua só igualdade de
+propósito (`coluna: valor`, combinados com AND, um valor `nil`
+significando `IS NULL`), sem `$gt`/`$in`/denylist pra falar — é pro
+CRUD de colunas planas do próprio `Store`, a peça sobre a qual
+`restpostgres` é construído, não algo que uma requisição `where=`
+chega a alcançar direto:
 
 ```go
 docs, err := store.Find(ctx, postgres.Filter{"status": "published"}, 0, 10,
@@ -123,9 +156,9 @@ docs, err := store.Find(ctx, postgres.Filter{"status": "published"}, 0, 10,
 ```
 
 Mesma forma do skip/limit/sort/colunas do `Find` acima, uma linguagem de
-filtro mais estreita de propósito — ver
-[backend Postgres](postgres-rfc.md) pro porquê de uma mais rica ainda não
-estar decidida.
+filtro mais estreita de propósito: uma mais rica existe, só que como o
+`postgres.Query` acima, nunca como uma extensão deste tipo `Filter` em
+si.
 
 ## Otimizando essas queries
 
