@@ -2,10 +2,12 @@
 sidebar_position: 2
 ---
 
-# Quick Start
+# Quick Start: Mongo or Postgres
 
-This page gets a real API running against a real MongoDB, in about five
-minutes, with no Go code written at all.
+Choose the [Go integration guide](/docs/reference/backends) for complete Mongo
+**and** Postgres services, including migrations, indexes and tests. The YAML
+walkthrough below is the Mongo option; the Postgres quickstart at the end runs
+the comments service with the same bootstrap and transactional events.
 
 :::info[You will learn]
 - How to start the local infrastructure (Mongo, Pub/Sub, Redis)
@@ -25,8 +27,8 @@ cd hyrule
 make env-up
 ```
 
-This starts Mongo on `localhost:27018`, a Pub/Sub emulator on `:8085`,
-and Redis on `:6380` — nothing is exposed outside your machine.
+This starts Mongo on `localhost:27018`, Postgres on `:5433`, a Pub/Sub
+emulator on `:8085`, and Redis on `:6380` — nothing is exposed outside your machine.
 
 ## 2. Describe a resource
 
@@ -100,3 +102,13 @@ service builds, which is what the next page digs into.
   get from data, not code — [Your First Resource](./your-first-resource.md)
   covers the rest of what a schema can express.
 :::
+
+## Postgres quickstart
+
+Follow the [comments-api run commands](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/examples/blog-apis/README.md#comments-api-postgres--pubsub):
+start the same local compose, provision the Pub/Sub topic, run
+`make comments-migrate MIGRATE_ARGS='-action prepare'` with an explicit
+POSTGRES_CONNECTION_STRING, then build/run comments-api. POST a comment and
+GET `/comments?where={"post_id":"post-1"}`. The [backend guide](/docs/reference/backends)
+provides a minimal complete Go program when Pub/Sub is not needed. YAML remains
+Mongo-only; changing the URI of hyrule-serve does not select Postgres.

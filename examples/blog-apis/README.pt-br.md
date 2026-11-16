@@ -11,13 +11,13 @@ capacidades diferente.
 | [`authors-api`](services/authors-api) | CRUD 100% genérico: só schema + `env.API.Register`, zero Go de negócio |
 | [`tags-api`](services/tags-api) | CRUD genérico com campo `Unique` e lookup por slug — o mesmo schema, sem reescrever nada, é [`cmd/hyrule-serve/example.yaml`](../../cmd/hyrule-serve/example.yaml) |
 | [`categories-api`](services/categories-api) | Recurso hierárquico: caminho materializado recalculado a cada escrita, endpoint `GET /categories/tree` construído direto a partir da interface `Store` (sem `*mongo.Collection` em lugar nenhum) |
-| [`posts-api`](services/posts-api) | O exemplo mais completo: relações (`author_id`, `category_id`, `tags`), outbox transacional, endpoints custom `/publish` e `/schedule` (este último escreve num hash do Redis e no outbox na mesma transação), indexação opcional no Elasticsearch |
+| [`posts-api`](services/posts-api) | O exemplo mais completo: relações (`author_id`, `category_id`, `tags`), outbox transacional, endpoints custom `/publish` e `/schedule` (este último grava evento no outbox na transação; o relay atualiza Redis após commit), indexação opcional no Elasticsearch |
 | [`comments-api`](services/comments-api) | Postgres via `app.Main`/`restpostgres`, índice declarativo e outbox transacional publicando `comment.published` no Pub/Sub |
 
 ## Rodando localmente
 
 ```bash
-# infraestrutura genérica (mongo/pubsub/redis) + Elasticsearch deste exemplo
+# infraestrutura genérica (mongo/postgres/pubsub/redis) + Elasticsearch deste exemplo
 docker compose -f examples/blog-apis/docker-compose.yml --profile debug up -d --wait
 
 SERVICES_DIR=examples/blog-apis/services make build SERVICE=posts-api
@@ -74,3 +74,5 @@ outbox e tópico. O harness e2e verifica a entrega real numa assinatura isolada,
 além do comportamento HTTP.
 
 As migrations rodam explicitamente antes do startup; veja o [runbook da A5](internal/commentsschema/README.md).
+
+Mongo (`posts-api`) e Postgres (`comments-api`) têm bootstrap, hooks/outbox e dry run. O evento e o recurso comitam no banco local; Redis/PubSub recebem pelo relay após commit, sem transação distribuída. Veja [guia dos backends](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/backends.md).

@@ -11,13 +11,13 @@ of capabilities.
 | [`authors-api`](services/authors-api) | 100% generic CRUD: just a schema + `env.API.Register`, zero business Go |
 | [`tags-api`](services/tags-api) | generic CRUD with a `Unique` field and a slug lookup — the same schema, with nothing rewritten, is [`cmd/hyrule-serve/example.yaml`](../../cmd/hyrule-serve/example.yaml) |
 | [`categories-api`](services/categories-api) | a hierarchical resource: a materialized path recomputed on every write, a `GET /categories/tree` endpoint built straight from the `Store` interface (no `*mongo.Collection` anywhere) |
-| [`posts-api`](services/posts-api) | the most complete example: relations (`author_id`, `category_id`, `tags`), a transactional outbox, custom `/publish` and `/schedule` endpoints (the latter writes to a Redis hash and to the outbox in the same transaction), optional Elasticsearch indexing |
+| [`posts-api`](services/posts-api) | the most complete example: relations (`author_id`, `category_id`, `tags`), a transactional outbox, custom `/publish` and `/schedule` endpoints (the latter stores an outbox event transactionally; its relay updates Redis after commit), optional Elasticsearch indexing |
 | [`comments-api`](services/comments-api) | Postgres via `app.Main`/`restpostgres`, a declarative index and a transactional outbox publishing `comment.published` to Pub/Sub |
 
 ## Running locally
 
 ```bash
-# generic infra (mongo/pubsub/redis) + this example's Elasticsearch
+# generic infra (mongo/postgres/pubsub/redis) + this example's Elasticsearch
 docker compose -f examples/blog-apis/docker-compose.yml --profile debug up -d --wait
 
 SERVICES_DIR=examples/blog-apis/services make build SERVICE=posts-api
@@ -74,3 +74,5 @@ Postgres, the outbox backlog and the destination topic. The e2e harness verifies
 actual delivery to an isolated Pub/Sub subscription as well as HTTP behavior.
 
 Schema migrations run explicitly before startup; see the [A5 migration runbook](internal/commentsschema/README.md).
+
+Mongo (`posts-api`) and Postgres (`comments-api`) share bootstrap, event hooks and dry run. The event and resource commit in the local database; Redis/PubSub are updated by the relay after commit, without a distributed transaction. See the [backend guide](../../website/docs/reference/backends.md).

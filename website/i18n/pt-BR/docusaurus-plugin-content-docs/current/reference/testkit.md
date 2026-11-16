@@ -2,14 +2,16 @@
 sidebar_position: 6
 ---
 
-# Testar um recurso
+# Testando recursos Mongo e Postgres
 
 `testkit` monta o que um teste de recurso precisa: um Mongo
-isolado, um cliente HTTP em processo e tokens de teste. Testes que
+isolado, um cliente HTTP em processo e tokens de teste. Helpers HTTP/tokens
+servem para ambos; Service/Mongo/Store/DryRun provisionam Mongo. Para Postgres,
+forneça um pool real isolado ao app.Build, como abaixo. Testes que
 precisam de Mongo pulam sozinhos sem `MONGO_TEST_URI` (ex.:
 `mongodb://localhost:27018/?directConnection=true`, o `make env-up`).
 
-## Subir o serviço inteiro
+## Mongo: subindo o serviço inteiro
 
 ```go
 c, db := testkit.Service(t, spec(), config.Config{}, testkit.DisabledAuth(t))
@@ -71,3 +73,75 @@ que foi indexado, sem precisar de um Elasticsearch real) — use
 `es.Hosts()` na config do recurso. `testkit.NewKeys(t)` assina tokens RSA
 de teste; `keys.Token(t, "username")` e `keys.TokenWith(t, claims)` cobrem
 os dois formatos de claim que `platform/auth` aceita.
+
+
+## Postgres: subindo o serviço inteiro
+
+Use `POSTGRES_TEST_URI` (dev local: `postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable`).
+`testkit.Service` é específico do Mongo; use `app.Build` e `testkit.NewClient`
+com schema Postgres real isolado. Não reutilize schema de produção nem execute
+DDL numa tabela compartilhada. O padrão requer imports de pgx/v5, pgxpool,
+google/uuid, app, config, testkit e biblioteca padrão:
+
+```go
+// spec() is your Postgres app.Spec, registering table "items".
+ctx := context.Background()
+uri := os.Getenv("POSTGRES_TEST_URI")
+if uri == "" { t.Skip("POSTGRES_TEST_URI not set") }
+admin, err := pgxpool.New(ctx, uri)
+if err != nil { t.Fatal(err) }
+t.Cleanup(admin.Close)
+schemaName := "t_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+quoted := pgx.Identifier{schemaName}.Sanitize()
+if _, err := admin.Exec(ctx, "CREATE SCHEMA " + quoted); err != nil { t.Fatal(err) }
+t.Cleanup(func() {
+    cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    if _, err := admin.Exec(cleanup, "DROP SCHEMA " + quoted + " CASCADE"); err != nil { t.Error(err) }
+})
+cfg := admin.Config()
+cfg.ConnConfig.RuntimeParams["search_path"] = schemaName
+pool, err := pgxpool.NewWithConfig(ctx, cfg)
+if err != nil { t.Fatal(err) }
+t.Cleanup(pool.Close)
+// Apply your real resource migration to this schema before Build.
+handler, err := app.Build(ctx, spec(), app.Deps{
+    Postgres: pool, Config: config.Config{}, Auth: testkit.DisabledAuth(t),
+})
+if err != nil { t.Fatal(err) }
+c := testkit.NewClient(t, handler)
+res := c.Do("POST", "/items", map[string]any{"name": "Go"})
+if res.Status != http.StatusCreated { t.Fatalf("POST = %d %s", res.Status, res.Raw) }
+```
+
+O pool fecha antes da remoção do schema isolado. Aplique as migrations reais do
+serviço, incluindo outbox quando necessário. Reutilize `env.PostgresTx` no Setup;
+app.Build instala funções compartilhadas e garante `Spec.PostgresIndexes`.
+Build não gerencia a vida do pool injetado nem inicia workers sem `Deps.Start`.
+Use `httptest.NewServer(handler)` quando precisar de socket HTTP real. Veja os
+testes concretos em `app/backend_contract_test.go` e
+`examples/blog-apis/services/comments-api/migrations_test.go`.
+
+Para dry run Postgres, chame app.Build novamente com o **mesmo pool populado**
+e `Deps{Postgres: pool, DryRun: true, Auth: authn}`. Use testkit.NewClient nesse
+handler, escreva e consulte pelo cliente/pool normal para verificar rollback.
+Não precisa de WriteGuard Mongo. Teste rollback tanto de recurso quanto de
+outbox; escritas diretas no pool e DDL de setup estão fora dessa proteção.
+
+## Comandos de validação para ambos
+
+```sh
+make env-up
+make test GOFLAGS='-count=1 -p=1'
+make vet
+make cover GOFLAGS=-p=1
+make standalone-example-test
+# Após terminar testes/cobertura, sem builds Docker concorrentes:
+make e2e
+```
+
+A suíte usa MONGO_TEST_URI e POSTGRES_TEST_URI exportados pelo Makefile. Sem
+eles, testes de banco pulam; execução verde sem infraestrutura não comprova
+integração. Limitamos concorrência de pacotes porque há teste real com orçamento
+de retry sensível à disputa de CPU. A cobertura não inclui gates HA manuais
+sem habilitação explícita: veja [evidências](integration-review.md).

@@ -40,6 +40,18 @@ the minor version instead.
 
 ### Fixed
 
+- Stop and join Mongo background workers before disconnecting on every Run
+  return path, matching the Postgres lifecycle and allowing worker cleanup to
+  finish against the database.
+- Reject unknown `app.Spec.Backend` values before bootstrap selects a database;
+  zero-value Mongo and explicit `BackendPostgres` keep their existing behavior.
+- Refresh the standalone example's module graph/checksums for the shared
+  Mongo/Postgres bootstrap. Add real dual-backend HTTP contract and pool
+  configuration coverage.
+- Consolidate EN/PT backend setup, transactional outbox, dry run, opt-in adoption
+  and gate evidence. Document public API migration notes and the two e2e
+  add/add conflicts that still require resolution before a future main merge.
+
 - `cmd/hyrule/templates/new/Makefile.tmpl`'s `build` target now fails
   with a clear message when `SERVICE` is empty, instead of running a
   broken `go build`. Also creates `.local/` explicitly before writing

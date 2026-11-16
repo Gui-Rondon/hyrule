@@ -16,7 +16,7 @@ From the project root, with `services/articles/` created ([Creating
 services](./creating-services.md)):
 
 ```bash
-make env-up                 # Mongo, replica set, on :27017
+make env-up                 # standard repo compose: Mongo :27018, Postgres :5433, Pub/Sub :8085, Redis :6380
 make build SERVICE=articles
 make run SERVICE=articles   # :8080, auth disabled
 ```
@@ -76,3 +76,12 @@ way [Relations and Hooks](/docs/learn/relations-and-hooks) shows for
 - There's no multi-service `dev` command yet — see the
   [roadmap](/docs/reference/roadmap).
 :::
+
+## Mongo and Postgres services
+
+The generated project template remains Mongo-specific; its own compose ports
+may differ from the Hyrule repository compose. For an existing Go service,
+[the backend guide](/docs/reference/backends) shows complete Mongo and Postgres
+registration, connection variables, schema setup, tests and opt-ins. Postgres
+resources run through app.Main too; a different URI alone does not convert a
+Mongo/YAML service. The HA lab is manual/local and separate from `make env-up`.

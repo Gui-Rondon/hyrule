@@ -22,8 +22,10 @@ and get a running REST API with:
 - **A transactional outbox** (a write and the event it causes commit
   together, in the same transaction, or neither does), **`testkit`**
   (isolated database + HTTP client per test) and **dry run** (a whole
-  service against real traffic, every write rolled back) — Mongo-only
-  for now, same as the YAML path above.
+  service against real traffic, every write rolled back). Transactional outbox
+  and dry run support both backends. YAML and the
+  testkit database provisioner remain Mongo-specific; HTTP/token helpers work
+  with Postgres through app.Build as well.
 
 Under the hood it keeps the HTTP contract of Eve (Python) (`rest`),
 which is where the project migrated from.
@@ -33,7 +35,23 @@ guided [Learn](https://gui-rondon.github.io/hyrule/docs/learn/intro)
 path plus a complete
 [Reference](https://gui-rondon.github.io/hyrule/docs/reference/architecture).
 
-## Quickstart: a resource with no Go
+## Mongo and Postgres integration
+
+Both backends use `app.Main`/`app.Build`, the same HTTP resource contract and
+transactional event hooks. Start with the [Mongo and Postgres integration guide](website/docs/reference/backends.md):
+complete Go services, connection settings, schema/index setup, tests and opt-ins.
+The [integration review](website/docs/reference/integration-review.md) records
+compatibility changes and gate evidence against `main`. Use a commit/release
+containing this integration; changing a backend does not migrate data.
+
+| | Mongo | Postgres |
+|---|---|---|
+| Resource | `Store: env.Store("items")` | `Adapter: restpostgres.NewAdapter(...)` |
+| Bootstrap | `app.BackendMongo` (default) | `app.BackendPostgres` |
+| Outbox | `outbox` | `outboxpostgres` |
+| Running example | [posts-api](examples/blog-apis/services/posts-api) | [comments-api](examples/blog-apis/services/comments-api) |
+
+## Mongo quickstart: a resource with no Go
 
 ```yaml
 # resources.yaml
@@ -50,7 +68,7 @@ resources:
 ```
 
 ```bash
-make env-up    # Mongo (27018), Pub/Sub (8085), Redis (6380)
+make env-up    # Mongo (27018), Postgres (5433), Pub/Sub (8085), Redis (6380)
 echo '{"auth": {"enable": "false"}}' > config.json
 RESOURCES_FILE=resources.yaml CONFIG_FILE=config.json \
   MONGO_CONNECTION_STRING='mongodb://localhost:27018/demo?directConnection=true' \
@@ -65,7 +83,7 @@ curl localhost:8080/tags/go
 That's `cmd/hyrule-serve` + `declarative` — it covers the
 common case. A resource with its own logic (hooks, custom endpoints,
 conditional validation) stays a small Go binary with `app.Main`, like the
-4 examples in [`examples/blog-apis/`](examples/blog-apis/) — both paths
+5 examples in [`examples/blog-apis/`](examples/blog-apis/) — both paths
 register resources the same way and coexist in the same process. The
 [Learn guide](https://gui-rondon.github.io/hyrule/docs/learn/intro)
 walks through building both kinds, step by step.
@@ -74,6 +92,33 @@ walks through building both kinds, step by step.
 same quickstart as above, but as its own Go module (own `go.mod`) that
 depends on this one — the proof that an external repository can really
 `go get` this framework, not just import it from inside this monorepo.
+
+## Postgres quickstart: Go resource with transactional events
+
+The comments service uses `app.BackendPostgres`, UUID/version CAS, JSONB,
+explicit migrations and a transactional outbox. From this checkout:
+
+```sh
+make env-up
+curl -sf -X PUT http://localhost:8085/v1/projects/local-dev/topics/comments-to-publish
+POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
+  make comments-migrate MIGRATE_ARGS='-action prepare'
+make build SERVICE=comments-api
+printf '%s\n' '{"auth":{"enable":false},"pubsub":{"project_id":"local-dev","to_publish":"comments-to-publish"}}' > .local/comments-api.json
+POSTGRES_CONNECTION_STRING='postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable' \
+  PUBSUB_EMULATOR_HOST=localhost:8085 CONFIG_FILE=.local/comments-api.json \
+  PORT=8082 .local/comments-api
+```
+
+```sh
+curl -X POST localhost:8082/comments -H 'Content-Type: application/json' \
+  -d '{"post_id":"post-1","author_name":"Link","body":"Hello","status":"published"}'
+curl -G localhost:8082/comments --data-urlencode 'where={"post_id":"post-1"}'
+```
+
+See [the example runbook](examples/blog-apis/README.md#comments-api-postgres--pubsub)
+for Pub/Sub delivery and schema rollout. [The backend guide](website/docs/reference/backends.md)
+shows a minimal Postgres service without the example's Pub/Sub dependency.
 
 ## Platform: scaffolding a multi-service project
 

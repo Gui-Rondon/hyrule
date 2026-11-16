@@ -161,3 +161,5 @@ that needs a query `Store` doesn't expose uses `Store` anyway —
 (`examples/blog-apis/services/categories-api/categories.go`) only needs
 `Find`/`FindOne` for that — but a more complex aggregation would still
 require extending the interface or dropping down to the driver.
+
+The Mongo outbox package remains backend-specific; `outboxpostgres` supplies the transactional Postgres counterpart. See [integration](backends.md) and [outbox](outbox.md).

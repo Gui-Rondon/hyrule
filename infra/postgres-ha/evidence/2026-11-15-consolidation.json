@@ -1,0 +1,238 @@
+{
+  "review_date": "2026-11-15",
+  "integration_base": "a4fef45396f27cdbed870b6e6bc82d4fbca2bd46",
+  "main_compared": "4aa619571580bda90a9cc14d261cc9086a081eb0",
+  "merge_base": "bf3383b5c6a3ca958ffca30e4361d03d5974f105",
+  "validated_source": "Consolidation changes on integration_base; this evidence is versioned in the same PR as those changes.",
+  "merge_preview": {
+    "performed_without_updating_refs": true,
+    "add_add_conflicts": [
+      "examples/blog-apis/e2e/run.sh",
+      "examples/blog-apis/e2e/jmeter/hyrule-e2e.jmx"
+    ],
+    "main_was_not_merged": true
+  },
+  "fresh_gates": [
+    {
+      "gate": "a6_observational",
+      "complete": true,
+      "plan_count": 30,
+      "checks": null,
+      "local_report": ".local/postgres-explain/20261115T215033Z-17c3542e-6b6f-42f4-a2e7-76db74e9926e/report.json",
+      "sha256": "010dbbf2bc4c31431b3ed8c73c70229a5bf38f4beedc712f6be69979f2a94e5c",
+      "server_version": "PostgreSQL 16.16 (Debian 16.16-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+      "modes": {
+        "auto": {
+          "plans": 10,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 8
+        },
+        "force_custom_plan": {
+          "plans": 10,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 8
+        },
+        "force_generic_plan": {
+          "plans": 10,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 1
+        }
+      }
+    },
+    {
+      "gate": "where",
+      "complete": true,
+      "plan_count": 30,
+      "checks": 7,
+      "local_report": ".local/postgres-explain/20261115T215046Z-55bff616-e54a-4cbb-8799-a266a477e7a8/report.json",
+      "sha256": "e2f79a47eb82e621ed297983ef01581141838cad5a5c52db701573b9b27005ed",
+      "server_version": "PostgreSQL 16.16 (Debian 16.16-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+      "modes": {
+        "auto": {
+          "plans": 10,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 8
+        },
+        "force_custom_plan": {
+          "plans": 10,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 8
+        },
+        "force_generic_plan": {
+          "plans": 10,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 1
+        }
+      }
+    },
+    {
+      "gate": "uuid_sort",
+      "complete": true,
+      "plan_count": 18,
+      "checks": 12,
+      "local_report": ".local/postgres-id-sort/20261115T215058Z-1c5e4b2c-6fff-4804-8080-2bb5b1b2b81c/report.json",
+      "sha256": "3ed06c928f90d1563edc607ad282e5cd3a3624ebf6065e904fba6bff9e1f9fb3",
+      "server_version": "PostgreSQL 16.16 (Debian 16.16-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+      "modes": {
+        "auto": {
+          "plans": 6,
+          "plans_with_sort": 2,
+          "plans_with_any_index": 4
+        },
+        "force_custom_plan": {
+          "plans": 6,
+          "plans_with_sort": 2,
+          "plans_with_any_index": 4
+        },
+        "force_generic_plan": {
+          "plans": 6,
+          "plans_with_sort": 2,
+          "plans_with_any_index": 4
+        }
+      }
+    },
+    {
+      "gate": "sparse",
+      "complete": true,
+      "plan_count": 30,
+      "checks": 2,
+      "local_report": ".local/postgres-explain/20261115T215100Z-c9f199f1-16a4-449e-bcc6-33a7e6e513df/report.json",
+      "sha256": "2159b0e58453f63740058da5437850ca254606abd01765287ec5792ffeb7fe8f",
+      "server_version": "PostgreSQL 16.16 (Debian 16.16-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+      "modes": {
+        "auto": {
+          "plans": 10,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 8
+        },
+        "force_custom_plan": {
+          "plans": 10,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 8
+        },
+        "force_generic_plan": {
+          "plans": 10,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 1
+        }
+      }
+    },
+    {
+      "gate": "typed_sort",
+      "complete": true,
+      "plan_count": 48,
+      "checks": 24,
+      "local_report": ".local/postgres-typed-sort/20261115T215113Z-59d8179c-bda5-45d8-ab45-a8b6a2416be3/report.json",
+      "sha256": "7ebfd0f52ba7b4a0b03c7af7d76180363a10bf2117150d4cddeb92e430c66074",
+      "server_version": "PostgreSQL 16.16 (Debian 16.16-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+      "modes": {
+        "auto": {
+          "plans": 16,
+          "plans_with_sort": 4,
+          "plans_with_any_index": 14
+        },
+        "force_custom_plan": {
+          "plans": 16,
+          "plans_with_sort": 4,
+          "plans_with_any_index": 14
+        },
+        "force_generic_plan": {
+          "plans": 16,
+          "plans_with_sort": 16,
+          "plans_with_any_index": 0
+        }
+      }
+    },
+    {
+      "gate": "plan_policy",
+      "complete": true,
+      "plan_count": 12,
+      "checks": null,
+      "local_report": ".local/postgres-plan-policy/20261115T215131Z-b9a934b7-8d78-41c1-a712-045bd6a5d61c/report.json",
+      "sha256": "8175f29a60d6ea37558d4e75ce3b205d7abb439aa72b88e524dd8c819ce78da1",
+      "server_version": "PostgreSQL 16.16 (Debian 16.16-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+      "modes": {
+        "auto": {
+          "plans": 4,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 3
+        },
+        "force_custom_plan": {
+          "plans": 4,
+          "plans_with_sort": 0,
+          "plans_with_any_index": 4
+        },
+        "force_generic_plan": {
+          "plans": 4,
+          "plans_with_sort": 1,
+          "plans_with_any_index": 1
+        }
+      }
+    },
+    {
+      "gate": "datetime_sort",
+      "complete": true,
+      "plan_count": 48,
+      "checks": 24,
+      "local_report": ".local/postgres-datetime-sort/20261115T215145Z-a6053cd5-a12f-48be-ae7f-1f446a3fd3a5/report.json",
+      "sha256": "2871a2a6bd0a5d9091e1abe8a592bbd5a94c4ad20912a76f6d76836f6a332e6c",
+      "server_version": "PostgreSQL 16.16 (Debian 16.16-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+      "modes": {
+        "auto": {
+          "plans": 16,
+          "plans_with_sort": 4,
+          "plans_with_any_index": 12
+        },
+        "force_custom_plan": {
+          "plans": 16,
+          "plans_with_sort": 4,
+          "plans_with_any_index": 12
+        },
+        "force_generic_plan": {
+          "plans": 16,
+          "plans_with_sort": 16,
+          "plans_with_any_index": 0
+        }
+      }
+    }
+  ],
+  "fresh_topology": true,
+  "fresh_migrations": true,
+  "historical_only_not_rerun": [
+    "postgres-ha-failover-test",
+    "postgres-ha-pitr-test"
+  ],
+  "coverage": {
+    "before_percent": 85.5,
+    "after_percent": 85.9,
+    "manual_ha_included": false,
+    "testkit_excluded": true
+  },
+  "full_race_suite": "passed with -count=1 -p=1 and real Mongo/Postgres",
+  "vet": "passed",
+  "standalone_module": "passed after go mod tidy",
+  "documentation_programs": "both full Go programs extracted from backends.md compiled",
+  "notes": [
+    "Counts and optimizer choices describe these fixtures only, not production performance.",
+    "report.json complete is published after fixture cleanup.",
+    "Local raw reports are ignored; hashes identify these snapshots but are not substitutes for reproduction.",
+    "An existing 60ms retry-budget integration test failed in one full run with 503 and empty RetryExhaustedReason; it passed in isolation and in the final full rerun. Retry classification was not changed."
+  ],
+  "e2e": {
+    "samples": 42,
+    "failures": 0,
+    "pubsub_checks": [
+      "6. POST /posts/{id}/publish -> 200, status:published, outbox->PubSub",
+      "6b. Comment transitions and actual PubSub delivery"
+    ]
+  },
+  "bootstrap_regressions_fixed": [
+    "unknown Backend rejected before dependency setup",
+    "Mongo workers cancelled/joined before Disconnect, including Setup failure"
+  ],
+  "cleanup": {
+    "remaining_gate_schemas": 0,
+    "checked_after_manual_gates": true
+  },
+  "website_build": "passed for en and pt-BR"
+}
