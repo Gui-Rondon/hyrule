@@ -10,6 +10,16 @@ when that changes. It exists so the
 [Architecture decisions](architecture-decisions.md) have a sequence to
 sit in, and so nobody mistakes a future phase for current behavior.
 
+## Current adoption and stability work
+
+The phases below are historical. The current [v1 roadmap](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
+adds explicit compatibility/support policy, Go 1.26/1.27 PR gates, SQLite local
+scaffolding, router composition and manual attested releases. See
+[stability](stability.md) and [SQLite](sqlite.md) for current behavior and limits.
+The historical coverage figures below are evidence from earlier phases; the
+current runtime gate is 95%. No v1 release date is set.
+
+
 ## Why two paths
 
 The project's direction is to offer Hyrule two complementary ways to

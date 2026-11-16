@@ -13,7 +13,7 @@ export POSTGRES_TEST_URI ?= $(POSTGRES_URI)
 COVERAGE_MIN ?= 95
 COVERAGE_ALL_MIN ?= 85
 COVERAGE_PROFILE ?= .local/coverage.out
-COVERAGE_PACKAGES ?= ./app/... ./behaviors/... ./declarative/... ./outbox/... ./outboxpostgres/... ./platform/... ./rest/... ./restpostgres/...
+COVERAGE_PACKAGES ?= ./app/... ./behaviors/... ./declarative/... ./outbox/... ./outboxpostgres/... ./platform/... ./rest/... ./restpostgres/... ./restsqlite/...
 
 .PHONY: test unit vet cover cover-all build image env-up env-down example-env-up example-env-down run loadtest e2e e2e-down standalone-example-test
 
@@ -24,7 +24,7 @@ test:
 
 # Tests that need no external service.
 unit:
-	MONGO_TEST_URI= POSTGRES_TEST_URI= go test -race ./...
+	MONGO_TEST_URI= POSTGRES_TEST_URI= PUBSUB_EMULATOR_HOST= REDIS_TEST_ADDR= go test -race ./...
 
 vet:
 	go vet ./...
@@ -164,3 +164,7 @@ postgres-ha-down:
 # Explicitly destroys only this lab's database, etcd and S3 volumes together.
 postgres-ha-reset:
 	$(POSTGRES_HA_COMPOSE) down --volumes --timeout 30
+
+.PHONY: router-example-test
+router-example-test:
+	cd examples/router-composition && go test -race ./... && go vet ./...

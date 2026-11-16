@@ -1,58 +1,32 @@
 ---
 sidebar_position: 2
 ---
+# Creating a platform project
 
-# Creating a project
+The default `hyrule new my-api` creates one SQLite API. For an existing-style
+multi-service Mongo project, explicitly select the platform layout:
 
-:::info[You will learn]
-- How to install the `hyrule` CLI
-- What `hyrule new` generates, and why
-- How to point the generated `go.mod` at Hyrule
-:::
-
-## 1. Install the CLI
-
-```bash
-go install github.com/Gui-Rondon/hyrule/cmd/hyrule@main
-```
-
-`@main` installs the main branch. To pin a published release, replace it
-with the desired tag. See the [roadmap](/docs/reference/roadmap) for the CLI scope.
-
-## 2. Scaffold the project
-
-```bash
-hyrule new my-platform
+```sh
+go install github.com/Gui-Rondon/hyrule/cmd/hyrule@latest
+hyrule new my-platform --layout=platform
 cd my-platform
+hyrule service create articles
+go mod tidy
+make env-up
+make build SERVICE=articles
+make run SERVICE=articles
 ```
 
-This writes:
+The generated go.mod pins the framework to the installed CLI release. Development
+CLI builds require `--framework-version=vX.Y.Z` or a published pseudo-version.
+Do not run tidy before creating the first service: the empty project does not yet
+import Hyrule, so tidy would remove the unused requirement.
 
-- `go.mod` — just `module my-platform` and a Go version; it doesn't
-  pre-require Hyrule, so you can add the dependency at the version you choose.
-- `Makefile` — `build`, `run`, `test`, `env-up`, `env-down`, the same
-  shape as this repository's own.
-- `docker-compose.yml` — a single-node Mongo replica set on
-  `localhost:27017`, enough for `rest.Store` and the outbox's
-  transactions.
-- `README.md` and `.gitignore`.
-- `services/` — empty; [Creating services](./creating-services.md) is
-  next.
+`hyrule.json` records layout/backend. Platform projects contain go.mod, Makefile,
+docker-compose.yml, README.md and services/. The single layout creates main.go
+and resource files at the root instead. Existing projects with services/ and no
+manifest retain legacy platform behavior. Files are never overwritten.
 
-## 3. Add Hyrule as a dependency
-
-```bash
-go get github.com/Gui-Rondon/hyrule@main
-```
-
-This is an ordinary public Go module dependency. Use `@main` for the main
-branch or a release tag to pin a version. For a local checkout, see the
-`replace` directive in
-[`examples/standalone-tags-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/standalone-tags-api).
-
-:::tip[Recap]
-- `hyrule new <project>` generates `go.mod`/`Makefile`/
-  `docker-compose.yml`/`services/` — plain Go project layout, not a
-  custom format.
-- Add Hyrule with `go get` at the version you choose.
-:::
+The next release containing this change provides the new default; older releases
+continue generating platform projects. See [SQLite](../reference/sqlite.md) for
+local experimentation and [compatibility](../reference/stability.md) for migration.

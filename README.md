@@ -35,6 +35,55 @@ guided [Learn](https://gui-rondon.github.io/hyrule/docs/learn/intro)
 path plus a complete
 [Reference](https://gui-rondon.github.io/hyrule/docs/reference/architecture).
 
+## First API without Docker
+
+Requires Go 1.26 or 1.27. The default scaffold uses experimental SQLite and runs
+without MongoDB, Redis, Pub/Sub, Docker or a C compiler:
+
+```sh
+go install github.com/Gui-Rondon/hyrule/cmd/hyrule@latest
+hyrule new my-api
+cd my-api
+hyrule service create products
+go run .
+```
+
+Open `http://localhost:8080/api/docs/`, then:
+
+```sh
+curl -H 'Content-Type: application/json' -d '{"name":"Master Sword"}' localhost:8080/products
+curl localhost:8080/products
+```
+
+`service create` resolves module dependencies; downloads need network access.
+Data persists in `hyrule.db` (override with `SQLITE_PATH`); local authentication
+is disabled unless a configuration source is supplied. SQLite has no outbox,
+dry run, soft delete or advanced query parity. See [SQLite](website/docs/reference/sqlite.md).
+
+This flow ships in the next release containing this change; older published
+versions retain their original scaffold. To test this checkout before release,
+use `go run ./cmd/hyrule new my-api --framework-version=<published-pseudo-version>`
+with a version containing this work. Local development tests use a module replace.
+Do not select an older tag that lacks SQLite. Released CLI builds pin their own
+framework version instead of depending on main.
+
+## Why Hyrule?
+
+Gin, Chi and Echo primarily handle HTTP routing and middleware. Hyrule supplies
+resource schemas, validation, CRUD, pagination, optimistic concurrency and
+transactional hooks, reducing repeated repository/service/handler code. Existing
+Mongo/Postgres paths also support transactional outbox and dry run.
+
+For domains whose operations do not fit resource CRUD, custom services and
+repositories can be a better fit; using Hyrule does not remove domain design or
+database migration responsibilities. Keep your router and mount the Hyrule
+`http.Handler`: [tested Gin/Chi/Echo examples](examples/router-composition/).
+
+Read [compatibility and support](COMPATIBILITY.md), [contributing](CONTRIBUTING.md),
+[security](SECURITY.md) and the [roadmap to v1](ROADMAP.md). Public does not mean
+stable: exported APIs are pre-v1 and SQLite/scaffolding remain experimental.
+
+
 ## Automatic Swagger documentation
 
 Swagger is enabled by default for every Go/YAML resource: open `/api/docs`
@@ -131,12 +180,12 @@ shows a minimal Postgres service without the example's Pub/Sub dependency.
 ## Platform: scaffolding a multi-service project
 
 ```bash
-go install github.com/Gui-Rondon/hyrule/cmd/hyrule@main
+go install github.com/Gui-Rondon/hyrule/cmd/hyrule@latest
 
-hyrule new my-platform
+hyrule new my-platform --layout=platform
 cd my-platform
-go get github.com/Gui-Rondon/hyrule@main
 hyrule service create articles
+go mod tidy
 
 make env-up
 make build SERVICE=articles
@@ -192,7 +241,7 @@ The full docs are at **https://gui-rondon.github.io/hyrule/**:
 
 ## Development
 
-Requires Go 1.27 and Docker.
+Requires Go 1.26 or 1.27; Docker is needed for the full integration suite.
 
     make env-up               # generic infra: Mongo (27018), Postgres (5433), Pub/Sub (8085), Redis (6380)
     make test                 # every test (uses real Mongo/Postgres from env-up)

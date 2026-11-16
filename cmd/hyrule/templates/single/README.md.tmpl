@@ -1,0 +1,22 @@
+# {{.Module}}
+
+Requires Go 1.26 or 1.27. No Docker or C compiler required.
+
+```sh
+hyrule service create products
+go mod tidy
+go run .
+```
+
+Open http://localhost:8080/api/docs (default PORT is 8080).
+
+```sh
+curl -H 'Content-Type: application/json' -d '{"name":"Master Sword"}' localhost:8080/products
+curl localhost:8080/products
+```
+
+SQLite persists to `hyrule.db`; set `SQLITE_PATH` to change it. Authentication
+is disabled for local experimentation when no configuration source is supplied.
+SQLite is experimental: no outbox, dry run, soft delete or advanced queries.
+See https://gui-rondon.github.io/hyrule/docs/reference/sqlite for limitations.
+Use Mongo or Postgres for the existing production-oriented backend paths.

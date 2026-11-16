@@ -43,6 +43,6 @@ func run(args []string) error {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-  hyrule new <project>          scaffold a new multi-service project
+  hyrule new <project> [--layout=single|platform] [--framework-version=vX.Y.Z]
   hyrule service create <name>  scaffold a service in the current project`)
 }

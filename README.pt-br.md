@@ -36,6 +36,55 @@ projeto migrou.
 a [Referência](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture)
 reúne os detalhes técnicos. As três seções também estão disponíveis em inglês.
 
+## Primeira API sem Docker
+
+Requer Go 1.26 ou 1.27. O scaffold padrão usa SQLite experimental e funciona sem
+MongoDB, Redis, Pub/Sub, Docker ou compilador C:
+
+```sh
+go install github.com/Gui-Rondon/hyrule/cmd/hyrule@latest
+hyrule new my-api
+cd my-api
+hyrule service create products
+go run .
+```
+
+Abra `http://localhost:8080/api/docs/` e experimente:
+
+```sh
+curl -H 'Content-Type: application/json' -d '{"name":"Master Sword"}' localhost:8080/products
+curl localhost:8080/products
+```
+
+`service create` resolve as dependências do módulo; o download exige rede. Os dados
+persistem em `hyrule.db` (altere com `SQLITE_PATH`); a autenticação local fica
+desativada quando nenhuma fonte de configuração é fornecida. SQLite não oferece
+outbox, dry run, soft delete nem paridade de consultas avançadas.
+Veja [SQLite](website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/sqlite.md).
+
+Este fluxo estará na próxima release que incorporar a mudança; versões anteriores
+mantêm o scaffold original. Antes da publicação, use o CLI deste checkout com
+`--framework-version=<pseudo-versão-publicada>` contendo esta entrega, ou um
+replace local como nos testes. Uma tag antiga sem SQLite não serve para esse fluxo.
+O CLI publicado fixa a própria versão do framework, sem depender de main.
+
+## Por que usar Hyrule?
+
+Gin, Chi e Echo oferecem principalmente roteamento HTTP e middleware. O Hyrule
+acrescenta schemas de recursos, validação, CRUD, paginação, concorrência otimista e
+hooks transacionais, reduzindo código repetido de repositories/services/handlers.
+Mongo/Postgres também oferecem outbox transacional e dry run.
+
+Domínios que não se encaixam em CRUD podem se beneficiar de services e repositories
+próprios. O framework não elimina decisões de domínio ou migrações de banco.
+Você pode manter seu roteador e montar o `http.Handler` do Hyrule:
+[exemplos testados com Gin/Chi/Echo](examples/router-composition/README.pt-br.md).
+
+Consulte [compatibilidade e suporte](COMPATIBILITY.md), [contribuição](CONTRIBUTING.md),
+[segurança](SECURITY.md) e o [roadmap para v1](ROADMAP.md). APIs exportadas continuam
+pré-v1; SQLite e scaffolding ainda estão em evolução.
+
+
 ## Documentação Swagger automática
 
 O Swagger vem habilitado por padrão para todo recurso Go/YAML: acesse
@@ -132,12 +181,12 @@ mostra também serviço Postgres mínimo sem a dependência Pub/Sub do exemplo.
 ## Plataforma: montando um projeto com múltiplos serviços
 
 ```bash
-go install github.com/Gui-Rondon/hyrule/cmd/hyrule@main
+go install github.com/Gui-Rondon/hyrule/cmd/hyrule@latest
 
-hyrule new my-platform
+hyrule new my-platform --layout=platform
 cd my-platform
-go get github.com/Gui-Rondon/hyrule@main
 hyrule service create articles
+go mod tidy
 
 make env-up
 make build SERVICE=articles
@@ -193,7 +242,7 @@ A documentação completa está em **https://gui-rondon.github.io/hyrule/pt-BR/*
 
 ## Desenvolvimento
 
-Requer Go 1.27 e Docker.
+Requer Go 1.26 ou 1.27; Docker é necessário para as integrações completas.
 
     make env-up              # infra genérica: Mongo rs (27018), Pub/Sub (8085), Redis (6380)
     make test                # todos os testes (usa o Mongo do env-up)

@@ -2,13 +2,12 @@
 
 A Hyrule Platform project, scaffolded by `hyrule new`.
 
-## Add Hyrule as a dependency
-
-	go get github.com/Gui-Rondon/hyrule@main   # or a tagged version, once released
+Hyrule is pinned in go.mod to the CLI release used to generate this project.
 
 ## Add a service
 
 	hyrule service create <name>
+	go mod tidy
 
 This writes `services/<name>/`: a small `app.Main` binary with one
 resource, a schema to extend, and a test using `testkit`.

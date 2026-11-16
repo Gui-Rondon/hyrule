@@ -11,6 +11,16 @@ arquiteturais](architecture-decisions.md) tenham uma sequência para se
 encaixar, e para que ninguém confunda uma fase futura com comportamento
 atual.
 
+## Trabalho atual de adoção e estabilidade
+
+As fases abaixo são históricas. O [roadmap atual para v1](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
+adiciona políticas de compatibilidade/suporte, CI Go 1.26/1.27 em PRs, scaffold
+SQLite local, composição de roteadores e releases manuais com proveniência.
+Veja [estabilidade](stability.md) e [SQLite](sqlite.md) para o comportamento atual.
+A cobertura histórica abaixo descreve fases antigas; o gate atual é 95% do runtime.
+Não há data definida para a v1.
+
+
 ## Por que dois caminhos
 
 A direção do projeto é oferecer ao Hyrule dois caminhos de adoção

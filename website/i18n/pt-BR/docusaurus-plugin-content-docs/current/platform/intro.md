@@ -25,7 +25,7 @@ introduzir uma segunda implementação do framework.
 A CLI oferece dois comandos:
 
 ```bash
-hyrule new <project>
+hyrule new <project> --layout=platform
 hyrule service create <name>
 ```
 

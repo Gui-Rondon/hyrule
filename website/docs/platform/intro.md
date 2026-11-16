@@ -27,7 +27,7 @@ second implementation of it.
 This page, and the ones after it, describe exactly two commands:
 
 ```bash
-hyrule new <project>
+hyrule new <project> --layout=platform
 hyrule service create <name>
 ```
 

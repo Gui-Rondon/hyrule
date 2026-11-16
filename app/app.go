@@ -1,20 +1,21 @@
-// Package app is the bootstrap shared by the services: configuration,
-// Mongo or Postgres (Spec.Backend), authentication, the Eve API,
-// /status and /healthcheck.
+// Package app bootstraps Hyrule services: configuration, database connections,
+// authentication, REST resources, health endpoints and graceful shutdown.
 //
-// A service only describes its resources:
+// Describe a service with [Spec] and register resources in its Setup function.
+// [Main] owns process signals and exits on failure; [Run] accepts a caller-owned
+// context. [Build] returns an [http.Handler] using caller-owned dependencies,
+// suitable for tests or composition with an existing HTTP router.
 //
-//	func main() {
-//		app.Main(app.Spec{Name: "tags-api", DefaultDB: "tags", Version: version, Setup: setup})
-//	}
-//
-// Build does the same without the process concerns, so tests can create the
-// whole service against a test database.
+// MongoDB is the default backend. [Spec.Backend] can select Postgres or the
+// experimental local SQLite backend. See the examples for complete programs.
+// Some HTTP response conventions preserve compatibility with Eve, the Python
+// REST framework from which Hyrule migrated; Werkzeug is its HTTP utility library.
 package app
 
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -37,6 +38,7 @@ import (
 	"github.com/Gui-Rondon/hyrule/platform/mongodb"
 	"github.com/Gui-Rondon/hyrule/platform/postgres"
 	"github.com/Gui-Rondon/hyrule/platform/server"
+	"github.com/Gui-Rondon/hyrule/platform/sqlite"
 	"github.com/Gui-Rondon/hyrule/rest"
 )
 
@@ -48,7 +50,7 @@ type Backend string
 const (
 	// BackendMongo wires Env.DB/mongodb.Connect, as every service did
 	// before Backend existed -- also the zero value, so an unset
-	// Spec.Backend means this.
+	// [Spec.Backend] means this.
 	BackendMongo Backend = ""
 	// BackendPostgres wires Env.Postgres/platform/postgres.Connect
 	// instead. Dry run is implemented via postgres.Transactor.Rollback
@@ -56,15 +58,17 @@ const (
 	// production write already goes through Store.Querier(ctx), which
 	// only ever runs inside the ambient transaction Rollback discards.
 	BackendPostgres Backend = "postgres"
+	// BackendSQLite is experimental local storage; no dry run or outbox.
+	BackendSQLite Backend = "sqlite"
 )
 
 // validate rejects typos before either bootstrap can select a database.
 func (b Backend) validate() error {
 	switch b {
-	case BackendMongo, BackendPostgres:
+	case BackendMongo, BackendPostgres, BackendSQLite:
 		return nil
 	default:
-		return fmt.Errorf("app: unknown backend %q (use BackendMongo or BackendPostgres)", b)
+		return fmt.Errorf("app: unknown backend %q (use BackendMongo, BackendPostgres or BackendSQLite)", b)
 	}
 }
 
@@ -72,8 +76,8 @@ func (b Backend) validate() error {
 type Spec struct {
 	// Name is the APP_NAME in properties-api, e.g. "tags-api".
 	Name string
-	// Backend selects Env.DB/mongodb (BackendMongo, the default) or
-	// Env.Postgres/platform/postgres (BackendPostgres).
+	// Backend selects MongoDB (default), Postgres, or experimental SQLite.
+	// See [BackendMongo], [BackendPostgres] and [BackendSQLite].
 	Backend Backend
 	// DefaultDB is used when building a URI from individual connection settings.
 	// Mongo also falls back to it for a URI without a database. Specify the
@@ -82,8 +86,8 @@ type Spec struct {
 	Version   string
 	// Setup registers the resources, custom endpoints and checkers.
 	Setup func(ctx context.Context, env *Env) error
-	// Messages are the default error texts: nil (Werkzeug1), or
-	// rest.Werkzeug0 for an API that really runs Werkzeug 0.11.
+	// Messages selects legacy Python HTTP error wording. Nil uses
+	// [rest.Werkzeug1]; [rest.Werkzeug0] preserves older client expectations.
 	Messages rest.Messages
 	// HTMLForbidden is rest.Options.HTMLForbidden (Eve 0.7 without 403
 	// in STANDARD_ERRORS).
@@ -93,7 +97,7 @@ type Spec struct {
 	CacheControl string
 	CacheExpires int
 	// Indexes is the service's <service>.indices.conf (go:embed); config-files
-	// adds or replaces entries with mongo.indexes (D-27). BackendMongo only.
+	// adds or replaces entries with mongo.indexes (legacy configuration compatibility). BackendMongo only.
 	Indexes []byte
 	// PostgresIndexes declares a BackendPostgres service's indexes,
 	// ensured at boot the same moment Indexes/mongo.indexes are for
@@ -121,10 +125,13 @@ const defaultQueryTimeout = 10 * time.Second
 
 // Env is what Setup receives.
 type Env struct {
-	Config config.Config
-	// DB is set for BackendMongo, nil for BackendPostgres.
+	// SQLite is set only for BackendSQLite.
+	SQLite   *sql.DB
+	SQLiteTx sqlite.Transactor
+	Config   config.Config
+	// DB is set only for [BackendMongo].
 	DB *mongo.Database
-	// Postgres is set for BackendPostgres, nil for BackendMongo.
+	// Postgres is set only for [BackendPostgres].
 	Postgres *pgxpool.Pool
 	// PostgresTx is the Transactor already wired into API's Options --
 	// a BackendPostgres Setup passes this same value to
@@ -152,10 +159,10 @@ type Env struct {
 // BackendMongo only -- a BackendPostgres Setup builds postgres.NewStore(e.Postgres, table)
 // directly and assigns it to rest.Resource.Adapter via
 // restpostgres.NewAdapter, since platform/postgres.Store does not
-// implement rest.Store (see store.go's own doc comment).
+// implement [rest.Store]. For local experiments use [Env.SQLite] instead.
 func (e *Env) Store(collection string) rest.Store {
 	if e.DB == nil {
-		panic("app: Env.Store is BackendMongo only -- this Setup's Spec.Backend is BackendPostgres")
+		panic("app: Env.Store is BackendMongo only -- use the selected backend adapter")
 	}
 	return mongodb.NewStore(e.DB.Collection(collection))
 }
@@ -167,10 +174,10 @@ func (e *Env) Wrap(mw func(http.Handler) http.Handler) { e.wrappers = append(e.w
 // AddCheck adds a healthcheck checker (the database check is built in).
 func (e *Env) AddCheck(c health.Checker) { e.checkers = append(e.checkers, c) }
 
-// Go runs task while the service serves, e.g. the outbox relay. Run cancels
-// its context on shutdown and waits for it before closing Mongo. Build alone
-// (tests) does not start tasks, and neither does a dry run: the tasks write
-// (the relay publishes and takes its lease, the scheduler publishes).
+// Go runs a task while [Run] serves, such as a worker publishing persisted events.
+// Run cancels its context and waits for it before closing the database. [Build]
+// does not start tasks unless [Deps.Start] is supplied. Dry run skips tasks
+// because publishing events or updating worker leases would cause writes.
 func (e *Env) Go(name string, task func(ctx context.Context) error) {
 	if e.DryRun {
 		slog.Info("dry run: background task not started", "task", name)
@@ -183,6 +190,8 @@ func (e *Env) Go(name string, task func(ctx context.Context) error) {
 
 // Deps are the external dependencies of Build.
 type Deps struct {
+	// SQLite is caller-owned; Build never closes it.
+	SQLite *sql.DB
 	Config config.Config
 	// Mongo/DB are for BackendMongo; Run connects them via mongodb.Connect.
 	Mongo *mongo.Client
@@ -218,7 +227,7 @@ func Main(spec Spec) {
 }
 
 // Run loads the configuration (CONFIG_FILE or properties-api), connects to
-// the database (Spec.Backend) and serves until ctx is done.
+// the database ([Spec.Backend]) and serves until ctx is done.
 func Run(ctx context.Context, spec Spec) error {
 	if err := spec.Backend.validate(); err != nil {
 		return err
@@ -226,7 +235,13 @@ func Run(ctx context.Context, spec Spec) error {
 	startCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	cfg, err := config.LoadFromEnv(startCtx, spec.Name)
+	var cfg config.Config
+	var err error
+	if spec.Backend == BackendSQLite && os.Getenv("CONFIG_FILE") == "" && os.Getenv("CONFIGSERVER_ADDRESS") == "" {
+		cfg = config.Config{"auth": map[string]any{"enable": false}}
+	} else {
+		cfg, err = config.LoadFromEnv(startCtx, spec.Name)
+	}
 	if err != nil {
 		return err
 	}
@@ -254,6 +269,25 @@ func Run(ctx context.Context, spec Spec) error {
 		})
 	}
 
+	if spec.Backend == BackendSQLite {
+		if dryRun {
+			return errors.New("app: SQLite does not support dry run")
+		}
+		path := cfg.String("sqlite.path", "hyrule.db")
+		if value := os.Getenv("SQLITE_PATH"); value != "" {
+			path = value
+		}
+		db, err := sqlite.Open(startCtx, path)
+		if err != nil {
+			return err
+		}
+		defer func() { stopTasks(); tasks.Wait(); db.Close() }()
+		handler, err := Build(startCtx, spec, Deps{Config: cfg, SQLite: db, Start: start})
+		if err != nil {
+			return err
+		}
+		return server.Serve(ctx, handler)
+	}
 	if spec.Backend == BackendPostgres {
 		pool, err := postgres.Connect(startCtx, cfg, spec.DefaultDB)
 		if err != nil {
@@ -313,6 +347,9 @@ func Build(ctx context.Context, spec Spec, deps Deps) (http.Handler, error) {
 	dryRunTimeout := deps.DryRunTimeout
 	if dryRunTimeout == 0 {
 		dryRunTimeout = defaultDryRunTimeout
+	}
+	if spec.Backend == BackendSQLite {
+		return buildSQLite(ctx, spec, deps, authn)
 	}
 	if spec.Backend == BackendPostgres {
 		return buildPostgres(ctx, spec, deps, authn, dryRunTimeout)
@@ -495,8 +532,8 @@ func declaredIndexes(spec Spec, cfg config.Config) ([]mongodb.IndexSpec, error) 
 	return mongodb.MergeIndexes(file, cfg)
 }
 
-// WarnEmbedded logs the requests with embedded, which the Eve APIs resolved
-// through eve-embedded (HTTP to the related APIs). The Go APIs ignore it;
+// WarnEmbedded logs requests using the legacy embedded query parameter.
+// Python Eve used an extension to fetch related resources over HTTP. Hyrule ignores it;
 // the log tells who still sends it (path, user agent, origin).
 func WarnEmbedded(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

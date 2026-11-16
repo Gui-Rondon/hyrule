@@ -1,0 +1,25 @@
+package main
+
+import (
+ "context"
+ "net/http"
+ "github.com/Gui-Rondon/hyrule/app"
+ "github.com/Gui-Rondon/hyrule/rest"
+ "github.com/Gui-Rondon/hyrule/restsqlite"
+)
+
+func init(){resources=append(resources,setup{{.Symbol}})}
+func setup{{.Symbol}}(ctx context.Context,env *app.Env)error{
+ res:=&rest.Resource{
+  Name:"{{.Name}}",
+  Schema:rest.Schema{"name":{Type:rest.TypeString,Required:true}},
+  ResourceMethods:[]string{http.MethodGet,http.MethodPost},
+  ItemMethods:[]string{http.MethodGet,http.MethodPatch,http.MethodPut,http.MethodDelete},
+  RequireMergePatchContentType:true,
+ }
+ adapter,err:=restsqlite.NewAdapter(ctx,env.SQLite,"{{.Table}}",res)
+ if err!=nil{return err}
+ res.Adapter=adapter
+ env.API.Register(res)
+ return nil
+}

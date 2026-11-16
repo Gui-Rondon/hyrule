@@ -1,0 +1,17 @@
+package main
+
+import (
+ "context"
+ "github.com/Gui-Rondon/hyrule/app"
+)
+
+// Resource files register their setup functions here. Add resources with
+// "hyrule service create <name>"; no generated file rewrites are required.
+var resources []func(context.Context,*app.Env) error
+
+func main() {
+ app.Main(app.Spec{Name:"{{.Module}}", Backend:app.BackendSQLite, Setup:func(ctx context.Context,env *app.Env)error{
+  for _,setup:=range resources{if err:=setup(ctx,env);err!=nil{return err}}
+  return nil
+ }})
+}

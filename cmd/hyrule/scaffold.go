@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
+	"go/format"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -38,11 +41,17 @@ func renderTemplateDir(templates fs.FS, base, outDir string, data any) error {
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
 		}
-		f, err := os.Create(dest)
-		if err != nil {
+		var rendered bytes.Buffer
+		if err := tmpl.Execute(&rendered, data); err != nil {
 			return err
 		}
-		defer f.Close()
-		return tmpl.Execute(f, data)
+		content := rendered.Bytes()
+		if strings.HasSuffix(dest, ".go") {
+			content, err = format.Source(content)
+			if err != nil {
+				return fmt.Errorf("format generated %s: %w", dest, err)
+			}
+		}
+		return os.WriteFile(dest, content, 0644)
 	})
 }
