@@ -2,13 +2,34 @@ package postgres
 
 import (
 	"context"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Gui-Rondon/hyrule/platform/config"
 )
+
+func TestConnectRejectsOverflowingPoolSizesBeforeDialing(t *testing.T) {
+	t.Setenv("POSTGRES_CONNECTION_STRING", "postgres://127.0.0.1:1/test?connect_timeout=1")
+	for _, key := range []string{"max_conns", "min_conns"} {
+		t.Run(key, func(t *testing.T) {
+			for _, n := range []int64{math.MaxInt32 + 1, math.MaxInt64} {
+				cfg := config.Config{"postgres": map[string]any{key: strconv.FormatInt(n, 10)}}
+				pool, err := Connect(context.Background(), cfg, "test")
+				if pool != nil {
+					pool.Close()
+					t.Fatal("overflowing pool size created a pool")
+				}
+				if err == nil || !strings.Contains(err.Error(), "postgres."+key) {
+					t.Fatalf("%s=%d: %v", key, n, err)
+				}
+			}
+		})
+	}
+}
 
 func testURI(t *testing.T) string {
 	uri := os.Getenv("POSTGRES_TEST_URI")

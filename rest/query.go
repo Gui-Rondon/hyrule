@@ -159,9 +159,12 @@ func parsePageAndEcho(args url.Values, p Pagination) (*ListQuery, error) {
 	}
 	if v := args.Get("page"); v != "" && !p.Disabled {
 		if n, err := strconv.Atoi(v); err == nil {
-			q.Page = int(math.Abs(float64(n)))
-			if q.Page == 0 {
-				q.Page = 1
+			// Keep integer precision and avoid overflowing abs(MinInt).
+			// An unrepresentable absolute page uses the normal default.
+			if n > 0 {
+				q.Page = n
+			} else if n < 0 && n != math.MinInt {
+				q.Page = -n
 			}
 		}
 	}

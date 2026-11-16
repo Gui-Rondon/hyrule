@@ -1,0 +1,61 @@
+name: Fuzzing
+on:
+  schedule:
+    # GitHub cron has no exact 15-day interval across month boundaries.
+    # A daily gate selects days anchored on 2026-11-16 UTC.
+    - cron: '31 7 * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: fuzzing
+  cancel-in-progress: false
+jobs:
+  fuzz:
+    name: Bounded Go fuzz campaign
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - name: Select the 15-day campaign date
+        id: campaign
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          days=$(( ($(date -u +%s) - $(date -u -d '2026-11-16' +%s)) / 86400 ))
+          if [ "$EVENT_NAME" = workflow_dispatch ] || [ "$((days % 15))" -eq 0 ]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.campaign.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: steps.campaign.outputs.run == 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          check-latest: true
+          go-version: '1.27.x'
+      - if: steps.campaign.outputs.run == 'true'
+        name: Fuzz query parsers (5 minutes)
+        run: go test ./rest -run='^$' -fuzz='^FuzzParseListQuery$' -fuzztime=5m -parallel=2 -timeout=6m
+      - if: steps.campaign.outputs.run == 'true' && !cancelled()
+        name: Fuzz SQL compilation (5 minutes)
+        run: go test ./platform/postgres -run='^$' -fuzz='^FuzzCompileFilter$' -fuzztime=5m -parallel=2 -timeout=6m
+      - if: steps.campaign.outputs.run == 'true' && !cancelled()
+        name: Fuzz document validation (5 minutes)
+        run: go test ./rest -run='^$' -fuzz='^FuzzValidateDict$' -fuzztime=5m -parallel=2 -timeout=6m
+      - if: steps.campaign.outputs.run == 'true' && !cancelled()
+        name: Fuzz merge patch (5 minutes)
+        run: go test ./restpostgres -run='^$' -fuzz='^FuzzMergePatch$' -fuzztime=5m -parallel=2 -timeout=6m
+      - if: steps.campaign.outputs.run == 'true' && failure()
+        name: Retain failing inputs for regression tests
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-failures-${{ github.run_id }}
+          path: |
+            rest/testdata/fuzz/
+            platform/postgres/testdata/fuzz/
+            restpostgres/testdata/fuzz/
+          if-no-files-found: warn
+          retention-days: 30

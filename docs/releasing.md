@@ -2,8 +2,8 @@
 
 Releases are manually dispatched by Gui-Rondon from main after PR review and green
 checks. The workflow validates the selected commit on Go 1.26/1.27, runs real
-backend integrations and coverage, then builds the CLI for Linux and Windows
-(amd64 and arm64, no CGO). No GoReleaser is needed for this small binary matrix.
+backend integrations and coverage, then builds `hyrule` and `hyrule-serve` for
+Linux and Windows (amd64 and arm64, no CGO). No GoReleaser is needed for this small binary matrix.
 Cosign may be added later; it is not a prerequisite.
 
 ## Publish
@@ -15,12 +15,24 @@ Cosign may be added later; it is not a prerequisite.
    `v0.X.Y-rc.N`). This workflow is restricted to the current maintainer and main.
    v1 requires a separate maturity decision; v2+ requires a new module path.
 3. Inspect checksums and verified signed SLSA provenance. The workflow publishes
-   four CLI binaries, a source archive, SHA256SUMS and provenance.sigstore.json.
+   eight binaries (both commands for each OS/architecture), a source archive,
+   SHA256SUMS and provenance.sigstore.json.
 4. Verify the published binary yourself:
 
    ```sh
    gh attestation verify hyrule_v0.X.Y_linux_amd64 --repo Gui-Rondon/hyrule \
      --signer-workflow Gui-Rondon/hyrule/.github/workflows/release.yml
+   ```
+
+   Also verify the selected `hyrule-serve_v0.X.Y_OS_ARCH` artifact. Both commands,
+   the source tarball and SHA256SUMS are attestation subjects. For a strict check:
+
+   ```sh
+   gh attestation verify ARTIFACT --bundle provenance.sigstore.json \
+     --repo Gui-Rondon/hyrule \
+     --signer-workflow Gui-Rondon/hyrule/.github/workflows/release.yml \
+     --source-digest EXPECTED_COMMIT_SHA \
+     --predicate-type https://slsa.dev/provenance/v1
    ```
 
    Inspect the source commit and workflow identity. A changed byte must cause
@@ -59,14 +71,18 @@ an aggregate number. Missing data means unavailable, not insecure or secure.
 The deps.dev slsaProvenances field is npm-only; for Go inspect attestations when
 available and verify published assets directly. No deps.dev ingestion SLA is promised.
 
-## GitHub activation after merge
+## GitHub activation after merge (separate administrative step)
 
 - Enable private vulnerability reporting and confirm SECURITY.md's private URL.
 - Enable code scanning advanced setup (the versioned CodeQL workflow); avoid a
   simultaneous duplicate default-setup configuration.
 - Run the Test workflow, then protect main with required checks **Go 1.26.x
-  integration**, **Go 1.27.x integration**, **Documentation EN and PT**, and
-  **CodeQL Go**, once those exact check names have appeared successfully.
+  integration**, **Go 1.27.x integration**, **Documentation EN and PT**,
+  **Windows SQLite and CLI**, **CodeQL Go**, and **Go vulnerabilities**, once
+  those exact check names have appeared successfully. Require the branch to be
+  up to date before merging. Bind required checks to the GitHub Actions app where
+  available. Website security regressions and npm audit run inside the existing
+  documentation check, without another build job.
 - Require PRs and resolved conversations; block force pushes/deletion, including
   administrators. With one maintainer, require zero independent approvals:
   Gui-Rondon reviews and merges, and cannot approve their own PR. Revisit this

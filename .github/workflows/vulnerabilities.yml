@@ -5,6 +5,7 @@ on:
     branches: [main]
   schedule:
     - cron: '17 6 * * 1'
+  workflow_dispatch: {}
 permissions:
   contents: read
 concurrency:
@@ -21,6 +22,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
+          check-latest: true
           go-version: '1.27.x'
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
       - run: govulncheck ./...
@@ -30,3 +32,13 @@ jobs:
         working-directory: examples/router-composition
       - run: govulncheck ./...
         working-directory: examples/standalone-tags-api
+      # PR/push website auditing is part of the existing documentation job.
+      # This lightweight scheduled check also catches new advisories without edits.
+      - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+      - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        name: Audit all website and build dependencies
+        run: npm audit --package-lock-only --ignore-scripts
+        working-directory: website

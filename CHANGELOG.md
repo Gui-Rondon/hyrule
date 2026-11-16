@@ -9,6 +9,26 @@ the minor version instead.
 
 ## [Unreleased]
 
+### Security
+
+- Resolve the latest Go security patches in CI while preserving the 1.26/1.27
+  matrix; document the local-toolchain standard-library advisories.
+- Reject PostgreSQL pool sizes that overflow int32 before opening a connection.
+- Keep extreme pagination values from overflowing into negative page numbers.
+- Update vulnerable website serialization, worker-pool and UUID dependencies;
+  use a documented, private deepmerge security fork with prototype-poisoning
+  regression tests until a compatible upstream fix is available.
+- Audit the complete website/build dependency tree in the existing docs jobs
+  and on scheduled vulnerability scans; keep Go scanning unchanged.
+- Pin build/runtime and integration images by digest, with Dockerfile updates
+  through Dependabot and documented manual checks for Compose-only images.
+- Add query, SQL compilation, validation and merge-patch fuzz targets. Their
+  seeds run in normal tests; bounded campaigns run every 15 days on Go 1.27
+  (four sequential 5-minute targets, two workers, 30-minute job timeout).
+- Include both hyrule and hyrule-serve in the Linux/Windows release matrix,
+  with checksums and existing artifact provenance covering all eight binaries.
+
+
 ### CI maintenance
 
 - Wait for an actual Pub/Sub emulator HTTP response before Compose reports it

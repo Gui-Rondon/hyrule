@@ -14,7 +14,8 @@
     "write-heading-ids": "docusaurus write-heading-ids",
     "check:translations": "node scripts/check-translations.mjs",
     "prebuild": "npm run check:translations",
-    "preview": "npm run build && docusaurus serve --host localhost --port 3000 --no-open"
+    "preview": "npm run build && docusaurus serve --host localhost --port 3000 --no-open",
+    "test:security": "node --test scripts/security.test.cjs"
   },
   "dependencies": {
     "@docusaurus/core": "3.10.2",
@@ -27,7 +28,8 @@
     "clsx": "^2.0.0",
     "prism-react-renderer": "^2.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "deepmerge": "file:vendor/deepmerge"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.10.2",
@@ -47,5 +49,13 @@
   },
   "engines": {
     "node": ">=20.0"
+  },
+  "overrides": {
+    "deepmerge": "$deepmerge",
+    "serialize-javascript": "7.1.4",
+    "tinypool": "2.2.0",
+    "sockjs": {
+      "uuid": "11.1.1"
+    }
   }
 }

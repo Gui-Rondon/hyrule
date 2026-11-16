@@ -1,7 +1,7 @@
 # One image per service: docker build --build-arg SERVICE=tags-api .
 # SERVICES_DIR defaults to the reference adopter shipped in this repo; a
 # consumer of the framework with its own services directory overrides it.
-FROM golang:1.27 AS build
+FROM golang:1.27@sha256:fe517acaa580cc7915457080f850c37e618b3c1e750f98b58fc6429b605147a1 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -17,7 +17,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}"
 # git_branch.txt is written by the CI build job and read by /status
 RUN touch git_branch.txt && cp git_branch.txt /out/
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 WORKDIR /app
 COPY --from=build /out/app /out/git_branch.txt /app/
 EXPOSE 8080

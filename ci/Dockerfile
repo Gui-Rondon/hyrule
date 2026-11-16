@@ -3,7 +3,7 @@
 # standard library already compiled, with and without -race. The runners have
 # no shared cache, so without it every job downloads and compiles them again.
 # The CI tags it with the hash of go.mod, go.sum and this file.
-FROM golang:1.27
+FROM golang:1.27@sha256:fe517acaa580cc7915457080f850c37e618b3c1e750f98b58fc6429b605147a1
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

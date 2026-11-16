@@ -1,0 +1,8 @@
+{
+  "name": "@hyrule/deepmerge-patched",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local deepmerge 4.3.1 fork fixing GHSA-gcqx-w48m-w2h4",
+  "main": "index.cjs",
+  "license": "MIT"
+}

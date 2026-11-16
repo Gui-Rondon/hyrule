@@ -17,3 +17,7 @@ calendar days**. This is an initial response target, not a guaranteed fix deadli
 Gui-Rondon will coordinate investigation, affected releases, mitigation, a fix and
 public advisory with the reporter. Acknowledgement and disclosure timing will be
 communicated privately. Older unsupported versions receive upgrade guidance.
+
+Gui-Rondon is the sole responder and may use AI assistance for triage and
+investigation. Responsibility for acknowledgement, remediation and disclosure
+remains with Gui-Rondon; AI assistance is not independent human review.
