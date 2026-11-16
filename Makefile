@@ -8,9 +8,14 @@ export PUBSUB_EMULATOR_HOST ?= localhost:8085
 export REDIS_TEST_ADDR ?= localhost:6380
 export POSTGRES_TEST_URI ?= $(POSTGRES_URI)
 
-COVERAGE_MIN ?= 85
+# Runtime libraries only; examples/CLI/manual HA tooling do not define this gate.
+# Their tests still run through ./... and can exercise framework code.
+COVERAGE_MIN ?= 95
+COVERAGE_ALL_MIN ?= 85
+COVERAGE_PROFILE ?= .local/coverage.out
+COVERAGE_PACKAGES ?= ./app/... ./behaviors/... ./declarative/... ./outbox/... ./outboxpostgres/... ./platform/... ./rest/... ./restpostgres/...
 
-.PHONY: test unit vet cover build image env-up env-down example-env-up example-env-down run loadtest e2e e2e-down standalone-example-test
+.PHONY: test unit vet cover cover-all build image env-up env-down example-env-up example-env-down run loadtest e2e e2e-down standalone-example-test
 
 # All tests; the ones that need Mongo/Postgres use MONGO_TEST_URI/
 # POSTGRES_TEST_URI (make env-up).
@@ -26,14 +31,19 @@ vet:
 
 SERVICES_DIR ?= examples/blog-apis/services
 
-# Same gate as the CI: fails below COVERAGE_MIN % (testkit excluded).
+# CI's library-only gate; all normal package tests still execute.
 cover:
 	@mkdir -p .local
-	go test -coverpkg=$$(go list ./app/... ./behaviors/... ./declarative/... ./outbox/... ./outboxpostgres/... ./platform/... ./rest/... ./restpostgres/... ./testkit/... ./internal/... ./examples/blog-apis/internal/... ./examples/blog-apis/cmd/... ./$(SERVICES_DIR)/... | grep -v /testkit | paste -sd, -) \
-		-coverprofile=.local/coverage.out ./... > /dev/null
-	@go tool cover -func=.local/coverage.out | awk -v m=$(COVERAGE_MIN) \
+	go test -coverpkg=$$(go list $(COVERAGE_PACKAGES) | paste -sd, -) \
+		-coverprofile=$(COVERAGE_PROFILE) ./... > /dev/null
+	@go tool cover -func=$(COVERAGE_PROFILE) | awk -v m=$(COVERAGE_MIN) \
 		'/^total:/ { sub("%", "", $$3); printf "coverage %s%% (minimum %s%%)\n", $$3, m; exit !($$3 + 0 >= m + 0) }'
-	@echo "HTML: go tool cover -html=.local/coverage.out"
+	@echo "HTML: go tool cover -html=$(COVERAGE_PROFILE)"
+
+# Historical aggregate scope, reported separately without diluting the library gate.
+cover-all:
+	$(MAKE) cover COVERAGE_MIN=$(COVERAGE_ALL_MIN) COVERAGE_PROFILE=.local/coverage-all.out \
+		COVERAGE_PACKAGES='./app/... ./behaviors/... ./declarative/... ./outbox/... ./outboxpostgres/... ./platform/... ./rest/... ./restpostgres/... ./internal/... ./examples/blog-apis/internal/... ./examples/blog-apis/cmd/... ./$(SERVICES_DIR)/...'
 
 build:
 	go build -o .local/$(SERVICE) ./$(SERVICES_DIR)/$(SERVICE)

@@ -35,6 +35,17 @@ func backoffWithJitter(retryNum int, base, max time.Duration) time.Duration {
 	return time.Duration(rand.Int64N(int64(d)))
 }
 
+// queryContextError preserves both the HTTP classification and the driver
+// context cause. HTTP rendering finds *Error; retry classification finds the
+// original deadline/cancellation through errors.Is.
+type queryContextError struct {
+	classified *Error
+	cause      error
+}
+
+func (e *queryContextError) Error() string   { return e.classified.Error() }
+func (e *queryContextError) Unwrap() []error { return []error{e.classified, e.cause} }
+
 // classifyContextErr decides, uniformly, the cause of a context error
 // observed during an operation that used retryCtx:
 //  1. ctx (the original caller) expired or was canceled -> propagated as is.

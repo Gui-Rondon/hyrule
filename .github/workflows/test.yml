@@ -13,14 +13,14 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      # Real Mongo (replica set), Pub/Sub emulator and Redis, same as
+      # Real Mongo (replica set), Postgres, Pub/Sub emulator and Redis, same as
       # local dev (docker-compose.yml) — no mocks, so coverage reflects
       # the actual transaction/outbox/unique-index behavior.
       - run: make env-up
       - name: Mongo logs (debug on failure)
         if: failure()
         run: docker compose logs mongo
-      - name: Test with coverage (fails below 85%, see Makefile COVERAGE_MIN)
+      - name: Framework coverage (95% minimum; all normal tests run)
         run: make cover
       - name: Upload coverage to Codecov
         if: always()

@@ -145,3 +145,17 @@ eles, testes de banco pulam; execução verde sem infraestrutura não comprova
 integração. Limitamos concorrência de pacotes porque há teste real com orçamento
 de retry sensível à disputa de CPU. A cobertura não inclui gates HA manuais
 sem habilitação explícita: veja [evidências](integration-review.md).
+
+## Cobertura do framework
+
+Após `make env-up`, execute `make cover GOFLAGS=-p=1`: o gate exige **95%**
+do código de runtime em `app`, `behaviors`, `declarative`, `outbox`,
+`outboxpostgres`, `platform`, `rest` e `restpostgres`, incluindo ambos os backends.
+Todos os testes normais de `./...` executam; exemplos, CLI, ferramentas HA
+manuais e `testkit` ficam fora do denominador. Não é cobertura apenas unitária:
+os testes de integração usam MongoDB e PostgreSQL reais.
+
+`make cover-all GOFLAGS=-p=1` preserva o escopo agregado anterior, com exemplos e
+ferramentas, e gate de 85%. Os perfis são `.local/coverage.out` e
+`.local/coverage-all.out`, respectivamente. Execute os dois sequencialmente.
+Percentuais desses escopos não são comparáveis diretamente.

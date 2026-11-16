@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -359,5 +360,32 @@ func TestRunServesUntilCanceledPostgres(t *testing.T) {
 	}
 	if !stopped.Load() {
 		t.Error("Run returned before the background task stopped")
+	}
+}
+
+func TestBuildPostgresRejectsInvalidConfigurationAndSetup(t *testing.T) {
+	pool := postgresTestPool(t)
+	for _, tc := range []struct {
+		name     string
+		cfg      config.Config
+		setupErr bool
+		want     string
+	}{
+		{name: "query timeout", cfg: config.Config{"postgres": map[string]any{"query_timeout": "invalid"}}, want: "postgres.query_timeout"},
+		{name: "indexes mode", cfg: config.Config{"postgres": map[string]any{"indexes_mode": "invalid"}}, want: "indexes_mode"},
+		{name: "setup failure", setupErr: true, want: "setup sentinel"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := app.Spec{Name: "invalid-config", Backend: app.BackendPostgres, Setup: func(context.Context, *app.Env) error {
+				if tc.setupErr {
+					return fmt.Errorf("setup sentinel")
+				}
+				return nil
+			}}
+			_, err := app.Build(context.Background(), spec, app.Deps{Postgres: pool, Config: tc.cfg})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v; want %q", err, tc.want)
+			}
+		})
 	}
 }

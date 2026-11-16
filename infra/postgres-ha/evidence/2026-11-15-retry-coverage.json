@@ -1,0 +1,125 @@
+{
+  "review_date": "2026-11-15",
+  "integration_base": "7e4f1bdc149f3a3884e63fe90e84e0640a91a210",
+  "main_compared": "4aa619571580bda90a9cc14d261cc9086a081eb0",
+  "validated_source": "Changes versioned with this snapshot, after tree-identical main ancestry preparation f46b98d.",
+  "merge_preparation": {
+    "commit": "f46b98d",
+    "resolved_tree": "ec8ac29e6536a3111fd728fbefe2e490e5773a03",
+    "tree_identical_to_integration": true,
+    "main_ref_not_updated_by_merge": true,
+    "pr_base": "integration/postgres-portability"
+  },
+  "coverage": {
+    "framework_baseline_percent": 92.6,
+    "framework_percent": 95.1,
+    "framework_minimum_percent": 95,
+    "framework_covered_statements": 3801,
+    "framework_total_statements": 3997,
+    "aggregate_percent": 88.0,
+    "aggregate_minimum_percent": 85,
+    "all_normal_tests_run": true,
+    "commands": [
+      "make cover GOFLAGS=-p=1",
+      "make cover-all GOFLAGS=-p=1"
+    ],
+    "runtime_packages": [
+      "app",
+      "behaviors",
+      "declarative",
+      "outbox",
+      "outboxpostgres",
+      "platform",
+      "rest",
+      "restpostgres"
+    ]
+  },
+  "retry": {
+    "real_read_regression": true,
+    "race_repetitions": 30,
+    "existing_conflict_test_also_repeated": true,
+    "http_status_and_message_preserved": true,
+    "context_cause_preserved": true
+  },
+  "branch_cleanup": {
+    "local_topic_branches_removed": 41,
+    "remote_topic_branches_removed": 2,
+    "develop_preserved": true,
+    "local_recovery_bundle": ".local/branch-cleanup/pre-cleanup.bundle"
+  },
+  "fresh_gates": [
+    {
+      "gate": "a6",
+      "complete": true,
+      "plan_count": 30,
+      "regression_checks": 0,
+      "local_report": ".local/postgres-explain/20261116T014841Z-e14b2fe2-d991-4cce-877b-efc861096e19/report.json",
+      "sha256": "3ec65c081840bee2164b2e46fb6cb2c9563ffddbe88e82e4623f3ccf0b036270"
+    },
+    {
+      "gate": "where",
+      "complete": true,
+      "plan_count": 30,
+      "regression_checks": 7,
+      "local_report": ".local/postgres-explain/20261116T014853Z-065e43e4-5f3b-42e9-84b1-78cdd121d37a/report.json",
+      "sha256": "ef2068a9211bb397e6d253584abc0e179b79fa8e57b173b960c3c8f64cb2e144"
+    },
+    {
+      "gate": "uuid_sort",
+      "complete": true,
+      "plan_count": 18,
+      "regression_checks": 12,
+      "local_report": ".local/postgres-id-sort/20261116T014906Z-5ec1cb5f-38ed-4fc4-8297-4c9e196b55ba/report.json",
+      "sha256": "e26e99cee5258adf338ac904e65ca44f670c1d26688db1410dccafe5e3de4c3a"
+    },
+    {
+      "gate": "sparse",
+      "complete": true,
+      "plan_count": 30,
+      "regression_checks": 2,
+      "local_report": ".local/postgres-explain/20261116T014909Z-97332d12-1fd5-4ef4-a153-f30f8b30858a/report.json",
+      "sha256": "51c04ab4f4070d77d5fdc9581ea8b88b4d4bf979c7517c4ceac9dd028dbaee84"
+    },
+    {
+      "gate": "typed_sort",
+      "complete": true,
+      "plan_count": 48,
+      "regression_checks": 24,
+      "local_report": ".local/postgres-typed-sort/20261116T014921Z-87f9be9e-e39b-4a45-a729-bc009b449dca/report.json",
+      "sha256": "a9cf0cefa98522ba55dc445f4a1d0772ac85441d51b8667bbb5b287c9c70dbfb"
+    },
+    {
+      "gate": "plan_policy",
+      "complete": true,
+      "plan_count": 12,
+      "regression_checks": 0,
+      "local_report": ".local/postgres-plan-policy/20261116T014939Z-a2622d76-fec5-4d07-a1cd-d935eba00f4d/report.json",
+      "sha256": "c490a08b854a182c4036f1151580181781f728645b271ee4b2a83ce3d3b317a7"
+    },
+    {
+      "gate": "datetime_sort",
+      "complete": true,
+      "plan_count": 48,
+      "regression_checks": 24,
+      "local_report": ".local/postgres-datetime-sort/20261116T014953Z-94c3873e-b6dd-4973-9c37-18a376085e8d/report.json",
+      "sha256": "784dfeefc217738a76ad39fc2bb6404c66f85a1b5cc89f03bca1f59b3d7f46c5"
+    }
+  ],
+  "ha_port": 5540,
+  "ha_manual_local_only": true,
+  "failover_pitr": "Historical; not rerun in this follow-up.",
+  "raw_artifacts": ".local/retry-coverage/",
+  "validation": {
+    "race": "make test GOFLAGS='-count=1 -p=1' passed; final run completed before coverage and Docker builds",
+    "vet": "make vet passed",
+    "external_module": "make standalone-example-test passed",
+    "website": "npm run build passed for EN and pt-BR",
+    "topology_and_migrations": "passed in manual lab on 5540",
+    "temporary_gate_schemas_remaining": 0,
+    "jmeter": {
+      "samples": 42,
+      "failures": 0,
+      "result_sha256": "18d54ce45c70a1ffa6a09102faa1e1f43b21b329e6775c3c8f6c627eb32f87e3"
+    }
+  }
+}

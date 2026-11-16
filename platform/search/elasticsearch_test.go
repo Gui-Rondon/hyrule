@@ -81,3 +81,37 @@ func TestParseHostsFromConfigFiles(t *testing.T) {
 		t.Errorf("hosts = %v", hosts)
 	}
 }
+
+func TestFailureContracts(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(503) }))
+	c := New([]string{srv.URL})
+	if err := c.Index(context.Background(), "items", "id", map[string]any{}); err == nil {
+		t.Fatal("HTTP failure accepted")
+	}
+	if ok, _ := c.Check(context.Background()); ok {
+		t.Fatal("unhealthy server reported healthy")
+	}
+	srv.Close()
+	if err := c.Delete(context.Background(), "items", "id"); err == nil {
+		t.Fatal("connection failure accepted")
+	}
+	if ok, _ := c.Check(context.Background()); ok {
+		t.Fatal("unreachable server reported healthy")
+	}
+	if err := c.Index(context.Background(), "items", "id", make(chan int)); err == nil {
+		t.Fatal("unencodable document accepted")
+	}
+	if err := New([]string{"://bad"}).Index(context.Background(), "items", "id", nil); err == nil {
+		t.Fatal("invalid endpoint accepted")
+	}
+	if _, err := FromConfig(config.Config{}); err == nil {
+		t.Fatal("missing hosts accepted")
+	}
+	if _, err := parseHosts([]any{17}); err == nil {
+		t.Fatal("unsupported hosts accepted")
+	}
+	hosts, err := parseHosts(map[string]any{"host": "example", "port": 9443, "scheme": "https"})
+	if err != nil || len(hosts) != 1 || hosts[0] != "https://example:9443" {
+		t.Fatalf("host map: %v / %v", hosts, err)
+	}
+}

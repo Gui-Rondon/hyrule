@@ -336,3 +336,45 @@ func TestInvalidBodies(t *testing.T) {
 		}
 	}
 }
+
+func TestReadHooksPreserveArgumentsAndFailures(t *testing.T) {
+	res := items()
+	c, svc := newAPI(t, nil, res)
+	docs, err := svc.Insert(context.Background(), []rest.Doc{{"name": "before"}}, rest.WriteOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := docs[0]["_id"].(bson.ObjectID).Hex()
+	res.Hooks.OnPreGet = []func(context.Context, *rest.ListQuery) error{func(ctx context.Context, _ *rest.ListQuery) error {
+		if rest.RequestArgs(ctx).Get("trace") != "present" {
+			t.Error("request args lost")
+		}
+		return rest.Abort(409, "pre-read refused")
+	}}
+	if r := c.Do("GET", "/items?trace=present", nil); r.Status != 409 {
+		t.Fatalf("OnPreGet: %d", r.Status)
+	}
+	res.Hooks.OnPreGet = nil
+	res.Hooks.OnFetchedResource = []func(context.Context, []rest.Doc) error{func(context.Context, []rest.Doc) error { return rest.Abort(409, "post-read refused") }}
+	if r := c.Do("GET", "/items", nil); r.Status != 409 {
+		t.Fatalf("OnFetchedResource: %d", r.Status)
+	}
+	res.Hooks.OnFetchedResource = nil
+	res.Hooks.OnFetchedItem = []func(context.Context, rest.Doc) error{func(context.Context, rest.Doc) error { return rest.Abort(409, "item read refused") }}
+	if r := c.Do("GET", "/items/"+id, nil); r.Status != 409 {
+		t.Fatalf("OnFetchedItem: %d", r.Status)
+	}
+}
+
+func TestHTMLForbiddenHasNoCacheHeaders(t *testing.T) {
+	keys := testkit.NewKeys(t)
+	res := items()
+	res.Store = testkit.Store(t, "html_forbidden")
+	api := rest.New(rest.Options{Auth: keys.Authenticator(t), HTMLForbidden: true, CacheControl: "max-age=300", CacheExpires: 300})
+	api.Register(res)
+	c := testkit.NewClient(t, api)
+	r := c.Do("GET", "/items", nil)
+	if r.Status != 403 || r.Header.Get("Content-Type") != "text/html" || r.Header.Get("Cache-Control") != "" || r.Header.Get("Expires") != "" {
+		t.Fatalf("HTML forbidden contract: %d %v", r.Status, r.Header)
+	}
+}

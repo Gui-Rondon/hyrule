@@ -453,3 +453,19 @@ func TestCompileFilterWrongShapeErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestCompileFilterRejectsMalformedNestedAndArrayOperands(t *testing.T) {
+	for _, q := range []Query{
+		{"nested.field": Query{"$exists": "true"}},
+		{"nested.field": Query{"$eq": make(chan int)}},
+		{"nested.field": Query{"$ne": make(chan int)}},
+		{"tags": Query{"$hasSome": "tag"}},
+		{"tags": Query{"$hasSome": []any{make(chan int)}}},
+		{"tags": Query{"$hasEvery": "tag"}},
+		{"tags": Query{"$hasEvery": []any{make(chan int)}}},
+	} {
+		if sql, _, err := CompileFilter(q, SchemaSpec{}, 0); err == nil {
+			t.Errorf("accepted invalid operand %v: %s", q, sql)
+		}
+	}
+}
