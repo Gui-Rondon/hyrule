@@ -16,6 +16,37 @@ logic, it stays a small Go binary with `app.Main`, like
 RESOURCES_FILE=resources.yaml PORT=8080 go run ./cmd/hyrule-serve
 ```
 
+## Choosing a backend
+
+Each resource's `backend:` field selects which `declarative.Backend`
+attaches its Store/Adapter — `mongo` (the default when the field is
+omitted, so every `resources.yaml` written before this field existed
+keeps working unchanged), `postgres` or `sqlite`. `hyrule-serve` itself
+still connects to exactly one backend per process (`app.Env` never
+carries more than one live connection), selected with `BACKEND`:
+
+```bash
+BACKEND=postgres RESOURCES_FILE=resources.yaml PORT=8080 go run ./cmd/hyrule-serve
+```
+
+```yaml
+resources:
+  - name: items
+    collection: items # a Mongo collection, or a SQL table for postgres/sqlite
+    backend: postgres # omit for mongo; also accepts sqlite
+    schema:
+      name: {type: string, required: true}
+```
+
+A resource whose `backend:` doesn't match the process's `BACKEND` fails
+at registration with a clear error (e.g. `backend "postgres" needs
+BACKEND=postgres`), never silently. See [Integrating Mongo and Postgres](backends.md) for `postgres.*`
+connection settings and pool limits, and [SQLite for local
+experimentation](sqlite.md) for `SQLITE_PATH`/`sqlite.path` and what that
+backend does not support yet (soft delete, advanced operators).
+Switching a resource's `backend:` never migrates its existing data
+between databases.
+
 ## A complete example
 
 This `resources.yaml` is the YAML equivalent of

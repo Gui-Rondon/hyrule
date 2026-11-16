@@ -23,8 +23,10 @@ identifiers. Hyphens in generated resource names map to underscores in table nam
 Object/array values can be stored but cannot be compared or uniquely indexed.
 Client values are SQL parameters; operators and identifiers are validated.
 
-Unsupported: soft delete, advanced Mongo/Postgres operators, outbox, dry run,
-SQLite resources.yaml and database migration/parity guarantees. Unsupported query
+Unsupported: soft delete, advanced Mongo/Postgres operators, outbox, dry run
+and database migration/parity guarantees. `resources.yaml` supports this
+backend via `backend: sqlite` (see [Resource via YAML](resources-yaml.md)),
+subject to the same restrictions listed here. Unsupported query
 operators return 400; unsupported backend configuration fails at startup. Unique
 indexes are real database constraints. Missing and null fields both compare as
 SQL NULL; this is not Mongo query parity. A single connection serializes local

@@ -35,8 +35,14 @@ type File struct {
 type Resource struct {
 	// Name is the DOMAIN key and, by default, the URL (rest.Resource.Name/URL).
 	Name string `yaml:"name"`
-	// Collection is the Mongo collection backing the resource (env.Store(Collection)).
+	// Collection is the resource's storage source: a Mongo collection name
+	// for the "mongo" backend, a table name for "postgres"/"sqlite".
 	Collection string `yaml:"collection"`
+	// Backend selects which Backend (see Registry) attaches this
+	// resource's Store/Adapter. Empty means "mongo", so every
+	// resources.yaml written before this field existed keeps working
+	// unchanged.
+	Backend string `yaml:"backend"`
 	// DisableSwagger and its snake_case alias default to false.
 	DisableSwagger      *bool  `yaml:"disableSwagger"`
 	DisableSwaggerAlias *bool  `yaml:"disable_swagger"`
@@ -107,7 +113,23 @@ func Parse(r io.Reader) (*File, error) {
 
 // Build compiles r into an rest.Resource backed by store (typically
 // env.Store(r.Collection)); the caller still does env.API.Register(res).
+//
+// Build is Mongo-only convenience kept for direct callers that already
+// have a rest.Store; a resources.yaml with a non-empty Backend goes
+// through File.Build instead, which resolves Store/Adapter through a
+// Registry.
 func (r Resource) Build(store rest.Store) (*rest.Resource, error) {
+	res, err := r.build()
+	if err != nil {
+		return nil, err
+	}
+	res.Store = store
+	return res, nil
+}
+
+// build compiles r into a *rest.Resource with neither Store nor Adapter
+// set -- the backend-agnostic part Build and File.Build share.
+func (r Resource) build() (*rest.Resource, error) {
 	if r.DisableSwagger != nil && r.DisableSwaggerAlias != nil && *r.DisableSwagger != *r.DisableSwaggerAlias {
 		return nil, fmt.Errorf("resource %q: disableSwagger and disable_swagger conflict", r.Name)
 	}
@@ -122,7 +144,6 @@ func (r Resource) Build(store rest.Store) (*rest.Resource, error) {
 	res := &rest.Resource{
 		Name:              r.Name,
 		ItemTitle:         r.ItemTitle,
-		Store:             store,
 		Schema:            schema,
 		AllowUnknown:      r.AllowUnknown,
 		ResourceMethods:   methods(r.ResourceMethods),
