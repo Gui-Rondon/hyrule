@@ -62,3 +62,37 @@ MONGO_TEST_URI='mongodb://localhost:27018/?directConnection=true' go test ./...
 
 O `testkit` dá ao teste seu próprio banco Mongo descartável — nada disso
 muda pra um módulo fora do `go.mod` do próprio Hyrule.
+
+
+## Piloto local opcional de consulta de tags
+
+`internal/taglookup` implementa somente `tags.lookup`, sem registrar rota ou mudar
+`main`. O executor exige serviço registrado, escopo fixo, identidade/política e
+auditoria obrigatória. Aceita apenas JSON limitado com `slug`, consulta uma tag
+habilitada e retorna `name`, `slug`, `enabled`. Recursos com `OnPreGet` são recusados;
+hooks de resposta continuam ativos e passam pela verificação de saída.
+
+`NewJWTIdentity` verifica tokens RS256 com chaves confiáveis por `kid`, issuer,
+audience, expiração e subject obrigatórios. A política exige scope exato
+`tags:read`, versão e recurso corretos. `WithToken` transporta credencial não
+confiável, sem conceder identidade. `LoadJWTIdentity(JWTFileConfig)` carrega a chave
+pública PEM provisionada pela aplicação; não há fallback de autenticação legado.
+
+`OpenSQLiteAudit(ctx, path)` oferece auditoria persistente local em arquivo separado
+dos dados, com WAL/FULL e append confirmado antes da resposta. Fechar o sink no
+shutdown. Arquivos novos usam 0600; retenção, backup, permissões existentes e
+proteção do volume pertencem ao deployment. O log não é imutável nem exactly-once.
+
+```sh
+go test -race ./internal/taglookup
+```
+
+Os testes usam SQLite e assinaturas RSA reais, sem serviços externos. O target
+raiz `make standalone-example-test` já os executa. A consulta tem orçamento de dois
+segundos mais até um segundo para auditoria independente, sem herdar tokens/claims.
+Dependências, readers e hooks precisam cooperar com cancelamento; o executor não
+isola código Go arbitrário. Não há servidor de ferramentas, transporte externo ou
+credenciais de produção incluídos.
+
+Ver o [contrato do piloto](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/read-pilot.md)
+para composição, limites e critérios de aceitação.

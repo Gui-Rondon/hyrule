@@ -61,3 +61,52 @@ MONGO_TEST_URI='mongodb://localhost:27018/?directConnection=true' go test ./...
 
 `testkit` gives the test its own throwaway Mongo database — nothing about
 it changes for a module outside Hyrule's own `go.mod`.
+
+## Optional local tags lookup pilot
+
+`internal/taglookup` is an application-local executor for the single read-only
+`tags.lookup` operation. It is not registered in `main` and exposes no endpoint.
+Construct it explicitly with an already registered tags `rest.Service`, a fixed
+resource scope, a trusted identity verifier, an authorization policy and a mandatory
+audit sink. Missing dependencies fail construction; missing identity/permission
+fails before any storage query. The existing REST authentication is unchanged.
+
+The executor accepts only `{"slug":"go"}` (strict bounded JSON), looks up one
+enabled tag and returns only `name`, `slug`, `enabled`. Resources with query-mutating
+`OnPreGet` hooks are rejected. Fetched hooks run before output checks. Dependencies
+and resource definitions must remain immutable and safe for concurrent use.
+Callbacks/readers must honor cancellation; this is not an arbitrary-code sandbox.
+Execution has a two-second budget plus up to one second for mandatory audit after
+cancellation. Classify failures with `errors.Is` and the package's sentinel errors.
+
+Run the SQLite-backed pilot tests without external services:
+
+```sh
+go test -race ./internal/taglookup
+```
+
+The root `make standalone-example-test` already includes these tests. The
+JWT integration tests use real RSA signatures and validate issuer, audience,
+expiration, subject and the exact tags:read scope. Production issuer/key
+configuration and external transport remain application work. A local persistent
+SQLite audit sink is included.
+See the [pilot contract](../../website/docs/reference/read-pilot.md) and its
+[Portuguese version](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/read-pilot.md).
+
+
+`taglookup.NewJWTIdentity` supplies `Verify` and `Authorize` callbacks for the
+executor. Configure explicit issuer, audience, resource scope and trusted public
+RSA keys by key ID. Pass an untrusted compact token with `taglookup.WithToken`;
+only successful signature/claim validation establishes identity. The integration
+accepts RS256 and the exact space-delimited `scope` permission, without legacy
+fallback, role inference, JWKS/network access or changes to REST authentication.
+See the pilot contract for composition and rotation details.
+
+
+`LoadJWTIdentity(JWTFileConfig)` loads a provisioned RSA public-key PEM while
+keeping issuer/audience/scope/key ID explicit. `OpenSQLiteAudit(ctx, path)` supplies
+a persistent audit callback (`sink.Write`) with WAL/FULL synchronization and
+independent committed appends. Use a separate file from resource data; close the
+sink on shutdown. New audit files use mode 0600; existing permissions, retention,
+backup and volume protection remain deployment concerns. The pilot contract
+includes startup composition and failure behavior. No credentials are bundled.

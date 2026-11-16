@@ -9,7 +9,47 @@ the minor version instead.
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve nested required fields in OpenAPI PATCH request schemas, including
+  object items in lists, while allowing omitted root fields. This aligns the
+  published contract with existing validation; runtime behavior and response
+  schemas remain unchanged.
+
 ### Added
+
+- Provision the local tags pilot from an explicit public-key PEM and persist
+  sanitized audit records in a separate SQLite file with WAL/FULL synchronization;
+  fail closed on audit errors and verify persistence/reopening and concurrency.
+
+- Integrate RS256 JWT identity and exact scope-based policy into the local tags
+  pilot, requiring pinned keys, issuer/audience, expiration and subject. Test real
+  signatures, rejected credentials and resource/action binding without changing
+  REST authentication or exposing an endpoint.
+
+- Add the application-local `tags.lookup` executor under the standalone example
+  with injected identity/policy, mandatory audit, bounded strict JSON input,
+  allowlisted output and SQLite-backed authorization/failure/concurrency tests.
+  No external endpoint, identity-provider integration or framework API is added.
+
+- Define the proposed `tags.lookup` read pilot, its explicit access policy and
+  bounded input/output, with a reproducible SQLite query rehearsal preceding the
+  local executor above. Authentication integration and MCP transport remain open.
+
+- Mark full-write and PATCH OpenAPI input objects with
+  `x-hyrule-custom-validation: true` when `Resource.Validate` is configured,
+  distinguishing document-wide server validation from per-field `Field.Check`.
+  This annotation does not execute callbacks or change runtime validation.
+
+- Record the Phase 6 contract study in English and Brazilian Portuguese: 21
+  SQLite-backed cases, six structural-schema/HTTP differences, a reproduction
+  harness, and evidence for keeping code generation deferred. The PATCH exporter
+  correction is recorded above; ADR acceptance remains open.
+
+- Document proposed ADR-0007–0012 and framework/platform Phases 6–11 in
+  English and Brazilian Portuguese, with a DX comparison and audit corrections.
+  Tool execution, discovery, MCP, code generation and RAG remain unimplemented
+  proposals; this documentation adds no runtime capability.
 
 - `resources.yaml`'s declarative resources now take an optional `backend:`
   field (`mongo`, the default, `postgres` or `sqlite`), dispatched through a

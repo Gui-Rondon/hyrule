@@ -15,5 +15,17 @@ and the [historical architecture roadmap](website/docs/reference/roadmap.md).
 | v1 gate | Mature contracts | Inventory reviewed, known breaks resolved, two compatible minors, migration guide and reproducible examples |
 
 SQLite remains experimental. Advanced SQLite queries, transactional outbox, dry
-run and YAML support are future work driven by real users. No SQLite production
+run are future work driven by real users. YAML resources already support
+`backend: sqlite` within the same experimental limits; see the
+[SQLite reference](website/docs/reference/sqlite.md). No SQLite production
 parity or v1 release date is promised.
+
+## Proposed DX and AI evolution
+
+[ADRs 0007–0012](website/docs/reference/architecture-decisions.md) and
+[Phases 6–11](website/docs/reference/roadmap.md) extend the framework/platform
+plan with contracts/DX, an authorized tool catalog, discovery, optional MCP and
+consumer-driven retrieval. The standalone example now contains a local `tags.lookup` executor prototype;
+external authentication/transport and the broader proposals remain open. Code
+generation and RAG require consumer evidence. They are independent of the v1 gates above.
+See the [review and audit corrections](website/docs/reference/ai-readiness.md).
