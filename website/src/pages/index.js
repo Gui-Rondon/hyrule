@@ -4,6 +4,7 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
+import CodeBlock from '@theme/CodeBlock';
 import styles from './index.module.css';
 
 function HomepageHeader() {
@@ -29,21 +30,58 @@ function HomepageHeader() {
             <Translate id="homepage.reference">Reference</Translate>
           </Link>
         </div>
-        <pre className={styles.codeTeaser}>
-          <code>{`resources:
-  - name: tags
-    collection: tags
-    schema:
-      name:
-        type: string
-        required: true
-      slug:
-        type: string
-        required: true
-        unique: true`}</code>
-        </pre>
+        <BackendExamples />
       </div>
     </header>
+  );
+}
+
+const resourceExample = (backend) => `resources:
+  - name: tags
+    collection: tags
+    backend: ${backend}
+    resource_methods: [get, post]
+    item_methods: [get, patch]
+    schema:
+      name: {type: string, required: true}
+      slug: {type: string, required: true, unique: true}`;
+
+function BackendExamples() {
+  return (
+    <section aria-labelledby="backend-examples">
+      <Heading as="h2" id={'backend-examples'}>
+        <Translate id="homepage.backends.title">One resource. Choose your backend.</Translate>
+      </Heading>
+      <p>
+        <Translate id="homepage.backends.intro">
+          Describe your API in YAML, configure the connection, and run hyrule-serve.
+        </Translate>
+      </p>
+      <div className={styles.backendGrid}>
+        <article className={styles.backendExample}>
+          <Heading as="h3">MongoDB</Heading>
+          <p><Translate id="homepage.backends.mongo.description">Collections are created on first write. Mongo is the default backend.</Translate></p>
+          <CodeBlock language="yaml" title="resources-mongo.yaml">{resourceExample('mongo')}</CodeBlock>
+          <CodeBlock language="bash">{`BACKEND=mongo CONFIG_FILE=config-mongo.json \\
+RESOURCES_FILE=resources-mongo.yaml PORT=8080 \\
+go run ./cmd/hyrule-serve`}</CodeBlock>
+          <Link className="button button--secondary" to="/docs/reference/yaml-backends#mongo">
+            <Translate id="homepage.backends.mongo.cta">Configure Mongo →</Translate>
+          </Link>
+        </article>
+        <article className={styles.backendExample}>
+          <Heading as="h3">Postgres</Heading>
+          <p><Translate id="homepage.backends.postgres.description">Use a JSONB table with UUIDs. Apply the table migration before starting.</Translate></p>
+          <CodeBlock language="yaml" title="resources-postgres.yaml">{resourceExample('postgres')}</CodeBlock>
+          <CodeBlock language="bash">{`BACKEND=postgres CONFIG_FILE=config-postgres.json \\
+RESOURCES_FILE=resources-postgres.yaml PORT=8080 \\
+go run ./cmd/hyrule-serve`}</CodeBlock>
+          <Link className="button button--secondary" to="/docs/reference/yaml-backends#postgres">
+            <Translate id="homepage.backends.postgres.cta">Configure Postgres →</Translate>
+          </Link>
+        </article>
+      </div>
+    </section>
   );
 }
 
