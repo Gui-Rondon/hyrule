@@ -16,7 +16,7 @@ From the project root, with `services/articles/` created ([Creating
 services](./creating-services.md)):
 
 ```bash
-make env-up                 # standard repo compose: Mongo :27018, Postgres :5433, Pub/Sub :8085, Redis :6380
+make env-up                 # generated project: Mongo :27017
 make build SERVICE=articles
 make run SERVICE=articles   # :8080, auth disabled
 ```

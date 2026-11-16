@@ -4,9 +4,9 @@ sidebar_position: 3
 
 # Outbox transacional com Mongo e Postgres
 
-Ambos commitam a escrita do recurso e o evento pendente na **mesma transação
+Ambos confirmam a escrita do recurso e o evento pendente na **mesma transação
 local do banco**. O relay publica após commit, pelo menos uma vez. Consumidores
-deduplicam por `outbox.AttrEventID` (`event_id`); perda de acknowledgement pode
+deduplicam por `outbox.AttrEventID` (`event_id`); perda de confirmação de recebimento pode
 publicar novamente. Não há transação distribuída com Pub/Sub, Redis ou outro
 serviço.
 
@@ -22,9 +22,9 @@ if err != nil { return err }
 env.AddCheck(check)
 ```
 
-Use transação em replica set. `outbox.New` define o checker transacional. `relay.Run` garante os índices
+Use transação em replica set. `outbox.New` define o verificador transacional. `relay.Run` garante os índices
 pending/TTL; quem chama Drain diretamente deve executar
-`relay.EnsureIndexes(ctx)` no setup. `Add` rejeita contexto fora da
+`relay.EnsureIndexes(ctx)` no código de inicialização. `Add` rejeita contexto fora da
 transação com `outbox.ErrNoTransaction`. `AllowNoTransaction` serve para
 standalone de desenvolvimento e elimina atomicidade. O relay Mongo usa lease
 de líder único e ordena pendentes por esse relay; falhas têm backoff e retry
@@ -47,7 +47,7 @@ env.AddCheck(check)
 Use o **mesmo pool** do adapter e de `env.PostgresTx`. `Add` usa a transação do
 contexto, rejeita contexto ausente/de outro pool com o mesmo
 `outbox.ErrNoTransaction` e não inicia outra transação silenciosamente.
-`EnsureTable` é DDL de setup, não requisição do recurso nem motor de migrations;
+`EnsureTable` é DDL de código de inicialização, não requisição do recurso nem motor de migrações;
 gerencie explicitamente mudanças incompatíveis em instalações existentes.
 
 O relay Postgres usa `FOR UPDATE SKIP LOCKED`. Vários workers/processos podem
@@ -63,9 +63,9 @@ Mede a idade do backlog pendente; linhas mortas Postgres são excluídas.
 Monitore/opere o backlog morto separadamente: pending verde não prova ausência
 de eventos que falharam.
 
-## Hooks e publishers compartilhados
+## Hooks e publicadores compartilhados
 
-O negócio pode anexar um evento antes da escrita:
+A lógica de negócio pode associar um evento antes da escrita:
 
 ```go
 ctx = events.With(ctx, outbox.Event{Topic: "items-changed", Type: "item.changed", Key: id, Body: payload})
@@ -89,10 +89,10 @@ involuntariamente pelas duas estratégias de hooks.
 `publisher` implementa `outbox.Publisher`; `outbox.PubSub` e `outbox.Dispatcher`
 funcionam com ambos. Provisione tópicos/subscriptions separadamente. Destinos
 locais também executam **após commit**: atualização Redis não é atômica com a
-escrita original Mongo/Postgres. Falhas locais são retentadas pelo relay;
+escrita original Mongo/Postgres. Falhas locais são executadas novamente pelo relay;
 handlers precisam de idempotência como consumidores remotos.
 
 Hooks anteriores ficam na transação de banco. `env.Go` suprime relays em dry
 run; dados e eventos pendentes sofrem rollback juntos. Build sem `Deps.Start`
 não inicia relays: testes chamam Drain ou executam worker ao verificar entrega.
-[Setup](backends.md), [dry run](dry-run.md) e [testes](testkit.md) detalham o entorno.
+[Configuração](backends.md), [dry run](dry-run.md) e [testes](testkit.md) detalham o entorno.

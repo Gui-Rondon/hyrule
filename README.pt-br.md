@@ -30,17 +30,18 @@ lógica própria — e ganhe uma API REST rodando com:
 Por baixo mantém o contrato HTTP do Eve (Python) (`rest`), de onde o
 projeto migrou.
 
-📖 **Documentação completa: https://gui-rondon.github.io/hyrule/** — a
-seção Reference já está em português
-([`/pt-BR/docs/reference/...`](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture));
-o guia Learn (passo a passo) ainda só existe em inglês.
+📖 **Documentação em português brasileiro: https://gui-rondon.github.io/hyrule/pt-BR/** —
+[Guia](https://gui-rondon.github.io/hyrule/pt-BR/docs/learn/intro) traz o passo a passo;
+[Plataforma](https://gui-rondon.github.io/hyrule/pt-BR/docs/platform/intro) mostra como criar projetos e serviços;
+a [Referência](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture)
+reúne os detalhes técnicos. As três seções também estão disponíveis em inglês.
 
 ## Documentação Swagger automática
 
-O Swagger vem habilitado por padrão para todo resource Go/YAML: acesse
+O Swagger vem habilitado por padrão para todo recurso Go/YAML: acesse
 `/api/docs` (ou `/swagger`), com OpenAPI 3.1 em `/api/openapi.json`. Use
 `DisableSwagger: true` em Go ou `disableSwagger: true` em YAML para ocultar
-um resource da documentação, mantendo suas rotas ativas. A documentação é
+um recurso da documentação, mantendo suas rotas ativas. A documentação é
 pública; operações protegidas exigem token. Veja a [referência Swagger](website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/swagger.md).
 
 ## Integração Mongo e Postgres
@@ -128,7 +129,7 @@ Veja [o runbook do exemplo](examples/blog-apis/README.pt-br.md) para entrega
 Pub/Sub e rollout do schema. O [guia dos backends](website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/backends.md)
 mostra também serviço Postgres mínimo sem a dependência Pub/Sub do exemplo.
 
-## Platform: montando um projeto com múltiplos serviços
+## Plataforma: montando um projeto com múltiplos serviços
 
 ```bash
 go install github.com/Gui-Rondon/hyrule/cmd/hyrule@main
@@ -149,26 +150,28 @@ projeto gerado tem seu próprio `go.mod`, `Makefile` e
 `docker-compose.yml`, no mesmo formato deste repositório; os
 subcomandos `dev`/`build --affected`/`deploy` são trabalho futuro (ver
 o [roadmap](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/roadmap)).
-O [guia da Platform](https://gui-rondon.github.io/hyrule/docs/platform/intro)
-(em inglês, como o resto do Learn) passa por isso passo a passo,
+O [guia da Plataforma](https://gui-rondon.github.io/hyrule/pt-BR/docs/platform/intro)
+apresenta o passo a passo,
 incluindo copiar o padrão de CI de build afetado e deploy do
 `examples/blog-apis` pra um projeto gerado.
 
 ## Documentação
 
-A documentação completa está em **https://gui-rondon.github.io/hyrule/**:
+A documentação completa está em **https://gui-rondon.github.io/hyrule/pt-BR/**:
 
 | | |
 |---|---|
-| [Reference → Store](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/store) | a interface `Store`: o que ela desacopla (e o que não desacopla ainda) |
-| [Reference → Outbox](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/outbox) | outbox transacional, e o primitivo condicional que dispara evento a partir do próprio write |
-| [Reference → resources.yaml](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/resources-yaml) | referência completa do YAML de recurso |
-| [Reference → Dry run](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/dry-run) | rodar em dry run: escreve tudo, mas a transação sempre reverte |
-| [Reference → Testkit](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/testkit) | testar um recurso (Mongo isolado, cliente HTTP, tokens) |
-| [Reference → Architecture](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture) | a camada `services → behaviors → rest → platform` e por que ela existe |
-| [Reference → Querying](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/querying) | a linguagem de query `where=`/`sort`/`projection` e como ela é interpretada |
-| [Reference → Adapter](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/adapter) | `rest.Adapter`, a costura que uma resource com Postgres (`restpostgres`) registra em vez de `Store` |
-| [Reference → Backend Postgres (histórico)](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/postgres-rfc) | o registro de design original do backend Postgres, superado pela referência do Adapter acima |
+| [Guia](https://gui-rondon.github.io/hyrule/pt-BR/docs/learn/intro) | guia passo a passo com os exemplos de `blog-apis` |
+| [Plataforma](https://gui-rondon.github.io/hyrule/pt-BR/docs/platform/intro) | criação de projetos e serviços, desenvolvimento local e CI/implantação |
+| [Referência → Store](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/store) | a interface `Store`: o que ela desacopla (e o que não desacopla ainda) |
+| [Referência → Outbox](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/outbox) | outbox transacional, e o primitivo condicional que dispara evento a partir da própria gravação |
+| [Referência → resources.yaml](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/resources-yaml) | referência completa do YAML de recurso |
+| [Referência → Dry run](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/dry-run) | rodar em dry run: escreve tudo, mas a transação sempre reverte |
+| [Referência → Testkit](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/testkit) | testar um recurso (Mongo isolado, cliente HTTP, tokens) |
+| [Referência → Arquitetura](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture) | a camada `services → behaviors → rest → platform` e por que ela existe |
+| [Referência → Consultas](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/querying) | a linguagem de consulta `where=`/`sort`/`projection` e como ela é interpretada |
+| [Referência → Adapter](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/adapter) | `rest.Adapter`, o ponto de integração que um recurso com Postgres (`restpostgres`) registra em vez de `Store` |
+| [Referência → Backend Postgres (histórico)](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/postgres-rfc) | o registro de design original do backend Postgres, superado pela referência do Adapter acima |
 
 ## Estrutura
 
@@ -182,7 +185,7 @@ A documentação completa está em **https://gui-rondon.github.io/hyrule/**:
     testkit/                       Mongo isolado por teste, ES gravador, tokens
     internal/domain/               o único pacote que continua interno (geração de slug)
     cmd/hyrule-serve/              binário genérico: registra os recursos de um YAML, sem Go de domínio
-    cmd/hyrule/                    o CLI da Platform: hyrule new, hyrule service create
+    cmd/hyrule/                    a CLI da Plataforma: hyrule new, hyrule service create
     ci/                            ci/affected (seleção de serviços afetados por um diff)
     examples/blog-apis/            uso de exemplo do framework (ver o README desse diretório)
     examples/standalone-tags-api/  um módulo Go externo (go.mod próprio) dependendo deste

@@ -12,8 +12,8 @@ certifica deploy/desempenho de produção. O PR continua contra
 
 ## Comparação com main
 
-Revisados bootstrap/ciclo de dependências, seam Store/Adapter, IDs/ETags/CAS,
-classificação de erros, números/schema, transações/outbox, opt-ins de índices/
+Revisados bootstrap/ciclo de dependências, ponto de integração Store/Adapter, IDs/ETags/CAS,
+classificação de erros, números/schema, transações/outbox, opções de ativação explícita de índices/
 consultas, migrations/gates HA manuais, APIs públicas e instruções EN/PT.
 Comparamos histórico de três pontos e tips diretamente: main tem o commit
 independente de e2e `048bc22`; olhar só commits acrescentados à integração não
@@ -27,7 +27,7 @@ conflitos add/add**, sem mudar branch ou checkout:
 
 As versões da integração preservam os caminhos Mongo e acrescentam comments
 Postgres, CAS, provisionamento/cleanup de subscription Pub/Sub isolada,
-migrations explícitas e validador check-results. Num futuro merge autorizado,
+migrações explícitas e validador check-results. Num futuro merge autorizado,
 compare novamente ambos os tips e preserve essas adições junto dos cenários
 Mongo originais de main. Não resolva descartando um backend. Após resolução,
 rode suíte completa e JMeter/PubSub de 42 amostras na **árvore resolvida**;
@@ -39,17 +39,17 @@ conflitos após mudanças em qualquer branch.
 
 | Achado | Resolução e validação |
 |---|---|
-| README/Learn/referências ainda chamavam outbox ou dry run de Mongo-only; ADR-0003/roadmap diziam que não existia outbox Postgres | Guia paralelo Mongo/Postgres e atualização EN/PT de outbox, dry run, testes, arquitetura e ADR. Decisões históricas continuam identificadas como histórico. |
+| README/Learn/referências ainda chamavam outbox ou dry run de exclusivo do Mongo; ADR-0003/roadmap diziam que não existia outbox Postgres | Guia paralelo Mongo/Postgres e atualização EN/PT de outbox, dry run, testes, arquitetura e ADR. Decisões históricas continuam identificadas como histórico. |
 | Texto de agendamento Redis implicava transação compartilhada Mongo/Redis | Explicitar commit local do outbox e entrega assíncrona por relay; Redis/PubSub têm efeitos externos retentáveis, sem transação distribuída. |
 | Spec.Backend desconhecido selecionava Mongo silenciosamente e podia causar panic com dependências erradas | Run/Build rejeitam antes de configuração/auth/conexão. Teste falhou antes da correção; Mongo padrão e Postgres explícito são exercitados por CRUD HTTP real. |
 | Configurações de duration do pool tinham cobertura incompleta de adoção | Asserts no pool real cobrem lifetime, idle, health period e connect timeout; tabela de rejeição cobre todas as opções expostas antes de conectar. |
 | Comentário Spec.DefaultDB sugeria fallback em URI Postgres sem banco | Documentada resolução real do pgx e banco explícito nas URIs de exemplo; comportamento de conexão existente preservado. |
-| Refactor do bootstrap mudou a ordem de defer de main: Mongo podia desconectar antes do cleanup dos workers | Cancelar/aguardar workers Mongo antes de Disconnect, como em Postgres. Teste real com falha de Setup nos dois backends reproduz o erro Mongo anterior e verifica banco disponível durante cleanup. |
+| Refactor do bootstrap mudou a ordem de defer de main: Mongo podia desconectar antes do limpeza dos workers | Cancelar/aguardar workers Mongo antes de Disconnect, como em Postgres. Teste real com falha de Configuração nos dois backends reproduz o erro Mongo anterior e verifica banco disponível durante limpeza. |
 | Módulo externo standalone não tinha checksums pgx exigidos pelo novo grafo de dependências do bootstrap | Atualizar go.mod/go.sum com go mod tidy e repetir o teste Mongo real; versões de dependências da raiz inalteradas. |
 
 ## Compatibilidade e migração
 
-- `Resource.Store` permanece tipado em BSON; quando Adapter é nil, o wrapper
+- `Resource.Store` permanece tipado em BSON; quando Adapter é nil, o adaptador
   Mongo interno é criado. Mongo continua `app.BackendMongo`, valor zero (`""`).
   Use essa constante: `Backend("mongo")`, erros de digitação e valores
   desconhecidos agora são rejeitados.
@@ -76,19 +76,19 @@ opts := rest.WriteOptions{IfMatch: match}
 - IDs/ETags são opacos: Mongo usa ObjectID/hash de conteúdo; Postgres usa
   UUID/version. Parsing HTTP de If-Match strong/lista/wildcard é explícito;
   weak nunca strong-match. Mongo mantém conflito wildcard de tentativa única
-  e labels de retry do driver. Postgres retenta CAS só no PATCH wildcard,
+  e labels de retry do driver. Postgres tenta novamente CAS só no PATCH wildcard,
   dentro dos orçamentos configurados de tempo/tentativas.
 - PATCH Postgres segue RFC 7396 (`null` remove chave); Mongo mantém deep merge/
   null do Eve. Postgres verifica campos obrigatórios após merge;
-  RequireMergePatchContentType segue opt-in explícito. Inteiros preservam
+  RequireMergePatchContentType segue opção de ativação explícita explícito. Inteiros preservam
   precisão int64 e rejeitam overflow; isso não iguala toda representação
   numérica/armazenamento nos bancos.
 - Datasource Filter/DefaultSort/Projection, lookup adicional BSON e YAML/
-  scaffolding permanecem específicos do Mongo. Tipos do schema Postgres
+  geração da estrutura inicial permanecem específicos do Mongo. Tipos do schema Postgres
   orientam o compilador; nested sort continua textual. Auth valida JWTs,
   sem sessão de usuário ou estado de refresh token.
 
-## Opt-ins e limites aceitos
+## Opções e limites aceitos
 
 Veja a [tabela de adoção](backends.md#adote-os-opt-ins-postgres-explicitamente)
 e os [detalhes do adapter](adapter.md). Nenhum recurso de produção é ativado
@@ -100,8 +100,8 @@ Limites: parâmetros de campo no generic podem impedir índice de expressão/
 parcial; offsets profundos podem exigir Sort. Presença sparse é explícita,
 pois a guarda implícita regrediu UUID. Índice tipado pode rejeitar casts
 existentes/futuros, exige nome novo e recusa Unique/Sparse/datetime typed.
-Índices com mesmo nome não têm definição comparada. Datetime seguro é opt-in
-por adapter e mantém normalização/NULL do helper. Custom custa planejamento
+Índices com mesmo nome não têm definição comparada. Datetime seguro é opção de ativação explícita
+por adapter e mantém normalização/NULL do utilitário. Custom custa planejamento
 no pool inteiro. Nenhum desses mecanismos garante latência de produção.
 
 Ambos os outboxes entregam pelo menos uma vez. Mongo usa lease de líder e
@@ -109,32 +109,32 @@ retry sem limite; Postgres tem SKIP LOCKED, dead_at/replay e não garante ordem
 por Key entre workers. Retenção e monitoramento de mortos Postgres exigem
 política operacional. Dry run reverte escritas de negócio transacionais,
 não chamadas diretas ao pool, DDL, efeitos externos ou alocação de sequences.
-Migrations são explícitas: startup verifica compatibilidade do schema comments,
+Migrations são explícitas: processo de inicialização verifica compatibilidade do schema comments,
 mas não o avança automaticamente.
 
 Permanece uma limitação de validação: o teste existente de conflito real usa
 orçamento de 60ms e ocasionalmente recebe 503 sem RetryExhaustedReason com
-log de query timeout; a causa exata não é corrigida nesta revisão. Falhou numa
+log de consulta timeout; a causa exata não é corrigida nesta revisão. Falhou numa
 execução completa desta revisão; a ocorrência é registrada, sem atribuí-la
 à correção de shutdown. Distinguir aprovação isolada/reexecução de uma correção
 da classificação de retry. Esta consolidação não altera esse contrato.
 
-## Evidências reproduzíveis dos gates
+## Evidências reproduzíveis dos testes de validação
 
 Todos os bancos são reais. Gates de planos usam 20 mil linhas e scans ligados.
 Contagens descrevem fixtures verificadas, não todo índice/query nem benchmark
 de capacidade. Observações auto/generic não devem ser generalizadas.
 
-| Gate | Evidência esperada | Artefato local |
+| Verificação | Evidência esperada | Artefato local |
 |---|---|---|
 | postgres-ha-test | Topologia, replay em réplicas e WAL archive | Saída Go; laboratório manual/local |
 | postgres-ha-migrations-test | Expand/backfill/contract, dirty/version e HTTP real | Saída Go; schemas isolados |
 | postgres-ha-explain-test | Inventário A6 observacional com 30 planos e controles de catálogo | .local/postgres-explain/ |
-| postgres-ha-where-test | 30 planos; Index Cond auto/custom; helper datetime generic uma vez por linha | .local/postgres-explain/ |
+| postgres-ha-where-test | 30 planos; Index Cond auto/custom; utilitário datetime generic uma vez por linha | .local/postgres-explain/ |
 | postgres-ha-id-sort-test | 18 planos, 12 checks PK sem Sort; offset profundo observacional | .local/postgres-id-sort/ |
 | postgres-ha-sparse-test | 30 planos, 2 checks de presença explícita Index Cond | .local/postgres-explain/ |
 | postgres-ha-typed-sort-test | 48 planos, 24 checks auto/custom sem Sort, paridade completa | .local/postgres-typed-sort/ |
-| postgres-ha-plan-policy-test | 12 planos do statement realmente em cache; URI em duas conexões/transações | .local/postgres-plan-policy/ |
+| postgres-ha-plan-policy-test | 12 planos do instrução SQL realmente em cache; URI em duas conexões/transações | .local/postgres-plan-policy/ |
 | postgres-ha-datetime-sort-test | 48 planos, 24 checks; padrão estrito e modo seguro explícito, dois fusos | .local/postgres-datetime-sort/ |
 
 ```sh
@@ -159,25 +159,25 @@ basta se a matriz estiver incompleta. Schema é removido antes da publicação
 completa. A cobertura normal exclui caminhos HA manuais desabilitados e
 testkit; percentual de cobertura e número de planos medem coisas diferentes.
 
-Failover e PITR foram validados no trabalho local anterior A2/A3; harness e
-runbooks estão em infra/postgres-ha/. São evidências históricas, não reexecução
-pelos gates de rotina desta consolidação. Comandos matam um primário ou criam
+Failover e PITR foram validados no trabalho local anterior A2/A3; ambiente de testes e
+guias operacionais estão em infra/postgres-ha/. São evidências históricas, não reexecução
+pelos testes de validação de rotina desta consolidação. Comandos matam um primário ou criam
 sandbox de restore e exigem execução manual deliberada. Não há provisionamento/
 execução HA no GitHub Actions; 5434 pertence a outro projeto local. O
-[runbook HA](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/infra/postgres-ha/README.md)
+[guia operacional HA](https://github.com/Gui-Rondon/hyrule/blob/main/infra/postgres-ha/README.md)
 registra escopo/limites, sem ser projeto de deploy de produção.
 
 ## Execução desta consolidação
 
 Passaram nesta consolidação: suíte completa com race (`-count=1 -p=1`), vet,
-teste Mongo do módulo externo, topologia, migrations, sete relatórios completos
+teste Mongo do módulo externo, topologia, migrações, sete relatórios completos
 (**216 planos**), compilação dos programas Mongo/Postgres da documentação e
 JMeter/PubSub (**42 amostras, zero falhas**). Cobertura subiu de **85,5% para
-85,9%** (gate 85%); Connect foi de 73,9% a 95,7%, e Env.Wrap/finishBuild
+85,9%** (teste de validação 85%); Connect foi de 73,9% a 95,7%, e Env.Wrap/finishBuild
 atingiram 100% no perfil medido. O build EN/PT passou.
 
-O [snapshot versionado](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/infra/postgres-ha/evidence/2026-11-15-consolidation.json)
-registra contagens por gate, observações por modo e hashes dos relatórios locais.
+O [snapshot versionado](https://github.com/Gui-Rondon/hyrule/blob/main/infra/postgres-ha/evidence/2026-11-15-consolidation.json)
+registra contagens por teste de validação, observações por modo e hashes dos relatórios locais.
 Failover/PITR estão marcados como históricos, fora destas novas execuções.
 
 Artefatos brutos ignorados ficam em .local/backend-consolidation/; o registro
@@ -199,18 +199,18 @@ A limitação de retry descrita acima pertence à execução histórica do PR #4
 Este acompanhamento reproduz o timeout durante uma leitura real: a classificação
 HTTP 503 descartava a causa de contexto antes de identificar `max_duration`.
 Agora a causa permanece acessível por `errors.Is` e o erro HTTP por `errors.As`;
-status e mensagem HTTP são preservados. Um timeout independente de query não
+status e mensagem HTTP são preservados. Um timeout independente de consulta não
 é reclassificado como esgotamento de retry. Há regressão com pgx real e
 30 repetições com race do caso novo e do conflito existente.
 
-O gate padrão agora exige 95% exclusivamente do framework em ambos os backends,
+O teste de validação padrão agora exige 95% exclusivamente do framework em ambos os backends,
 com todos os testes normais executados. Consulte [testkit](./testkit.md) para
 o escopo e o relatório agregado separado. Os 85,9% acima são evidência histórica
-do escopo agregado anterior, não o baseline comparável do novo gate.
+do escopo agregado anterior, não o baseline comparável do novo teste de validação.
 
 Cobertura deste acompanhamento: **95,1% framework** (baseline no mesmo escopo
-**92,6%**), **88,0% agregado**. Gate do framework: 95%; gate agregado separado: 85%.
+**92,6%**), **88,0% agregado**. Gate do framework: 95%; teste de validação agregado separado: 85%.
 
 Validação final: race, vet, módulo externo, topologia/migrations, 216 planos,
 JMeter/PubSub (42 amostras, zero falhas) e build EN/PT aprovados. Zero schemas
-temporários restantes. Consulte o [snapshot deste acompanhamento](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/infra/postgres-ha/evidence/2026-11-15-retry-coverage.json).
+temporários restantes. Consulte o [snapshot deste acompanhamento](https://github.com/Gui-Rondon/hyrule/blob/main/infra/postgres-ha/evidence/2026-11-15-retry-coverage.json).

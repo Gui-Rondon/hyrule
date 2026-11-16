@@ -105,7 +105,7 @@ service builds, which is what the next page digs into.
 
 ## Postgres quickstart
 
-Follow the [comments-api run commands](https://github.com/Gui-Rondon/hyrule/blob/integration/postgres-portability/examples/blog-apis/README.md#comments-api-postgres--pubsub):
+Follow the [comments-api run commands](https://github.com/Gui-Rondon/hyrule/blob/main/examples/blog-apis/README.md#comments-api-postgres--pubsub):
 start the same local compose, provision the Pub/Sub topic, run
 `make comments-migrate MIGRATE_ARGS='-action prepare'` with an explicit
 POSTGRES_CONNECTION_STRING, then build/run comments-api. POST a comment and

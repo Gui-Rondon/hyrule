@@ -34,6 +34,7 @@ const config = {
   projectName: 'hyrule',
 
   onBrokenLinks: 'throw',
+  onBrokenAnchors: 'throw',
   markdown: {
     hooks: {
       onBrokenMarkdownLinks: 'throw',
@@ -45,7 +46,7 @@ const config = {
     locales: ['en', 'pt-BR'],
     localeConfigs: {
       en: {label: 'English'},
-      'pt-BR': {label: 'Português'},
+      'pt-BR': {label: 'Português (Brasil)'},
     },
   },
 
@@ -142,7 +143,7 @@ const config = {
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} Guilherme Rondon. MIT licensed.`,
+        copyright: `© ${new Date().getFullYear()} Guilherme Rondon · MIT`,
       },
       prism: {
         // Same dark forest/charcoal theme in both modes: code blocks are

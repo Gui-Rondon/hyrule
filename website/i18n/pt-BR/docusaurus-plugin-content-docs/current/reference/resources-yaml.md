@@ -2,7 +2,7 @@
 sidebar_position: 4
 ---
 
-# Resource via YAML
+# Recursos em YAML
 
 `declarative` carrega um ou mais recursos de um arquivo YAML;
 `cmd/hyrule-serve` os registra sem nenhuma linha de Go específica do
@@ -21,7 +21,7 @@ RESOURCES_FILE=resources.yaml PORT=8080 go run ./cmd/hyrule-serve
 Esse `resources.yaml` é o equivalente em YAML de
 `examples/blog-apis/services/tags-api` (hoje escrito à mão em Go) —
 toda requisição/resposta abaixo é saída real de rodar isso, não
-inventada pra esta documentação:
+inventada para esta documentação:
 
 ```yaml
 resources:
@@ -113,7 +113,7 @@ curl -X POST localhost:8080/tags -H 'Content-Type: application/json' \
 Listar combina `where=` (ver [`querying.md`](querying.md)) com
 `pagination` — `_links` sempre aparece, mas `_meta` (`page`/
 `max_results`/`total`) só aparece quando a paginação não está
-`disabled`. Mais uma tag antes, essa desabilitada, pra ter algo pro
+`disabled`. Mais uma tag antes, essa desabilitada, para ter algo para o
 `where=` de fato restringir:
 
 ```bash
@@ -138,7 +138,7 @@ curl -G localhost:8080/tags --data-urlencode 'where={"enabled":false}'
 resources:
   - name: tags            # obrigatório; vira Resource.Name e Resource.URL
     collection: tags       # coleção no Mongo (env.Store(collection))
-    item_title: tag        # opcional; default é o nome sem "s" no final
+    item_title: tag        # opcional; o padrão é o nome sem "s" no final
 
     schema:
       <campo>:
@@ -185,15 +185,15 @@ Nomes de método aceitam qualquer caixa (`get` ou `GET`).
 `resource_methods`/`item_methods` decidem quais métodos HTTP existem
 de fato (um não listado é `405`); `public_methods`/
 `public_item_methods` só restringem mais ainda, de "precisa de token"
-pra "não precisa" — um método em `public_methods` mas fora de
-`resource_methods` continua `405`, nunca um buraco público pra algo
+para "não precisa" — um método em `public_methods` mas fora de
+`resource_methods` continua `405`, nunca um buraco público para algo
 não listado. No exemplo acima, `GET` é público nas duas rotas,
 `POST`/`PATCH`/`PUT` sempre precisam de token.
 
 ## O que não tem equivalente em YAML
 
 Dois campos de `rest.Field`/`Resource` carregam código Go arbitrário,
-não dado — e por isso não dá pra expressá-los aqui:
+não dado — e por isso não dá para expressá-los aqui:
 
 - **`Field.Check`**: validação personalizada de um campo (ex.: checar
   contra outra API).
@@ -205,12 +205,12 @@ os `Hooks` (`OnInsert`, `OnUpdate`, outbox, busca, auditoria...) também
 ficam de fora do loader — um recurso que precisa de qualquer um desses
 continua em Go. Um recurso construído a partir do YAML é um
 `*rest.Resource` normal, então nada impede anexar hooks nele em Go
-antes de registrar (`declarative/declarative_test.go`'s
-`TestBuiltResourceComposesWithConditionalOutbox` faz exatamente isso).
+antes de registrar (`TestBuiltResourceComposesWithConditionalOutbox`, em
+`declarative/declarative_test.go`, faz exatamente isso).
 
 ## Visibilidade no Swagger
 
 O Swagger vem habilitado por padrão. Configure `disableSwagger: true`
-(alias: `disable_swagger`) no resource para ocultar somente sua documentação.
-Omitido ou `false` inclui o resource. Aliases conflitantes impedem a construção.
+(alias: `disable_swagger`) no recurso para ocultar somente sua documentação.
+Omitido ou `false` inclui o recurso. Aliases conflitantes impedem a construção.
 Veja a [documentação Swagger automática](swagger.md).

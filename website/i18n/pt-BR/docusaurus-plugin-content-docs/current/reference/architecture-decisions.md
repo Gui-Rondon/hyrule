@@ -10,7 +10,7 @@ partir de suposições). A linha **Status** de cada ADR acompanha se a
 decisão foi de fato implementada e validada, separadamente de se a
 decisão em si foi aceita — aceitar uma direção e construí-la são dois
 fatos diferentes, e esta página não confunde os dois. Ver o
-[`roadmap.md`](roadmap.md) pra como as fases que implementam essas
+[`roadmap.md`](roadmap.md) para entender como as fases que implementam essas
 decisões se sequenciam entre si.
 
 ## ADR-0001 — Superfície pública do framework
@@ -31,14 +31,14 @@ badge do pkg.go.dev no README sugira.
 github.com/Gui-Rondon/hyrule` e construir nada com isso.
 
 **Alternativas consideradas.**
-- Mover os pacotes do núcleo pra um novo diretório `pkg/` — rejeitada;
+- Mover os pacotes do núcleo para um novo diretório `pkg/` — rejeitada;
   a própria regra do projeto contra criar `pkg/` "apenas por
   convenção" se aplica, e o Go não exige isso.
 - Promover exatamente os pacotes que um consumidor externo precisa —
   `rest`, `app`, `outbox`, `testkit`, `declarative`, `behaviors/*`, e
   os adapters de `platform/*` que um consumidor instancia direto
   (`mongodb`, `postgres`, `redis`, `pubsub`, `auth`, `config`,
-  `health`, `metrics`, `server`) — de `internal/` pra raiz do módulo,
+  `health`, `metrics`, `server`) — de `internal/` para raiz do módulo,
   com os mesmos nomes de pacote.
 - Manter tudo interno e construir um pacote público separado de "SDK"
   que reexporta um subconjunto curado — rejeitada; dobra a manutenção
@@ -46,34 +46,34 @@ github.com/Gui-Rondon/hyrule` e construir nada com isso.
   paralela que o projeto está tentando evitar.
 
 **Decisão.** A segunda opção. `domain/slug` fica interno até que
-surja uma necessidade externa real pra ele. Este ADR registra o
+surja uma necessidade externa real para ele. Este ADR registra o
 destino; mover o código é Fase 1, não esta rodada.
 
 **Consequências.** `cmd/hyrule-serve` e `examples/blog-apis` vão
 precisar dos caminhos de import atualizados quando a Fase 1 executar.
-A superfície de compatibilidade do módulo cresce de zero pra tudo que
+A superfície de compatibilidade do módulo cresce de zero para tudo que
 é exportado por esses pacotes.
 
 **Riscos.** Diff mecânico grande, tocando todo arquivo dos pacotes
 movidos; risco de exportar algo de cada pacote que devia ter ficado
 como detalhe de implementação, sem uma passada deliberada por pacote
-pra decidir o que é de fato público.
+para decidir o que é de fato público.
 
 **Critério de validação.** Um módulo Go de rascunho separado (seu
 próprio `go.mod`) consegue `go get github.com/Gui-Rondon/hyrule` e
-construir um resource mínimo usando `rest`, `app`, `declarative` e
+construir um recurso mínimo usando `rest`, `app`, `declarative` e
 `platform/mongodb`, sem importar nada de dentro de `internal/`.
 
 ## ADR-0002 — Portabilidade do contrato `rest.Store`
 
-**Status:** Aceito, depois revisado (ver Revisão abaixo) — o rework
-com generics continua adiado, exatamente como decidido; um seam
+**Status:** Aceito, depois revisado (ver Revisão abaixo) — o redesenho
+com generics continua adiado, exatamente como decidido; um ponto de integração
 diferente (`Adapter`) é o que de fato foi construído.
 
 **Implementado em:** não se aplica na época em que este ADR foi
-escrito (a decisão era adiar o rework com generics, ver Decisão
+escrito (a decisão era adiar o redesenho com generics, ver Decisão
 abaixo); o `rest.Store` continuou inalterado no PR #6, conforme
-decidido. Ver Revisão pro que foi implementado em vez disso, a partir
+decidido. Ver Revisão para o que foi implementado em vez disso, a partir
 do PR #10.
 
 **Contexto.** Os métodos de `rest.Store` são tipados em
@@ -84,7 +84,7 @@ do driver Mongo direto (`mongo.ErrNoDocuments`,
 decidiu, de forma independente, que `postgres.Store` não tenta
 implementar `rest.Store`.
 
-**Problema.** Pra promoção pública do ADR-0001 significar algo pro
+**Problema.** Pra promoção pública do ADR-0001 significar algo para o
 caminho do Postgres, alguma coisa precisa impedir que o framework
 assuma silenciosamente erros no formato do Mongo quando um consumidor
 puder de fato escolher um backend.
@@ -93,51 +93,51 @@ puder de fato escolher um backend.
 - Generificar `rest.Store`/`Service`/`Resource` com generics do Go
   (`Store[F, U any]`) — o esforço maior que `postgres-rfc.md` nomeia,
   tocando a maior parte de `internal/rest/service.go`.
-- Contornar `rest` completamente pros resources com Postgres — o
+- Contornar `rest` completamente para os recursos com Postgres — o
   caminho de menor custo que `postgres-rfc.md` já recomenda, o mesmo
   padrão que `internal/outbox` já usa falando com `*mongo.Collection`
   direto.
 - Manter `rest.Store` no formato do Mongo como contrato "de
   referência" e construir um segundo caminho de HTTP/resource
-  independente pro Postgres — rejeitada de cara: isso é dois
+  independente para o Postgres — rejeitada de cara: isso é dois
   frameworks, e é exatamente o tipo de diferença entre Mongo e
   Postgres escondida que as próprias regras do projeto proíbem.
 
-**Decisão.** Adiar o rework com generics. Até que um resource real com
+**Decisão.** Adiar o redesenho com generics. Até que um recurso real com
 Postgres seja necessário em produção, o caminho de contorno continua
 sendo a forma suportada de usar `postgres.Store`, exatamente como
 `postgres-rfc.md` recomenda. A Fase 1 não vai tentar generificar
-`rest.Store`. Este ADR existe pra isso ser uma decisão explícita e
+`rest.Store`. Este ADR existe para isso ser uma decisão explícita e
 revisitável, não uma paralisação implícita.
 
-**Consequências.** A futura documentação "Storage and database
-adapters" da jornada Framework só pode descrever honestamente o Mongo
+**Consequências.** A futura documentação "Armazenamento e adaptadores
+de banco de dados" da jornada Framework só pode descrever honestamente o Mongo
 como o backend integrado com `rest`; o Postgres continua documentado
-como um pacote independente, de nível mais baixo, até o rework com
+como um pacote independente, de nível mais baixo, até o redesenho com
 generics acontecer de fato.
 
-**Riscos.** Bloqueia qualquer necessidade de curto prazo de um resource
-integrado ao `rest` que não seja Mongo. Gatilho pra revisitar: o
-primeiro resource real que precise tanto da maquinaria HTTP do `rest`
+**Riscos.** Bloqueia qualquer necessidade de curto prazo de um recurso
+integrado ao `rest` que não seja Mongo. Gatilho para revisitar: o
+primeiro recurso real que precise tanto da maquinaria HTTP do `rest`
 quanto de um store que não seja Mongo.
 
-**Critério de validação.** Nenhuma documentação descreve um resource
+**Critério de validação.** Nenhuma documentação descreve um recurso
 Postgres passando por `rest.Store`.
 
 ### Revisão — 2026-11, Fase 8 da portabilidade Postgres
 
-**O que mudou.** Uma resource Postgres real acabou sendo necessária
+**O que mudou.** Um recurso Postgres real acabou sendo necessário
 antes do gap de generics ser revisitado por conta própria — o próprio
-gatilho de revisão deste ADR ("o primeiro resource real que precise
+gatilho de revisão deste ADR ("o primeiro recurso real que precise
 tanto da maquinaria HTTP do `rest` quanto de um store que não seja
 Mongo"). Nenhuma das três alternativas originais foi seguida como
-estava escrita: nem o rework com generics (`Store[F, U any]`), nem
+estava escrita: nem o redesenho com generics (`Store[F, U any]`), nem
 contornar `rest` completamente (a recomendação original), nem um
 segundo caminho HTTP independente (rejeitado desde o início). O que
 de fato foi construído, aprovado explicitamente pelo usuário ("Eu
 concordo que esse desenho — um núcleo compartilhado via Adapter — é o
 caminho certo") antes do início da Fase 0: uma quarta opção, um novo
-seam de interface — `rest.Adapter` (`rest/adapter.go`) — que
+ponto de integração de interface — `rest.Adapter` (`rest/adapter.go`) — que
 `rest.Service` passou a usar em vez de `rest.Store` diretamente.
 
 **Por que não generics.** `Adapter` não parametriza `Store` por
@@ -158,25 +158,25 @@ por `platform/mongodb.Store` — porque `Adapter` fica na frente dele,
 não no lugar dele: uma `Resource` com `Adapter` definido nunca toca
 `Store` (`Resource.setDefaults`, `rest/resource.go`, só constrói um
 `mongoAdapter` envolvendo `Store` quando `Adapter` é `nil` — o
-caminho padrão de uma resource Mongo que nunca precisou mudar nada).
+caminho padrão de um recurso Mongo que nunca precisou mudar nada).
 
 **O que isso habilitou.** `restpostgres.NewAdapter` (um pacote novo,
 o único importando `rest` e `platform/postgres` juntos, seção 2 do
 plano de portabilidade) implementa `Adapter` por completo sobre uma
 tabela `jsonb` mais colunas relacionais de metadado — ver
-[`adapter.md`](adapter.md) pro contrato completo e
-[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/integration/postgres-portability/examples/blog-apis/services/comments-api)
-pra primeira resource real servida de ponta a ponta sobre HTTP por
+[`adapter.md`](adapter.md) para o contrato completo e
+[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis/services/comments-api)
+para o primeiro recurso real servido de ponta a ponta sobre HTTP por
 esse caminho (Fase 7). O scaffold `platform/postgres` que este ADR já
 citava continua existindo, ainda sem importar `rest`, exatamente como
 decidido — `restpostgres` é a única ponte entre os dois, nunca o
 contrário.
 
-**Consequência pra documentação.** A frase original ("o caminho de
+**Consequência para documentação.** A frase original ("o caminho de
 contorno continua sendo a forma suportada de usar `postgres.Store`")
 não é mais verdade — desatualizada por este próprio ADR, não ignorada
 silenciosamente. [`store.md`](store.md) e
-[`postgres-rfc.md`](postgres-rfc.md) foram atualizados pra apontar pra
+[`postgres-rfc.md`](postgres-rfc.md) foram atualizados para apontar para
 [`adapter.md`](adapter.md) como o caminho atual; `postgres-rfc.md` em
 si passa a ser um registro histórico do desenho original (a maioria
 dos pontos "Decided" lá se confirmou; os marcados "open" foram
@@ -187,12 +187,12 @@ resolvidos durante a implementação em si, não revisitados aqui).
 **Status:** Implementado — adiamento original cumprido (2026-11-15)
 
 **Implementado em:** não se aplica; a própria decisão é esperar por um
-resource real com Postgres (ver Decisão abaixo). O `outbox` (movido de
+recurso real com Postgres (ver Decisão abaixo). O `outbox` (movido de
 `internal/outbox` pelo ADR-0001/Fase 1) continua inalterado no PR #6,
 conforme decidido.
 
 **Contexto.** `internal/outbox` é fixo em `*mongo.Collection`/
-`*mongo.Database`, escreve um resource e seu evento na mesma transação
+`*mongo.Database`, escreve um recurso e seu evento na mesma transação
 do Mongo, e documenta a entrega como at-least-once, nunca
 exactly-once. [`postgres-rfc.md`](postgres-rfc.md), seção 9,
 esboça uma alternativa nativa de Postgres (`BEGIN`/`COMMIT`,
@@ -204,14 +204,14 @@ agora, especulativamente, ou esperar por um consumidor real.
 
 **Alternativas consideradas.**
 - Construir uma interface de outbox genérica em relação ao store
-  agora — rejeitada: não há um consumidor real pra validar o design
+  agora — rejeitada: não há um consumidor real para validar o design
   contra, exatamente a "abstração genérica sem consumidores reais"
   que o projeto proíbe.
-- Esperar até o ADR-0002 ser revisitado e existir um resource real com
+- Esperar até o ADR-0002 ser revisitado e existir um recurso real com
   Postgres, então construir a contraparte de outbox do Postgres
-  guiada pelas necessidades reais daquele resource.
+  guiada pelas necessidades reais daquele recurso.
 
-**Decisão.** A segunda opção. Outbox continua Mongo-only; nenhuma
+**Decisão.** A segunda opção. Outbox continua exclusivo do Mongo; nenhuma
 mudança de código nesta rodada ou na Fase 1.
 
 **Consequências.** A narrativa de "dois caminhos complementares, mesmo
@@ -222,7 +222,7 @@ a documentação deve dizer isso claramente, não insinuar.
 a versão genérica antes do ADR-0002 desbloquear isso.
 
 **Critério de validação.** Nenhuma documentação ou ADR afirma que
-existe um outbox Postgres funcionando até que um resource de fato use
+existe um outbox Postgres funcionando até que um recurso de fato use
 um.
 
 **Revisão — 2026-11-15.** O adiamento histórico acima foi cumprido nas Streams
@@ -231,10 +231,10 @@ do recurso; `comments-api` o utiliza e verifica entrega Pub/Sub real. Hooks
 de eventos aceitam Adder; publishers/conditions permanecem em `outbox`.
 Mongo mantém implementação separada. Postgres usa SKIP LOCKED, sem ordem por
 Key entre workers, e implementa dead_at/replay; Mongo preserva lease de líder
-e retry sem limite. Não há interface genérica de storage nem transação
+e retry sem limite. Não há interface genérica de armazenamento nem transação
 distribuída. Veja [outbox](outbox.md) e [evidências consolidadas](integration-review.md).
 
-## ADR-0004 — Escopo inicial do CLI / Platform
+## ADR-0004 — Escopo inicial do CLI / Plataforma
 
 **Status:** Implementado
 
@@ -242,44 +242,44 @@ distribuída. Veja [outbox](outbox.md) e [evidências consolidadas](integration-
 
 **Contexto.** Não existe CLI multi-comando. `cmd/hyrule-serve` é um
 único binário genérico de servidor. `ci/affected` já faz detecção real
-de build afetado como ferramenta independente (aceita `-services` pra
+de build afetado como ferramenta independente (aceita `-services` para
 layouts fora de `examples/blog-apis`) mas não está ligado a nenhum
-workflow de CI ou CLI. O `Makefile` já tem targets `build`/`image`/
+workflow de CI ou CLI. O `Makefile` já tem alvos `build`/`image`/
 `run`/`env-up` parametrizados por `SERVICE`.
 
-**Problema.** A visão de Platform do prompt (`hyrule new`,
+**Problema.** A visão de Plataforma do prompt (`hyrule new`,
 `service create`, `dev`, `test`, `build --affected`, `deploy`) é
 grande; construir tudo isso antes de qualquer parte ter um usuário
-real arrisca "implementar comandos apenas pra preencher uma lista."
+real arrisca "implementar comandos apenas para preencher uma lista."
 
 **Alternativas consideradas.**
 - Construir a superfície completa de comandos de uma vez.
-- Começar só com scaffolding de projeto/serviço (`hyrule new`,
+- Começar só com geração da estrutura inicial de projeto/serviço (`hyrule new`,
   `hyrule service create`), reaproveitando o Makefile e o
-  `ci/affected` pra tudo relacionado a build/test/afetado em vez de
+  `ci/affected` para tudo relacionado a build/test/afetado em vez de
   reimplementá-los como subcomandos Go imediatamente.
-- Envolver `ci/affected` e os targets do Makefile como subcomandos
-  primeiro, deixando o scaffolding pra depois.
+- Envolver `ci/affected` e os alvos do Makefile como subcomandos
+  primeiro, deixando o geração da estrutura inicial para depois.
 
-**Decisão.** Começar só com scaffolding. O primeiro valor real de um
+**Decisão.** Começar só com geração da estrutura inicial. O primeiro valor real de um
 CLI é eliminar a cópia manual de `examples/blog-apis/services/*` ao
 começar um novo serviço — `ci/affected`, o Makefile e o modelo de
-manifesto único já funcionam e não precisam de um wrapper de CLI pra
+manifesto único já funcionam e não precisam de um adaptador de CLI para
 serem úteis hoje. Envolver as ferramentas existentes como subcomandos
-fica pra depois, quando o CLI já existir como binário.
+fica para depois, quando o CLI já existir como binário.
 
-**Consequências.** A documentação da jornada Platform deve descrever
+**Consequências.** A documentação da jornada Plataforma deve descrever
 só `hyrule new` e `hyrule service create` no início; os subcomandos
 `dev`/`test`/`build`/`deploy` ficam como trabalho futuro, e devem ser
 marcados como tal onde quer que sejam mencionados.
 
-**Riscos.** Só scaffolding pode parecer pouco em relação à visão
+**Riscos.** Só geração da estrutura inicial pode parecer pouco em relação à visão
 completa do prompt — intencional; é o menor incremento que ainda é
 valor real e utilizável.
 
 **Critério de validação.** Uma pessoa consegue rodar `hyrule new
 my-platform && hyrule service create articles` e obter um serviço que
-builda e roda pelos targets existentes do Makefile, sem copiar
+compila e roda pelos alvos existentes do Makefile, sem copiar
 `examples/blog-apis` manualmente.
 
 ## ADR-0005 — Versionamento e compatibilidade pré-1.0
@@ -294,16 +294,16 @@ só no papel.
 política de compatibilidade documentada. `go.mod` sem sufixo de versão
 major, consistente com 0.x.
 
-**Problema.** A Fase 1 está pra introduzir as primeiras mudanças
-quebradoras de verdade do repo (mover pacotes de `internal/` pra
-caminhos de import públicos) sem lugar nenhum pra registrar o que
+**Problema.** A Fase 1 está para introduzir as primeiras mudanças
+quebradoras de verdade do repo (mover pacotes de `internal/` para
+caminhos de import públicos) sem lugar nenhum para registrar o que
 mudou e quando.
 
 **Decisão.** Adotar o formato [Keep a Changelog](https://keepachangelog.com/)
 em `CHANGELOG.md`, e tags SemVer 0.x a partir de agora (uma mudança
 quebradora sobe o minor, já que o major continua `0`). Começar o
-changelog agora, antes da Fase 1 executar, pra que a primeira entrada
-de verdade já tenha um lugar pra ir.
+changelog agora, antes da Fase 1 executar, para que a primeira entrada
+de verdade já tenha um lugar para ir.
 
 **Consequências.** PRs futuros que mudam comportamento público devem
 adicionar uma entrada no changelog; nenhuma checagem de CI força isso
@@ -323,7 +323,7 @@ Fase 1.
 
 **Contexto.** `ci/affected` funciona (o próprio teste dele exercita o
 grafo de dependência real do `examples/blog-apis` — ver
-[`store.md`](store.md) e o doc do pacote de `ci/affected/main.go`) mas
+[`store.md`](store.md) e o documento do pacote de `ci/affected/main.go`) mas
 nenhum workflow de CI chama ele. O único artefato de deploy é um
 manifesto Kubernetes ilustrativo
 (`examples/blog-apis/deploy/posts-api/manifest.yml`), não ligado a
@@ -336,22 +336,22 @@ são fáceis de super-construir num sistema de deploy multi-cloud
 genérico, exatamente o que a regra 6 do prompt ("não implemente um
 sistema universal de deploy") e a regra de CI/CD ("não acople o
 Hyrule a um único provedor") proíbem explicitamente. Também não existe
-um consumidor real multi-provedor ainda pra validar essa abstração —
-o mesmo problema de "sem consumidor real" que o ADR-0003 nomeou pra
+um consumidor real multi-provedor ainda para validar essa abstração —
+o mesmo problema de "sem consumidor real" que o ADR-0003 nomeou para
 portabilidade do outbox.
 
 **Alternativas consideradas.**
-- Construir uma camada de abstração de provedor (interfaces pra GitHub
-  Actions/GitLab CI, pra Kubernetes/Cloud Run/Fly/etc.) — rejeitada
-  pelo mesmo motivo: nenhum segundo provedor real pra desenhar contra
+- Construir uma camada de abstração de provedor (interfaces para GitHub
+  Actions/GitLab CI, para Kubernetes/Cloud Run/Fly/etc.) — rejeitada
+  pelo mesmo motivo: nenhum segundo provedor real para desenhar contra
   ainda.
 - Documentar o padrão só em texto, sem um workflow de verdade rodando
   — rejeitada: "ligar a um workflow de CI real" (a própria frase do
-  roadmap pra Fase 4) implica algo que de fato roda, não só uma
+  roadmap para Fase 4) implica algo que de fato roda, não só uma
   descrição de como poderia.
 - Adicionar um workflow real do GitHub Actions, com escopo em
-  `examples/blog-apis`, que chama o `ci/affected` pra selecionar os
-  serviços alterados, builda só esses, e — a costura configurável —
+  `examples/blog-apis`, que chama o `ci/affected` para selecionar os
+  serviços alterados, compila só esses, e — o ponto de integração configurável —
   chama um `deploy/<service>/deploy.sh` opcional se o serviço tiver
   um, deixado como um stub que imprime o que faria em vez de tocar num
   ambiente real. O `deploy.sh` é o "adapter" completo: o comando de
@@ -362,7 +362,7 @@ build` por serviço afetado no CI, não um rebuild do repo inteiro);
 deploy independente é um ponto de extensão documentado
 (`deploy/<service>/deploy.sh`), não uma capacidade entregue — não tem
 o que configurar ainda porque não existe um ambiente de destino real
-pra esse exemplo público fazer deploy. Versionamento por serviço (o
+para esse exemplo público fazer deploy. Versionamento por serviço (o
 objetivo 4 da Fase 4 do prompt) fica sem começar: esses serviços de
 exemplo não são publicados de forma independente hoje, e inventar um
 esquema sem consumidor real repete o erro pelo qual as alternativas
@@ -376,14 +376,14 @@ adapta o padrão; o Hyrule não entrega um subcomando "deploy" que chama
 isso.
 
 **Riscos.** Alguém pode confundir o workflow com uma integração de CI
-suportada pelo Hyrule, em vez de um template pra copiar — mitigado por
+suportada pelo Hyrule, em vez de um template para copiar — mitigado por
 comentários no arquivo do workflow e por este ADR, o mesmo
 enquadramento honesto que o [`postgres-rfc.md`](postgres-rfc.md) já
 usa.
 
 **Critério de validação.** Um push ou PR que só toca os arquivos de um
-serviço faz o workflow reportar e buildar só esse serviço, em menos
+serviço faz o workflow reportar e compilar só esse serviço, em menos
 tempo que um rebuild completo; um push tocando um caminho compartilhado
-(go.mod, `platform/*`, `Dockerfile`) faz ele reportar e buildar todos.
+(go.mod, `platform/*`, `Dockerfile`) faz ele reportar e compilar todos.
 O stub `deploy.sh` de cada serviço roda sem erro e não faz nenhuma
 mudança externa real.

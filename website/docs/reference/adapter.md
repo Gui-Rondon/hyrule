@@ -100,7 +100,7 @@ the one exception: a service built with `app.Main`/`app.Spec.Backend:
 app.BackendPostgres` gets both called for it automatically at boot
 (the same moment `mongo.indexes`/`Spec.Indexes` are for a Mongo-backed
 service) — only the table DDL stays the service's own job.
-[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/integration/postgres-portability/examples/blog-apis/services/comments-api)
+[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis/services/comments-api)
 is a complete, real example doing exactly this — the first (and,
 today, only) resource in the repo served end to end over HTTP by a
 real binary through this path, instead of only through
