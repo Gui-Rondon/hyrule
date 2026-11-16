@@ -19,6 +19,7 @@ may shorten that notice, with impact and migration instructions disclosed.
 - After a new major: the previous major's final minor receives security fixes for
   six months. Older releases receive upgrade guidance, not indefinite backports.
 - Go 1.26 and 1.27 are supported, tested with automatic toolchain switching disabled.
+  Use the latest security patch of either line; see [toolchain security](docs/security.md#go-toolchain-security).
   Changes to the minimum Go version require release notes and a compatibility review.
 
 ## Maturity today
