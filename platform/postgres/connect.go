@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"strconv"
@@ -81,11 +82,15 @@ func Connect(ctx context.Context, cfg config.Config, defaultDB string) (*pgxpool
 	pgCfg := cfg.Sub("postgres")
 	if n, err := poolIntSetting(pgCfg, "max_conns"); err != nil {
 		return nil, err
+	} else if n > math.MaxInt32 {
+		return nil, fmt.Errorf("postgres.max_conns: exceeds int32 maximum")
 	} else if n > 0 {
 		poolCfg.MaxConns = int32(n)
 	}
 	if n, err := poolIntSetting(pgCfg, "min_conns"); err != nil {
 		return nil, err
+	} else if n > math.MaxInt32 {
+		return nil, fmt.Errorf("postgres.min_conns: exceeds int32 maximum")
 	} else if n > 0 {
 		poolCfg.MinConns = int32(n)
 	}

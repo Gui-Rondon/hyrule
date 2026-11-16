@@ -3,6 +3,7 @@ package rest_test
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -141,11 +142,16 @@ func TestBadQueries(t *testing.T) {
 	for _, q := range []string{
 		`where={bad`,
 		`where={"$where":"1"}`,
+		`where={"$or":[{"$where":"return true"}]}`,
+		`where={"name":{"$function":{"body":"return true","args":[],"lang":"js"}}}`,
+		`where={"nested":{"$accumulator":{"init":"function(){return 0}"}}}`,
 		`where={"name":{"$regex":"("}}`,
 		`sort=[(]`,
 		`projection={bad`,
 	} {
-		if res := c.Do("GET", "/items?"+q, nil); res.Status != http.StatusBadRequest {
+		key, value, _ := strings.Cut(q, "=")
+		target := "/items?" + url.Values{key: {value}}.Encode()
+		if res := c.Do("GET", target, nil); res.Status != http.StatusBadRequest {
 			t.Errorf("%s = %d %s", q, res.Status, res.Raw)
 		}
 	}
