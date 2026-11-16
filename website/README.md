@@ -9,16 +9,30 @@ translation of Learn, Platform, Reference and the site interface).
 
 ```bash
 npm install
-npm start                      # English, live reload
-npm start -- --locale pt-BR     # Brazilian Portuguese, live reload
+npm start                      # English only, live reload, port 3000
+npm start -- --locale pt-BR     # Portuguese only, live reload, port 3000
 ```
 
-## Build
+The development server serves **one locale per process**. Its language selector
+cannot open another locale on that same server. In particular, plain `npm start`
+does not serve `/hyrule/pt-BR/docs/...`. Stop the existing process before starting
+a different locale on the same port. To run both development servers in parallel,
+use another port, for example `npm start -- --locale pt-BR --port 3001`.
+
+## Preview both languages
 
 ```bash
-npm run build      # static site in build/
-npm run serve       # serve that build locally
+npm run preview    # builds both locales and serves them together on port 3000
 ```
+
+Use this mode to check translations and switch languages through the site menu:
+
+- English: http://localhost:3000/hyrule/docs/learn/quick-start
+- Brazilian Portuguese: http://localhost:3000/hyrule/pt-BR/docs/learn/quick-start
+
+The preview serves a static build and does not live-reload edits. Stop it and
+run `npm run preview` again after changes. `npm run build` only generates the
+files in `build/`; `npm run serve` serves an existing build without rebuilding.
 
 ## Deployment
 
