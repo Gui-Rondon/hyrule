@@ -59,6 +59,14 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: .local/coverage.out
           fail_ci_if_error: true
+      - name: Pub/Sub healthcheck diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps --all
+          pubsub_container=$(docker compose ps --all --quiet pubsub)
+          if [ -n "$pubsub_container" ]; then
+            docker inspect "$pubsub_container" --format '{{json .State.Health}}'
+          fi
       - name: Backend logs on failure
         if: failure()
         run: docker compose logs --tail=100
