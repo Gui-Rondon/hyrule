@@ -37,6 +37,17 @@ services:
   pubsub:
     image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
     command: ["gcloud", "beta", "emulators", "pubsub", "start", "--host-port=0.0.0.0:8085", "--project=local-dev"]
+    # A running Java process does not yet mean the emulator accepts requests.
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8085/v1/projects/local-dev/topics', timeout=2).close()"
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
     ports:
       - "127.0.0.1:8085:8085"
 
