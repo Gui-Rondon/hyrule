@@ -58,6 +58,16 @@ const (
 	BackendPostgres Backend = "postgres"
 )
 
+// validate rejects typos before either bootstrap can select a database.
+func (b Backend) validate() error {
+	switch b {
+	case BackendMongo, BackendPostgres:
+		return nil
+	default:
+		return fmt.Errorf("app: unknown backend %q (use BackendMongo or BackendPostgres)", b)
+	}
+}
+
 // Spec describes a service.
 type Spec struct {
 	// Name is the APP_NAME in properties-api, e.g. "tags-api".
@@ -65,7 +75,9 @@ type Spec struct {
 	// Backend selects Env.DB/mongodb (BackendMongo, the default) or
 	// Env.Postgres/platform/postgres (BackendPostgres).
 	Backend Backend
-	// DefaultDB is used when the Mongo or Postgres URI has no database.
+	// DefaultDB is used when building a URI from individual connection settings.
+	// Mongo also falls back to it for a URI without a database. Specify the
+	// database explicitly in Postgres URIs (pgx otherwise resolves its default).
 	DefaultDB string
 	Version   string
 	// Setup registers the resources, custom endpoints and checkers.
@@ -208,6 +220,9 @@ func Main(spec Spec) {
 // Run loads the configuration (CONFIG_FILE or properties-api), connects to
 // the database (Spec.Backend) and serves until ctx is done.
 func Run(ctx context.Context, spec Spec) error {
+	if err := spec.Backend.validate(); err != nil {
+		return err
+	}
 	startCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -267,7 +282,11 @@ func Run(ctx context.Context, spec Spec) error {
 	if err != nil {
 		return err
 	}
-	defer client.Disconnect(context.Background())
+	defer func() {
+		stopTasks()
+		tasks.Wait()
+		client.Disconnect(context.Background())
+	}()
 
 	handler, err := Build(startCtx, spec, Deps{Config: cfg, Mongo: client, DB: db, Start: start, DryRun: dryRun, DryRunTimeout: dryRunTimeout, WriteGuard: guard})
 	if err != nil {
@@ -278,6 +297,9 @@ func Run(ctx context.Context, spec Spec) error {
 
 // Build wires the service and returns its HTTP handler.
 func Build(ctx context.Context, spec Spec, deps Deps) (http.Handler, error) {
+	if err := spec.Backend.validate(); err != nil {
+		return nil, err
+	}
 	authn := deps.Auth
 	if authn == nil {
 		var err error

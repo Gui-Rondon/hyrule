@@ -39,12 +39,10 @@ um dos dois definindo `Adapter` (`restpostgres.NewAdapter(...)`) ou
 
 ## Decisões que moldam o framework
 
-- **Storage é uma decisão separada da de eventos.** `outbox`
-  grava na mesma transação Mongo do write — uma escolha própria, não uma
-  consequência inevitável do Mongo. Se o storage de um recurso mudar, o
-  outbox pode seguir o banco (fica mais simples) ou ficar como está (se a
-  transação do novo banco não cobrir o outbox do jeito que a do Mongo
-  cobre) — ver [`docs/outbox.md`](outbox.md).
+- **Storage e eventos compartilham a transação local.** Recursos Mongo usam
+  `outbox`; Postgres usa `outboxpostgres` com mesmo pool/contexto. Hooks dependem
+  do contrato Adder, mas a atomicidade não atravessa dois bancos nem publishers
+  externos. Veja [outbox](outbox.md).
 - **Portabilidade de storage é a interface, não a linguagem de query.**
   `rest.Store` continuou exatamente `bson.M`/`bson.D`-tipado, no
   formato do Mongo, nunca generificado (ADR-0002) — um segundo backend
@@ -62,3 +60,5 @@ um dos dois definindo `Adapter` (`restpostgres.NewAdapter(...)`) ou
   `Resource.Validate`, `Resource.Datasource` e todos os `Hooks` carregam
   comportamento arbitrário e ficam de fora de propósito — ver
   [`docs/resources-yaml.md`](resources-yaml.md).
+
+Veja [integração dos dois backends](backends.md) e [revisão/evidências](integration-review.md) para o estado atual, bootstrap e limites.

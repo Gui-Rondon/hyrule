@@ -161,3 +161,5 @@ que `Store` não expõe (ex.: `categories-api`'s `GET /categories/tree`, em
 `examples/blog-apis/services/categories-api/categories.go`) usa `Store`
 mesmo assim — `Find`/`FindOne` já bastam para isso — mas um agregador
 complexo ainda exigiria estender a interface ou cair para o driver.
+
+O pacote Mongo outbox permanece específico do backend; `outboxpostgres` fornece a contraparte transacional Postgres. Veja [integração](backends.md) e [outbox](outbox.md).

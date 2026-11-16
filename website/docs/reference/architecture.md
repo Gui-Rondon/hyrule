@@ -39,12 +39,10 @@ exactly what it's there for, to be the glue between the two.
 
 ## Decisions that shape the framework
 
-- **Storage is a decision separate from events.** `outbox`
-  writes in the same Mongo transaction as the write — a choice of its
-  own, not an inevitable consequence of using Mongo. If a resource's
-  storage ever changes, the outbox can follow the database (simpler) or
-  stay as is (if the new database's transaction doesn't cover the
-  outbox the way Mongo's does) — see [`outbox.md`](outbox.md).
+- **Storage and events share a local transaction.** Mongo resources use
+  `outbox`; Postgres resources use `outboxpostgres` with the same pool/context.
+  Shared hooks depend on the Adder contract, but atomicity never spans two
+  databases or an external publisher. See [outbox](outbox.md).
 - **Storage portability is the interface, not the query language.**
   `rest.Store` stayed exactly `bson.M`/`bson.D`-typed, Mongo-shaped,
   never generified (ADR-0002) — a real second backend needed a
@@ -62,3 +60,5 @@ exactly what it's there for, to be the glue between the two.
   `Resource.Datasource` and every kind of `Hooks` carry arbitrary
   behavior and are left out on purpose — see
   [`resources-yaml.md`](resources-yaml.md).
+
+See [both backend integrations](backends.md) and the [review/evidence](integration-review.md) for current bootstrap behavior and limits.

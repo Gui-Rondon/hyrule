@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Gui-Rondon/hyrule/platform/config"
 )
@@ -91,8 +92,9 @@ func TestConnectAndPing(t *testing.T) {
 func TestConnectAppliesPoolSettings(t *testing.T) {
 	t.Setenv("POSTGRES_CONNECTION_STRING", testURI(t))
 	cfg := config.Config{"postgres": map[string]any{
-		"max_conns": "7",
-		"min_conns": "2",
+		"max_conns":         "7",
+		"min_conns":         "2",
+		"max_conn_lifetime": "1h", "max_conn_idle_time": "2m", "health_check_period": "15s", "connect_timeout": "2s",
 	}}
 	pool, err := Connect(context.Background(), cfg, "x")
 	if err != nil {
@@ -102,6 +104,9 @@ func TestConnectAppliesPoolSettings(t *testing.T) {
 	got := pool.Config()
 	if got.MaxConns != 7 || got.MinConns != 2 {
 		t.Fatalf("MaxConns, MinConns = %d, %d", got.MaxConns, got.MinConns)
+	}
+	if got.MaxConnLifetime != time.Hour || got.MaxConnIdleTime != 2*time.Minute || got.HealthCheckPeriod != 15*time.Second || got.ConnConfig.ConnectTimeout != 2*time.Second {
+		t.Fatalf("duration settings not applied: lifetime=%v idle=%v health=%v connect=%v", got.MaxConnLifetime, got.MaxConnIdleTime, got.HealthCheckPeriod, got.ConnConfig.ConnectTimeout)
 	}
 }
 
@@ -166,5 +171,23 @@ func TestConnectFailsOnBadDurationSetting(t *testing.T) {
 	cfg := config.Config{"postgres": map[string]any{"statement_timeout": "not-a-duration"}}
 	if _, err := Connect(context.Background(), cfg, "x"); err == nil {
 		t.Error("invalid postgres.statement_timeout must fail")
+	}
+}
+
+// Invalid pool settings fail before dialing any server, including settings
+// other than statement_timeout that previously had no rejection coverage.
+func TestConnectRejectsInvalidPoolSettings(t *testing.T) {
+	t.Setenv("POSTGRES_CONNECTION_STRING", "postgres://localhost/test?sslmode=disable")
+	for _, key := range []string{"max_conns", "min_conns", "max_conn_lifetime", "max_conn_idle_time", "health_check_period", "connect_timeout", "statement_timeout", "lock_timeout"} {
+		t.Run(key, func(t *testing.T) {
+			pool, err := Connect(context.Background(), config.Config{"postgres": map[string]any{key: "invalid"}}, "fallback")
+			if pool != nil {
+				pool.Close()
+				t.Fatal("invalid setting created pool")
+			}
+			if err == nil || !strings.Contains(err.Error(), "postgres."+key) {
+				t.Fatalf("error for %s = %v", key, err)
+			}
+		})
 	}
 }

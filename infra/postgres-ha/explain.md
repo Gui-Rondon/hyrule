@@ -279,3 +279,15 @@ including date-only/no-zone/infinity formats accepted by the direct cast: they
 sort as SQL NULL. The helper is not a new strict RFC3339 validator. NULLS order
 uses PostgreSQL defaults, and stable pages require an explicit unique tie term.
 No production index or application opt-in is installed by this gate.
+
+
+## Consolidated review evidence
+
+The [2026-11-15 snapshot](evidence/2026-11-15-consolidation.json) records the
+reviewed main/integration revisions, current plan counts, report hashes and
+coverage. The [integration review](../../website/docs/reference/integration-review.md)
+and [Portuguese version](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/integration-review.md)
+separate fresh topology/migration/plan runs from historical failover/PITR
+validation and document the two pending add/add conflicts against main.
+No branch merge is performed by generating this evidence. Report hashes identify
+local fixture artifacts; rerun the commands to verify another checkout.

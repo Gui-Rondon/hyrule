@@ -27,13 +27,11 @@ get a working REST API for it. What that buys you, specifically:
 - **`testkit`**: an isolated database and an HTTP client per test, no
   service to stand up, no mocks of your own storage.
 
-The YAML path below, the transactional outbox, and `testkit`'s isolated
-database all stay Mongo-only for now — a Postgres-backed resource is
-hand-written Go, tested against a real Postgres directly
-(`examples/blog-apis/services/comments-api`'s own tests are the
-working example). Dry run, through `app.Spec.Backend`, now covers
-both: `postgres.Transactor{Rollback: true}` rolls back a Postgres
-service's writes the same way a Mongo one's are.
+Mongo and Postgres both support the Go bootstrap, transactional outbox and dry
+run. YAML/scaffolding and testkit's database provisioner remain Mongo-specific;
+Postgres uses Go registration and a real isolated pool with the shared HTTP
+helpers. Start with [Integrating Mongo and Postgres](/docs/reference/backends)
+for equally detailed setup, runnable programs and test guidance for either.
 
 You can describe that resource two ways. In Go:
 
@@ -83,7 +81,8 @@ only for the parts that genuinely need code.
 This guide builds toward **blog-apis**, the small example that ships
 with the framework: `authors-api` and `tags-api` are plain CRUD,
 `categories-api` is a hierarchy, and `posts-api` ties them together with
-relations, hooks, and an outbox-driven publish flow. Every snippet in
+relations, hooks, and an outbox-driven publish flow. `comments-api` demonstrates
+Postgres with the same bootstrap and transactional Pub/Sub publishing. Every snippet in
 this guide is real code from that example or from the framework
 itself — nothing here is invented for the docs.
 

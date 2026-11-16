@@ -2,14 +2,16 @@
 sidebar_position: 6
 ---
 
-# Testing a resource
+# Testing Mongo and Postgres resources
 
 `testkit` sets up what a resource test needs: an isolated
-Mongo, an in-process HTTP client, and test tokens. Tests that need Mongo
+Mongo database, an in-process HTTP client, and test tokens. The HTTP/token
+helpers work with either backend; Service/Mongo/Store/DryRun provision Mongo.
+For Postgres, supply an isolated real pool to app.Build as shown below. Tests that need Mongo
 skip themselves when `MONGO_TEST_URI` isn't set (e.g.
 `mongodb://localhost:27018/?directConnection=true`, `make env-up`).
 
-## Booting the whole service
+## Mongo: booting the whole service
 
 ```go
 c, db := testkit.Service(t, spec(), config.Config{}, testkit.DisabledAuth(t))
@@ -72,3 +74,75 @@ was indexed, no real Elasticsearch needed) — use `es.Hosts()` in the
 resource's config. `testkit.NewKeys(t)` signs test RSA tokens;
 `keys.Token(t, "username")` and `keys.TokenWith(t, claims)` cover the two
 claim shapes `platform/auth` accepts.
+
+
+## Postgres: booting the whole service
+
+Use `POSTGRES_TEST_URI` (local dev: `postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable`).
+`testkit.Service` is Mongo-specific; use `app.Build` and `testkit.NewClient`
+with a real isolated Postgres schema. Do not reuse a production schema or run
+DDL against a shared resource table. This pattern needs imports from pgx/v5,
+pgxpool, google/uuid, app, config, testkit and the standard library:
+
+```go
+// spec() is your Postgres app.Spec, registering table "items".
+ctx := context.Background()
+uri := os.Getenv("POSTGRES_TEST_URI")
+if uri == "" { t.Skip("POSTGRES_TEST_URI not set") }
+admin, err := pgxpool.New(ctx, uri)
+if err != nil { t.Fatal(err) }
+t.Cleanup(admin.Close)
+schemaName := "t_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+quoted := pgx.Identifier{schemaName}.Sanitize()
+if _, err := admin.Exec(ctx, "CREATE SCHEMA " + quoted); err != nil { t.Fatal(err) }
+t.Cleanup(func() {
+    cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    if _, err := admin.Exec(cleanup, "DROP SCHEMA " + quoted + " CASCADE"); err != nil { t.Error(err) }
+})
+cfg := admin.Config()
+cfg.ConnConfig.RuntimeParams["search_path"] = schemaName
+pool, err := pgxpool.NewWithConfig(ctx, cfg)
+if err != nil { t.Fatal(err) }
+t.Cleanup(pool.Close)
+// Apply your real resource migration to this schema before Build.
+handler, err := app.Build(ctx, spec(), app.Deps{
+    Postgres: pool, Config: config.Config{}, Auth: testkit.DisabledAuth(t),
+})
+if err != nil { t.Fatal(err) }
+c := testkit.NewClient(t, handler)
+res := c.Do("POST", "/items", map[string]any{"name": "Go"})
+if res.Status != http.StatusCreated { t.Fatalf("POST = %d %s", res.Status, res.Raw) }
+```
+
+The pool is closed before the isolated schema is dropped. Apply the same
+migrations used by the service, including outbox tables if needed. Reuse
+`env.PostgresTx` in Setup; app.Build installs shared functions and ensures
+`Spec.PostgresIndexes`. Build does not own the injected pool and does not run
+workers without `Deps.Start`. Use `httptest.NewServer(handler)` only when a real
+HTTP socket is required. See the concrete tests in `app/backend_contract_test.go`
+and `examples/blog-apis/services/comments-api/migrations_test.go`.
+
+For Postgres dry run, call app.Build again with the **same seeded pool** and
+`Deps{Postgres: pool, DryRun: true, Auth: authn}`. Use testkit.NewClient on that
+handler, perform writes, then inspect data through the normal client/pool.
+No Mongo WriteGuard is required. Test rollback of both resource and outbox rows;
+raw pool writes and setup DDL are outside that protection.
+
+## Validation commands for both backends
+
+```sh
+make env-up
+make test GOFLAGS='-count=1 -p=1'
+make vet
+make cover GOFLAGS=-p=1
+make standalone-example-test
+# After tests/coverage finish (avoid concurrent Docker builds):
+make e2e
+```
+
+The full suite reads both MONGO_TEST_URI and POSTGRES_TEST_URI from Makefile.
+Without those variables, database tests skip; a green no-infrastructure run is
+not integration evidence. Package concurrency is limited above because a real
+retry-budget test is sensitive to CPU contention. Coverage excludes manual HA
+gates unless explicitly enabled: see [gate evidence](integration-review.md).

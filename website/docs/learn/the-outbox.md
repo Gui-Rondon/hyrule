@@ -104,9 +104,10 @@ remember to wire it up twice. `examples/blog-apis/services/posts-api/posts_test.
 <details>
 <summary>Deep dive: local destinations, for events that aren't Pub/Sub</summary>
 
-`posts-api`'s `/schedule` endpoint writes its event to a Redis hash
-instead of Pub/Sub — in the same transaction as the status change, so a
-scheduler process can scan Redis instead of polling Mongo. `outbox.Dispatcher`
+`posts-api`'s `/schedule` endpoint stores an outbox event in the same Mongo
+transaction as the status change. After commit the relay updates a Redis hash
+so a scheduler can scan Redis instead of polling Mongo; Redis is not part of
+the originating database transaction. `outbox.Dispatcher`
 is what makes a topic name like `"local:posts-schedule"` resolve to a
 Redis write instead of a real publish. See
 [Reference → outbox](/docs/reference/outbox)
@@ -124,3 +125,12 @@ for the full mechanism.
 - Next: [Testing](./testing.md) tests exactly this kind of hook, with no
   HTTP server involved.
 :::
+
+## The same event flow on Postgres
+
+Use `outboxpostgres.Outbox` with the adapter's same pool and `env.PostgresTx`;
+`events.Hooks`, `events.ConditionalHooks` and publishers stay shared. The
+Postgres relay supports SKIP LOCKED workers and dead-event replay, with no
+cross-worker Key ordering. See the [parallel Mongo/Postgres integrations](/docs/reference/outbox)
+and the runnable comments-api example. These differences do not require a
+second event contract or a generic storage abstraction.

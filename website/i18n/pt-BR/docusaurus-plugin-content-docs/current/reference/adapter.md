@@ -4,6 +4,9 @@ sidebar_position: 1.5
 
 # A interface `Adapter`
 
+Para registro completo nos dois backends, veja [Integração Mongo e Postgres](backends.md).
+
+
 `rest.Resource.Adapter` (`rest/adapter.go`) é o ponto de contato que
 `rest.Service` usa pra tudo que uma requisição precisa: parsear e
 combinar `where`/`sort`/`projection`, gerar e parsear ids, CRUD,
@@ -99,7 +102,7 @@ dependem), e qualquer índice declarativo
 explicitamente — nada disso acontece dentro do próprio `NewAdapter`,
 de propósito, o mesmo precedente que o próprio comentário de
 `EnsureFunctions` cita.
-[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis/services/comments-api)
+[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/integration/postgres-portability/examples/blog-apis/services/comments-api)
 é um exemplo completo e real fazendo exatamente isso na
 inicialização — a primeira (e, até hoje, única) resource do repo
 servida de ponta a ponta sobre HTTP por esse caminho, em vez de só

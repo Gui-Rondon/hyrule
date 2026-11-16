@@ -157,7 +157,7 @@ only one importing `rest` and `platform/postgres` together, section 2
 of the portability plan) implements `Adapter` in full over a `jsonb`
 table plus relational metadata columns — see
 [`adapter.md`](adapter.md) for the full contract and
-[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/main/examples/blog-apis/services/comments-api)
+[`examples/blog-apis/services/comments-api`](https://github.com/Gui-Rondon/hyrule/tree/integration/postgres-portability/examples/blog-apis/services/comments-api)
 for the first real resource served end to end over HTTP through this
 path (Fase 7). The `platform/postgres` scaffold this ADR already
 named keeps existing, still never importing `rest`, exactly as
@@ -175,7 +175,7 @@ were resolved during the actual build, not revisited here).
 
 ## ADR-0003 — Outbox and Postgres
 
-**Status:** Accepted — implementation deferred
+**Status:** Implemented — original deferral fulfilled (2026-11-15)
 
 **Implemented in:** not applicable; the decision itself is to wait for
 a real Postgres-backed resource (see Decision below). `outbox` (moved
@@ -214,14 +214,15 @@ generic version before ADR-0002 unblocks it.
 **Validation criteria.** No documentation or ADR claims a working
 Postgres outbox until a resource actually uses one.
 
-**Note — 2026-11, Fase 8 of the Postgres portability plan.** This
-ADR's own blocking condition is met: ADR-0002 was revisited (see its
-Revision) and a real Postgres-backed resource exists
-(`examples/blog-apis/services/comments-api`). The Postgres outbox
-counterpart itself was never built, though — `comments-api` doesn't
-use outbox, by design (it's the minimal CRUD proof Fase 7 needed, not
-a vehicle for new, unapproved scope). Status stays deferred; this
-only updates why.
+**Revision — 2026-11-15.** The historical deferral above was fulfilled by
+Streams C1–C5 (PRs #29–#31). `outboxpostgres` stores events in the resource's
+same-pool transaction; `comments-api` uses it and verifies real Pub/Sub delivery.
+Shared events hooks accept an Adder; publishers/conditions remain in `outbox`.
+The Mongo implementation remains separate. Postgres uses SKIP LOCKED, has no
+cross-worker Key ordering, and implements dead_at/replay; Mongo retains its
+leader lease and unbounded retry behavior. No generic storage interface or
+distributed transaction was introduced. See [outbox](outbox.md) and the
+[consolidated evidence](integration-review.md).
 
 ## ADR-0004 — Initial scope of the CLI / Platform
 
