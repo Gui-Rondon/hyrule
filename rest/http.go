@@ -67,11 +67,18 @@ func New(opts Options) *API {
 	a.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, ErrNotFound)
 	})
+	a.registerSwagger()
 	return a
 }
 
 // Register adds a resource and returns its Service.
 func (a *API) Register(res *Resource) *Service {
+	resourceURL := res.URL
+	if resourceURL == "" {
+		resourceURL = res.Name
+	}
+	checkSwaggerRoute("/" + resourceURL)
+	checkSwaggerRoute("/" + resourceURL + "/{lookup}")
 	svc := NewService(res, a.opts.Transactor)
 	svc.queryTimeout = a.opts.QueryTimeout
 	svc.dryRun = a.opts.DryRun
@@ -97,7 +104,10 @@ func (a *API) ResourceURLs() []string {
 
 // Handle adds a custom route. More specific patterns win over the resource
 // routes, e.g. "POST /articles/{id}/publish".
-func (a *API) Handle(pattern string, h http.Handler) { a.mux.Handle(pattern, h) }
+func (a *API) Handle(pattern string, h http.Handler) {
+	checkSwaggerRoute(pattern)
+	a.mux.Handle(pattern, h)
+}
 
 // RequireAuth protects a custom endpoint with the API authentication.
 func (a *API) RequireAuth(h http.Handler) http.Handler {

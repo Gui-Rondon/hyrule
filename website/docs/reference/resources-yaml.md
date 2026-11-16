@@ -206,3 +206,10 @@ of those stays in Go. A resource built from YAML is a plain
 `*rest.Resource`, so nothing stops you from attaching hooks to it in
 Go before registering — `declarative/declarative_test.go`'s
 `TestBuiltResourceComposesWithConditionalOutbox` does exactly that.
+
+## Swagger visibility
+
+Swagger is enabled by default. Set `disableSwagger: true` (alias:
+`disable_swagger`) on a resource to hide only its documentation. Omitted or
+`false` includes it. Conflicting aliases fail resource construction.
+See [automatic Swagger documentation](swagger.md).

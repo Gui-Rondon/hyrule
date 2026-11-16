@@ -27,6 +27,9 @@ import (
 type Resource struct {
 	// Name identifies the resource (the DOMAIN key).
 	Name string
+	// DisableSwagger hides this resource from OpenAPI; its routes remain active.
+	// The zero value includes the resource in the automatically served docs.
+	DisableSwagger bool
 	// URL is the route, Eve's "url". Defaults to Name.
 	URL string
 	// ResourceTitle is the title of the collection links. Defaults to URL.

@@ -43,6 +43,7 @@ const sidebars = {
         'reference/querying',
         'reference/outbox',
         'reference/resources-yaml',
+        'reference/swagger',
         'reference/dry-run',
         'reference/testkit',
         'reference/observability',
