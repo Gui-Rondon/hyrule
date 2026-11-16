@@ -172,8 +172,8 @@ func TestRelayLease(t *testing.T) {
 	box := newBox(t)
 	ctx := context.Background()
 	add(t, box, outbox.Event{Topic: "t", Body: "1"})
-	one := &outbox.Relay{Outbox: box, Publisher: &recorder{}, Owner: "one", Lease: 300 * time.Millisecond}
-	two := &outbox.Relay{Outbox: box, Publisher: &recorder{}, Owner: "two", Lease: 300 * time.Millisecond}
+	one := &outbox.Relay{Outbox: box, Publisher: &recorder{}, Owner: "one", Lease: time.Minute}
+	two := &outbox.Relay{Outbox: box, Publisher: &recorder{}, Owner: "two", Lease: time.Minute}
 
 	if n, err := one.Drain(ctx); err != nil || n != 1 {
 		t.Fatalf("one = %d %v", n, err)
@@ -186,7 +186,13 @@ func TestRelayLease(t *testing.T) {
 		t.Fatalf("one renews: %d %v", n, err)
 	}
 
-	time.Sleep(400 * time.Millisecond) // one stopped renewing
+	// Expire the persisted lease explicitly. The test exercises a real Mongo
+	// handoff without assuming that instrumented CI operations finish in 300ms.
+	leases := box.Collection().Database().Collection(box.Collection().Name() + "_lease")
+	result, err := leases.UpdateOne(ctx, bson.M{"_id": box.Collection().Name(), "owner": "one"}, bson.M{"$set": bson.M{"until": time.Unix(0, 0)}})
+	if err != nil || result.MatchedCount != 1 {
+		t.Fatalf("expire held lease: %v %v", result, err)
+	}
 	add(t, box, outbox.Event{Topic: "t", Body: "3"})
 	if n, err := two.Drain(ctx); err != nil || n != 1 {
 		t.Fatalf("two after expiry = %d %v", n, err)
@@ -331,8 +337,8 @@ func TestRelayPublishTimeoutAndLeaseRenewal(t *testing.T) {
 		time.Sleep(120 * time.Millisecond)
 		return nil
 	})
-	one := &outbox.Relay{Outbox: box2, Publisher: slow, Owner: "one", Lease: 300 * time.Millisecond}
-	two := &outbox.Relay{Outbox: box2, Publisher: slow, Owner: "two", Lease: 300 * time.Millisecond}
+	one := &outbox.Relay{Outbox: box2, Publisher: slow, Owner: "one", Lease: time.Minute}
+	two := &outbox.Relay{Outbox: box2, Publisher: slow, Owner: "two", Lease: time.Minute}
 	done := make(chan int)
 	go func() {
 		n, _ := one.Drain(ctx)

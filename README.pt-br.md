@@ -4,6 +4,11 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/Gui-Rondon/hyrule.svg)](https://pkg.go.dev/github.com/Gui-Rondon/hyrule)
 [![codecov](https://codecov.io/gh/Gui-Rondon/hyrule/branch/main/graph/badge.svg)](https://codecov.io/gh/Gui-Rondon/hyrule)
+[![Tests](https://github.com/Gui-Rondon/hyrule/actions/workflows/test.yml/badge.svg?branch=main&event=push)](https://github.com/Gui-Rondon/hyrule/actions/workflows/test.yml)
+[![CodeQL](https://github.com/Gui-Rondon/hyrule/actions/workflows/codeql.yml/badge.svg?branch=main&event=push)](https://github.com/Gui-Rondon/hyrule/actions/workflows/codeql.yml)
+[![Go vulnerabilities](https://github.com/Gui-Rondon/hyrule/actions/workflows/vulnerabilities.yml/badge.svg?branch=main&event=push)](https://github.com/Gui-Rondon/hyrule/actions/workflows/vulnerabilities.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Gui-Rondon/hyrule/badge)](https://scorecard.dev/viewer/?uri=github.com/Gui-Rondon/hyrule)
+[![Latest release](https://img.shields.io/github/v/release/Gui-Rondon/hyrule)](https://github.com/Gui-Rondon/hyrule/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Um framework Go para montar microsserviços rápido, e testar os fluxos

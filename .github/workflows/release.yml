@@ -33,9 +33,16 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       - run: make env-up
-      - run: make test vet router-example-test standalone-example-test
-      - if: matrix.go == '1.27.x'
-        run: make cover
+      - name: Tests and coverage without repeating the full suite
+        env:
+          GO_VERSION: ${{ matrix.go }}
+        run: |
+          if [[ "$GO_VERSION" == '1.27.x' ]]; then
+            make cover COVERAGE_TEST_FLAGS=-race
+          else
+            make test
+          fi
+      - run: make vet examples-tidy router-example-test standalone-example-test
       - if: always()
         run: docker compose stop
   publish:
