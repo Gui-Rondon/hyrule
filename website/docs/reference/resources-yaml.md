@@ -47,6 +47,9 @@ backend does not support yet (soft delete, advanced operators).
 Switching a resource's `backend:` never migrates its existing data
 between databases.
 
+For complete connection settings, Postgres table DDL and runnable commands,
+follow [Run YAML resources with Mongo or Postgres](yaml-backends.md).
+
 ## A complete example
 
 This `resources.yaml` is the YAML equivalent of
@@ -168,7 +171,8 @@ curl -G localhost:8080/tags --data-urlencode 'where={"enabled":false}'
 ```yaml
 resources:
   - name: tags            # required; becomes Resource.Name and Resource.URL
-    collection: tags       # the Mongo collection (env.Store(collection))
+    collection: tags       # Mongo collection or SQL table
+    backend: mongo         # optional: mongo (default), postgres or sqlite
     item_title: tag        # optional; defaults to the name without a trailing "s"
 
     schema:

@@ -16,6 +16,14 @@ de lógica própria, ele continua sendo um binário Go com `app.Main`, como
 RESOURCES_FILE=resources.yaml PORT=8080 go run ./cmd/hyrule-serve
 ```
 
+## Escolha do backend
+
+Cada recurso aceita `backend: mongo` (padrão), `postgres` ou `sqlite`.
+O processo seleciona sua conexão com `BACKEND`; os dois precisam corresponder.
+Veja o [guia Mongo e Postgres em YAML](yaml-backends.md) para configurações,
+migração SQL e comandos completos, e as [restrições do SQLite](sqlite.md).
+Trocar o backend não migra dados.
+
 ## Um exemplo completo
 
 Esse `resources.yaml` é o equivalente em YAML de
@@ -137,7 +145,8 @@ curl -G localhost:8080/tags --data-urlencode 'where={"enabled":false}'
 ```yaml
 resources:
   - name: tags            # obrigatório; vira Resource.Name e Resource.URL
-    collection: tags       # coleção no Mongo (env.Store(collection))
+    collection: tags       # coleção Mongo ou tabela SQL
+    backend: mongo         # opcional: mongo (padrão), postgres ou sqlite
     item_title: tag        # opcional; o padrão é o nome sem "s" no final
 
     schema:

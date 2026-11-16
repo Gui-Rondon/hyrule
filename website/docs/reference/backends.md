@@ -19,7 +19,7 @@ existing services. Equal support does not mean identical storage semantics.
 | Transactional events | `outbox.New(env.DB)` | `outboxpostgres.Outbox{Pool: env.Postgres}` |
 | Dry run | Replica set, rollback and WriteGuard | Same-pool transaction rollback |
 | Tests | `testkit.Service` / real Mongo | `app.Build` + isolated real Postgres + `testkit.NewClient` |
-| YAML / generated CLI resource | Supported | Supported via `backend: postgres` in `resources.yaml` — see [Resource via YAML](resources-yaml.md) |
+| YAML / generated CLI resource | Supported | Supported via `backend: postgres` in `resources.yaml` — see the [configuration guide](yaml-backends.md) |
 
 ## Start local dependencies
 

@@ -1,16 +1,16 @@
-/* Fixed at the very top of the viewport, above the sticky navbar
-   (--ifm-z-index-fixed is 200) so it stays visible while scrolling a
+/* Fixed just below the sticky navbar, using its theme height so the
+   indicator stays aligned on desktop and mobile while scrolling a
    long doc page. Track is intentionally almost invisible — only the
    gold fill is meant to read as the indicator, same restrained spirit
    as the rest of the site (the reference "stamina bar" this reuses had
    a visible dark track + a neon glow; we keep neither). */
 .track {
   position: fixed;
-  top: 0;
+  top: var(--ifm-navbar-height);
   left: 0;
   right: 0;
   height: 3px;
-  z-index: 500;
+  z-index: calc(var(--ifm-z-index-fixed) - 1);
   background: rgba(0, 0, 0, 0.08);
   pointer-events: none;
 }

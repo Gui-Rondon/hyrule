@@ -23,8 +23,9 @@ identificadores simples. Hífens de nomes gerados viram underscores nas tabelas.
 Objetos e arrays podem ser armazenados, mas não comparados ou indexados como únicos.
 Valores usam parâmetros SQL; operadores e identificadores são validados.
 
-Não suporta soft delete, operadores avançados Mongo/Postgres, outbox, dry run,
-resources.yaml SQLite ou garantias de paridade/migração. Operadores incompatíveis
+Não suporta soft delete, operadores avançados Mongo/Postgres, outbox, dry run
+ou garantias de paridade/migração. `resources.yaml` aceita `backend: sqlite`,
+com as mesmas restrições desta página; veja [recursos em YAML](resources-yaml.md). Operadores incompatíveis
 retornam 400; configuração incompatível falha no startup. Índices únicos são
 restrições reais do banco. Campo ausente e null comparam como SQL NULL, sem prometer
 paridade Mongo. Uma conexão serializa escritas locais; o foco é experimentação.

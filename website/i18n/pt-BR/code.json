@@ -364,5 +364,23 @@
   },
   "homepage.description": {
     "message": "Um framework Go para criar microsserviços com rapidez: descreva um recurso em YAML e obtenha uma API REST com CRUD, validação, ETags e outbox transacional. Use o testkit para testar os fluxos sem subir toda a aplicação."
+  },
+  "homepage.backends.title": {
+    "message": "Um recurso. Escolha seu backend."
+  },
+  "homepage.backends.intro": {
+    "message": "Descreva sua API em YAML, configure a conexão e execute hyrule-serve."
+  },
+  "homepage.backends.mongo.description": {
+    "message": "As coleções são criadas na primeira escrita. Mongo é o backend padrão."
+  },
+  "homepage.backends.mongo.cta": {
+    "message": "Configurar Mongo →"
+  },
+  "homepage.backends.postgres.description": {
+    "message": "Use uma tabela JSONB com UUIDs. Aplique a migração da tabela antes de iniciar."
+  },
+  "homepage.backends.postgres.cta": {
+    "message": "Configurar Postgres →"
   }
 }

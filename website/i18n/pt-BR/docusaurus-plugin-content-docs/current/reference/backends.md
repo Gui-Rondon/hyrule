@@ -19,7 +19,7 @@ existentes. Suporte equivalente não significa semântica de armazenamento idên
 | Eventos transacionais | `outbox.New(env.DB)` | `outboxpostgres.Outbox{Pool: env.Postgres}` |
 | Dry run | Replica set, rollback e WriteGuard | Rollback da transação no mesmo pool |
 | Testes | `testkit.Service` / Mongo real | `app.Build` + Postgres real isolado + `testkit.NewClient` |
-| YAML / recurso gerado pela CLI | Suportado | Registro em Go; YAML/scaffolding continuam específicos do Mongo |
+| YAML / recurso gerado pela CLI | Suportado | Suportado com `backend: postgres` em `resources.yaml`; veja o [guia de configuração](yaml-backends.md) |
 
 ## Inicie as dependências locais
 
@@ -232,5 +232,6 @@ viabilizar o índice parcial legado em planos custom. Nenhuma guarda de presenç
 é acrescentada implicitamente: a tentativa anterior regrediu planos UUID.
 Campos parametrizados no generic e offsets profundos continuam observacionais;
 declarar índice não garante uso nem latência de produção. Nested datetime e
-Unique/Sparse typed são extensões separadas. YAML continua exclusivo do Mongo; trocar
-Spec.Backend não converte backend nem migra dados.
+Unique/Sparse typed são extensões separadas. O campo `backend` de
+`resources.yaml` seleciona o backend do recurso; veja o [guia de configuração](yaml-backends.md).
+Trocar esse campo ou `Spec.Backend` não converte backend nem migra dados.
