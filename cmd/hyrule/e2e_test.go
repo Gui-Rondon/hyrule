@@ -35,7 +35,7 @@ func TestScaffoldBuilds(t *testing.T) {
 	}
 	defer os.Chdir(wd)
 
-	if err := runNew([]string{"my-platform"}); err != nil {
+	if err := runNew([]string{"my-platform", "--layout=platform", "--framework-version=v0.102.1"}); err != nil {
 		t.Fatalf("hyrule new: %v", err)
 	}
 

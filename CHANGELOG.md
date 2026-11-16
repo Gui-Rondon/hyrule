@@ -9,6 +9,31 @@ the minor version instead.
 
 ## [Unreleased]
 
+### Adoption, compatibility and supply chain
+
+- **Breaking (next minor):** `hyrule new` now defaults to a single SQLite API
+  runnable with `go run .`; use `--layout=platform` for the previous Mongo
+  multi-service scaffold. Existing manifest-free platform projects still work.
+  Generated projects pin the installed CLI release; development CLI builds require
+  `--framework-version`. `service create` resolves dependencies for the single layout.
+- Experimental `platform/sqlite`, `restsqlite` and `app.BackendSQLite`: persistent
+  local CRUD, transactions, real unique indexes, UUID/version ETags, RFC 7396
+  merge patch and scalar queries. No outbox, dry run, soft delete or YAML support.
+- Upgrade klauspost/compress to v1.20.2 for GO-2026-6865.
+- Support Go 1.26/1.27; PR CI runs real adapter integrations, race/vet checks,
+  generated/external examples, EN/PT docs and the existing 95% runtime gate.
+- Compatibility/support and v1 maturity policies, contribution/review process,
+  security reporting (seven-day initial response), issue/PR templates and roadmap.
+- Compiling pkg.go.dev examples and clarified app documentation; tested Gin/Chi/Echo
+  handler composition in a standalone example, without core router dependencies.
+- Maintainer-dispatched Linux/Windows CLI releases with checksums, verified GitHub
+  SLSA provenance, immutable version checks and bounded Go proxy index requests.
+  No release/tag is published by this PR; pkg.go.dev/deps.dev ingest asynchronously.
+- Pinned, least-privilege Actions; CodeQL, vulnerability scans, Dependabot and
+  scheduled Scorecard. Branch protection/private reporting activation is tracked
+  separately in docs/releasing.md; workflow files alone do not activate settings.
+
+
 ### Added
 
 - Automatic OpenAPI 3.1 and embedded Swagger UI at `/api/openapi.json` and

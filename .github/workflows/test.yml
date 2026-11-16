@@ -1,31 +1,89 @@
 name: Test
-
 on:
+  pull_request: {}
   push:
     branches: [main]
   workflow_dispatch: {}
-
+permissions:
+  contents: read
 jobs:
   test:
+    name: Go ${{ matrix.go }} integration
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.26.x', '1.27.x']
+    env:
+      GOTOOLCHAIN: local
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          go-version-file: go.mod
-      # Real Mongo (replica set), Postgres, Pub/Sub emulator and Redis, same as
-      # local dev (docker-compose.yml) — no mocks, so coverage reflects
-      # the actual transaction/outbox/unique-index behavior.
-      - run: make env-up
-      - name: Mongo logs (debug on failure)
-        if: failure()
-        run: docker compose logs mongo
-      - name: Framework coverage (95% minimum; all normal tests run)
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Tests without infrastructure (includes SQLite and CLI smoke test)
+        run: go test -race ./...
+      - name: Start real backend integrations
+        run: make env-up
+      - name: Require ready databases and emulators
+        run: |
+          docker compose exec -T mongo mongosh --quiet --eval 'if (!rs.status().ok) quit(1)'
+          docker compose exec -T postgres pg_isready -U postgres
+          curl --fail --retry 15 --retry-delay 2 --retry-connrefused http://localhost:8085/v1/projects/local-dev/topics
+          docker compose exec -T redis redis-cli ping
+      - run: make test
+      - run: make vet
+      - run: make router-example-test
+      - run: make standalone-example-test
+      - name: Framework coverage (95% minimum)
+        if: matrix.go == '1.27.x'
         run: make cover
-      - name: Upload coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@v5
+      - name: Upload coverage
+        if: matrix.go == '1.27.x' && github.event_name != 'pull_request'
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: .local/coverage.out
           fail_ci_if_error: true
+      - name: Backend logs on failure
+        if: failure()
+        run: docker compose logs --tail=100
+      - name: Stop integration environment
+        if: always()
+        run: docker compose stop
+  docs:
+    name: Documentation EN and PT
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+        working-directory: website
+      - run: npm run build
+        working-directory: website
+  windows:
+    name: Windows SQLite and CLI
+    runs-on: windows-latest
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27.x'
+      - run: go test ./platform/sqlite ./restsqlite
+      - run: go test ./app -run 'TestSQLite|Example'
+      - run: go test ./cmd/hyrule -run 'TestRunDispatch|TestRunNew|TestRunService|TestProjectAndVersionValidation'
+      - run: go build -o hyrule.exe ./cmd/hyrule
+      - run: ./hyrule.exe --help

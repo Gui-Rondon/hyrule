@@ -18,7 +18,7 @@ func TestRunNew(t *testing.T) {
 	}
 	defer os.Chdir(wd)
 
-	if err := runNew([]string{"my-platform"}); err != nil {
+	if err := runNew([]string{"my-platform", "--layout=platform", "--framework-version=v0.102.1"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -40,7 +40,7 @@ func TestRunNew(t *testing.T) {
 		t.Errorf("go.mod = %q, missing module name", mod)
 	}
 
-	if err := runNew([]string{"my-platform"}); err == nil {
+	if err := runNew([]string{"my-platform", "--layout=platform", "--framework-version=v0.102.1"}); err == nil {
 		t.Error("recreating an existing project should fail")
 	}
 	if err := runNew([]string{"Not-Valid"}); err == nil {
