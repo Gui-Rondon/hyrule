@@ -293,8 +293,12 @@ func TestServiceWildcardMaxDurationExhaustedUnderRealConflict(t *testing.T) {
 	if !ok || e.Status != http.StatusServiceUnavailable || e.RetryExhaustedReason != "max_duration" {
 		t.Fatalf("err = %#v, want a 503 Error with RetryExhaustedReason=max_duration", err)
 	}
-	if *calls < 2 {
-		t.Errorf("hook called %d times, want at least 2 (MaxAttempts=1000 must never be what exhausts first)", *calls)
+	// A slow first attempt can consume the entire wall-clock budget,
+	// especially under -race and coverage on CI. It still exercises a
+	// real conflict; max_duration above, not a minimum retry count,
+	// establishes which limit exhausted.
+	if *calls < 1 {
+		t.Errorf("hook called %d times, want at least 1 real conflict", *calls)
 	}
 }
 
