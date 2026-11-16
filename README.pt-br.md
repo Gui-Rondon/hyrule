@@ -31,7 +31,7 @@ Por baixo mantém o contrato HTTP do Eve (Python) (`rest`), de onde o
 projeto migrou.
 
 📖 **Documentação em português brasileiro: https://gui-rondon.github.io/hyrule/pt-BR/** —
-[Aprenda](https://gui-rondon.github.io/hyrule/pt-BR/docs/learn/intro) traz o passo a passo;
+[Guia](https://gui-rondon.github.io/hyrule/pt-BR/docs/learn/intro) traz o passo a passo;
 [Plataforma](https://gui-rondon.github.io/hyrule/pt-BR/docs/platform/intro) mostra como criar projetos e serviços;
 a [Referência](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/architecture)
 reúne os detalhes técnicos. As três seções também estão disponíveis em inglês.
@@ -161,7 +161,7 @@ A documentação completa está em **https://gui-rondon.github.io/hyrule/pt-BR/*
 
 | | |
 |---|---|
-| [Aprenda](https://gui-rondon.github.io/hyrule/pt-BR/docs/learn/intro) | guia passo a passo com os exemplos de `blog-apis` |
+| [Guia](https://gui-rondon.github.io/hyrule/pt-BR/docs/learn/intro) | guia passo a passo com os exemplos de `blog-apis` |
 | [Plataforma](https://gui-rondon.github.io/hyrule/pt-BR/docs/platform/intro) | criação de projetos e serviços, desenvolvimento local e CI/implantação |
 | [Referência → Store](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/store) | a interface `Store`: o que ela desacopla (e o que não desacopla ainda) |
 | [Referência → Outbox](https://gui-rondon.github.io/hyrule/pt-BR/docs/reference/outbox) | outbox transacional, e o primitivo condicional que dispara evento a partir da própria gravação |

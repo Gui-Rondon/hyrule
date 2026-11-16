@@ -32,7 +32,7 @@ porque ainda estejam abertas.
 | Outbox nos dois backends | Eventos transacionais | `outbox` Mongo e `outboxpostgres` Postgres, hooks compartilhados, comments-api publica via Pub/Sub | **Concluído** — veja [outbox](outbox.md) e [evidências](integration-review.md) |
 | CLI / Plataforma | `hyrule new` / `service create` / `dev` / `build` / `deploy` | `cmd/hyrule` tem `new` e `service create` (ADR-0004); `dev`/`build --affected`/`deploy` nem começaram | **Parcialmente fechado** — geração da estrutura inicial da Fase 3 pronta; envolver `ci/affected`/Makefile foi adiado de propósito |
 | Build afetado / deploy independente | Orquestrado pela plataforma | `ci/affected` roda de verdade em `.github/workflows/blog-apis-affected.yml`; deploy é um ponto de integração documentado `deploy/<service>/deploy.sh`, não uma capacidade entregue (ADR-0006) | **Fechado para o exemplo, de propósito** — Fase 4; um adapter de deploy real e versionamento por serviço continuam sem começar até existir um consumidor real |
-| Documentação de duas jornadas | Aprenda (Framework) + Aprenda (Plataforma) + Referência compartilhada | As duas jornadas existem (`/docs/learn`, `/docs/platform`), cada uma descrevendo só o que foi construído | **Fechado** — Fase 5 |
+| Documentação de duas jornadas | Guia (Framework) + Guia (Plataforma) + Referência compartilhada | As duas jornadas existem (`/docs/learn`, `/docs/platform`), cada uma descrevendo só o que foi construído | **Fechado** — Fase 5 |
 | ADRs / versionamento | Um processo formal de decisão e compatibilidade | Não existia antes desta página | **Gap alto, custo baixo** — pura documentação |
 
 ## Fases
@@ -85,7 +85,7 @@ porque ainda estejam abertas.
 - **Fase 5 — Documentação.** Escrever a jornada Plataforma só quando o
   CLI for real, para que o site publicado nunca descreva um comando que
   ainda não existe. **Concluída.** Uma nova categoria "Plataforma" sob o
-  [Aprenda](/docs/learn/intro) — `/docs/platform/intro`,
+  [Guia](/docs/learn/intro) — `/docs/platform/intro`,
   `creating-a-project`, `creating-services`, `local-development` e
   `ci-and-deploy` — cobre exatamente `hyrule new`/`hyrule service
   create` e o padrão `ci/affected`/`deploy.sh` da Fase 4, nomeando

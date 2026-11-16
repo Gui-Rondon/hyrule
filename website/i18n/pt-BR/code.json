@@ -336,7 +336,7 @@
     "message": "Referência"
   },
   "homepage.cards.learn.title": {
-    "message": "Aprenda"
+    "message": "Guia"
   },
   "homepage.cards.learn.description": {
     "message": "Um passo a passo com um exemplo real: crie um recurso, acrescente relações e hooks, integre a outbox transacional e teste o fluxo completo."

@@ -8,7 +8,7 @@
     "description": "The alt text of navbar logo"
   },
   "item.label.Learn": {
-    "message": "Aprenda",
+    "message": "Guia",
     "description": "Navbar item with label Learn"
   },
   "item.label.Reference": {
