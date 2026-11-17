@@ -286,7 +286,7 @@ tool route and starts no tool server automatically.
 
 | Request | Authorized result |
 |---|---|
-| `GET /tools/tags.lookup` | Descriptor with `name`, `version`, `read_only`; no storage query. |
+| `GET /tools/tags.lookup` | Descriptor with schemas, limits and hash; no storage query. |
 | `POST /tools/tags.lookup` | JSON input `{"slug":"go"}` and the executor result. |
 
 POST requires `application/json`. Query parameters, GET bodies and extra/duplicate
@@ -338,6 +338,53 @@ fallback, oversized chunked bodies, sanitized failures and audit before output.
 An actual loopback connection test uses a signed RSA token and SQLite audit,
 including a partial-body client that times out on the server. No remote
 deployment, provisioned TLS, MCP or production credentials are included.
+
+## Contract discovery — 2026-11-16
+
+`Executor.Discover(ctx)` and authorized HTTP GET now include, alongside `name`,
+`version` and `read_only`:
+
+- `description`: the lookup's purpose and exact matching semantics.
+- `input_schema`: a JSON Schema 2020-12 object requiring only `slug`, with 1–128
+  permitted ASCII characters and no additional properties.
+- `output_schema`: two strict result variants: `found=false` without a tag, or
+  `found=true` with `name`, `slug`, `enabled=true`. HTTP errors are not successful
+  results and retain their separate codes.
+- `limits`: input/output byte limits, one result and execution/audit budgets,
+  derived from the executor's actual constants.
+- `server_rules`: constraints not enforced by structural validation alone.
+- `contract_hash`: hexadecimal SHA-256 of deterministic descriptor JSON excluding
+  the hash field itself. It identifies content, not credentials, and does not
+  replace the operation's semantic version.
+
+The three field types come from registered `Resource.Schema`. Operation-specific
+constraints belong to this read, not a second CRUD schema: uniqueness/defaults
+and write callbacks do not become lookup arguments or validators. No generic
+exporter is added to `rest`, and no tables/documents are enumerated.
+
+Parser and descriptor share length limits and character constraints. ASCII is
+expressed by excluding invalid characters without regex anchors, avoiding Go/JS
+end-of-string differences for a final newline. The server compares output slug
+to input; JSON Schema alone cannot express this relationship. Byte limits,
+duplicate JSON keys, identity, policy, hooks and committed audit also remain
+explicit server rules.
+
+Every discovery repeats authorization and audit through `Describe`, without
+querying storage. There is no cross-user cache or real data in the descriptor.
+Each call returns fresh maps/slices, so caller mutation cannot change the next
+response. Missing permission or audit failure yields neither contracts nor hash.
+Execution still rechecks permission independently of GET.
+
+Tests compile the published schemas and compare acceptance with the actual parser,
+including boundaries, Unicode/newlines, required fields and extra properties.
+Actual found/absent/disabled results validate against output schema; private fields,
+missing fields and enabled=false are rejected. Tests also cover deterministic
+hashing, mutation isolation, no user data, no execution of write callbacks and
+GET/POST contract parity.
+
+This is local pilot discovery, not completion of the generic catalog or Phase 8.
+A future MCP adapter can reuse `Discover` and `Execute` without duplicating schema
+or authorization after selecting a compatible client, transport and version.
 
 ## Local query rehearsal and its limits
 

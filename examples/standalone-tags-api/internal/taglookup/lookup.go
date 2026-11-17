@@ -24,6 +24,9 @@ const Version = "1"
 const Permission = "tags:read"
 const MaxInput = 1024
 const MaxOutput = 16 * 1024
+const minSlugLength = 1
+const maxSlugLength = 128
+const invalidSlugPattern = `[^A-Za-z0-9_-]`
 const executionTimeout = 2 * time.Second
 const auditTimeout = time.Second
 
@@ -36,7 +39,7 @@ var (
 	ErrDeadline    = errors.New("deadline exceeded")
 	ErrCanceled    = errors.New("canceled")
 	ErrAudit       = errors.New("audit unavailable")
-	slugPattern    = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+	invalidSlug    = regexp.MustCompile(invalidSlugPattern)
 )
 
 // Principal must come from a verified application boundary, never tool input.
@@ -204,7 +207,7 @@ func parse(input io.Reader) (string, error) {
 		}
 		var ok bool
 		slug, ok = value.(string)
-		if !ok || !slugPattern.MatchString(slug) {
+		if !ok || len(slug) < minSlugLength || len(slug) > maxSlugLength || invalidSlug.MatchString(slug) {
 			return "", ErrInput
 		}
 	}

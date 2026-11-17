@@ -14,7 +14,7 @@ atual.
 ## Trabalho atual de adoção e estabilidade
 
 As Fases 0–5 abaixo são históricas; a Fase 6 tem evidência de estudo e segue
-aberta; a Fase 7 tem piloto local parcial; as Fases 8–11 são propostas não iniciadas. O [roadmap atual para v1](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
+aberta; a Fase 7 tem piloto local parcial; a Fase 8 tem descoberta local parcial; as Fases 9–11 são propostas não iniciadas. O [roadmap atual para v1](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
 adiciona políticas de compatibilidade/suporte, CI Go 1.26/1.27 em PRs, scaffold
 SQLite local, composição de roteadores e releases manuais com proveniência.
 Veja [estabilidade](stability.md) e [SQLite](sqlite.md) para o comportamento atual.
@@ -125,7 +125,7 @@ apresentação para cada uma delas.
 
 A Fase 6 tem [estudo concluído](phase-6-contract-study.md), com correções de
 contrato e aceitação da decisão ainda abertas; não está Concluída. A Fase 7 tem executor local parcial com identidade/política JWT, sem transporte externo.
-As Fases 8–11 continuam **Propostas / não iniciadas**. Os [ADRs
+A Fase 8 tem descoberta local parcial; as Fases 9–11 continuam **Propostas / não iniciadas**. Os [ADRs
 0007–0012](architecture-decisions.md) registram as decisões propostas; a [análise de DX
 e prontidão para IA](ai-readiness.md) registra suas evidências. Esta numeração estende o
 roadmap de framework/plataforma, sem renumerar o plano histórico de portabilidade
@@ -183,3 +183,7 @@ do provedor de produção e transporte externo continuam pendentes; a Fase 7 seg
 O transporte HTTP local opt-in do piloto já tem descoberta e execução protegidas
 por JWT/auditoria, testes loopback reais e limites de leitura/escrita. Deploy
 remoto, provedor de produção e MCP permanecem pendentes; a Fase 7 segue parcial.
+
+A descoberta local do piloto agora projeta schemas de entrada/saída e limites do
+contrato, com hash determinístico e autorização/auditoria a cada chamada. A Fase 8
+segue parcial: não há catálogo genérico, cache por perfil nem adapter MCP.

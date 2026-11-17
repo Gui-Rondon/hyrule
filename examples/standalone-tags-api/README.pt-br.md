@@ -106,3 +106,11 @@ a loopback com limites de leitura/escrita/header. A aplicação controla startup
 shutdown. Não há rota automática, deploy remoto, TLS provisionado ou MCP.
 Os testes incluem socket loopback real e timeout de corpo parcial; o ambiente
 precisa permitir escuta local.
+
+
+GET autorizado e `Executor.Discover` retornam contratos JSON Schema 2020-12 de
+entrada/saída, limites reais, regras exclusivas do servidor e hash SHA-256
+determinístico. Tipos vêm do schema do recurso; as restrições de slug e resultado
+são da operação. Descoberta autoriza/audita sem consultar dados, com metadados novos
+por chamada. Hash/schema não substituem autorização. Os contratos são comparados
+com o parser real e os resultados SQLite.

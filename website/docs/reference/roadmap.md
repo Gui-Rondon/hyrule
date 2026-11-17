@@ -13,7 +13,7 @@ sit in, and so nobody mistakes a future phase for current behavior.
 ## Current adoption and stability work
 
 Phases 0–5 below are historical; Phase 6 has study evidence but remains open;
-Phase 7 has a partial local pilot; Phases 8–11 are proposed and not started. The current [v1 roadmap](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
+Phase 7 has a partial local pilot; Phase 8 has partial local discovery; Phases 9–11 are proposed and not started. The current [v1 roadmap](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
 adds explicit compatibility/support policy, Go 1.26/1.27 PR gates, SQLite local
 scaffolding, router composition and manual attested releases. See
 [stability](stability.md) and [SQLite](sqlite.md) for current behavior and limits.
@@ -118,7 +118,7 @@ presentation for each of them.
 
 Phase 6 has a [completed study](phase-6-contract-study.md), with contract
 corrections and decision acceptance still open; it is not Done. Phase 7 has a partial local executor with JWT identity/policy but no external transport;
-Phases 8–11 remain **Proposed / not started**. Complexity is relative, without
+Phase 8 has partial local discovery; Phases 9–11 remain **Proposed / not started**. Complexity is relative, without
 schedule or staffing commitments. [ADRs 0007–0012](architecture-decisions.md)
 record the proposed decisions; the [DX and AI-readiness review](ai-readiness.md)
 records their evidence. The v1 stabilization roadmap remains independent:
@@ -174,3 +174,7 @@ configuration and external transport remain pending; Phase 7 remains partial.
 The opt-in local HTTP pilot now has JWT/audit-protected discovery and invocation,
 real loopback tests and read/write limits. Remote deployment, production provider
 configuration and MCP remain pending; Phase 7 remains partial.
+
+Local pilot discovery now projects input/output schemas and contract limits with
+a deterministic hash and per-call authorization/audit. Phase 8 remains partial:
+there is no generic catalog, profile cache or MCP adapter.

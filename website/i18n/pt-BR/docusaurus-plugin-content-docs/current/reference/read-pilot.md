@@ -289,7 +289,7 @@ continua sem registrar rota ou iniciar servidor de ferramentas automaticamente.
 
 | Requisição | Resultado autorizado |
 |---|---|
-| `GET /tools/tags.lookup` | Descritor com `name`, `version`, `read_only`; não consulta storage. |
+| `GET /tools/tags.lookup` | Descritor com schemas, limites e hash; não consulta storage. |
 | `POST /tools/tags.lookup` | Entrada JSON `{"slug":"go"}` e resultado do executor. |
 
 POST exige `application/json`. Query parameters, corpo em GET, chaves extras ou
@@ -341,6 +341,53 @@ ausência de fallback por cookie/query, corpo chunked grande, falhas sanitizadas
 auditoria antes de liberar saída. Um teste abre conexão loopback real com token
 RSA e auditoria SQLite, incluindo cliente com corpo parcial que expira no servidor.
 Não há deploy remoto, TLS provisionado, MCP ou credenciais de produção incluídos.
+
+## Descoberta de contratos — 2026-11-16
+
+`Executor.Discover(ctx)` e o GET HTTP autorizado agora incluem, além de `name`,
+`version` e `read_only`:
+
+- `description`: finalidade e semântica exata da consulta.
+- `input_schema`: JSON Schema 2020-12 de objeto com somente `slug` obrigatório,
+  1–128 caracteres ASCII permitidos, sem propriedades adicionais.
+- `output_schema`: união de duas respostas estritas: `found=false` sem tag, ou
+  `found=true` com `name`, `slug`, `enabled=true`. Erros HTTP não são resultados
+  bem-sucedidos e continuam usando seus códigos próprios.
+- `limits`: limites de bytes de entrada/saída, uma linha e budgets de execução e
+  auditoria, derivados das constantes reais do executor.
+- `server_rules`: regras não representáveis pela validação estrutural isolada.
+- `contract_hash`: SHA-256 hexadecimal do JSON determinístico do descritor,
+  excluindo o próprio campo hash. É identidade de conteúdo, não credencial nem
+  substituto da versão semântica da operação.
+
+Os tipos dos três campos vêm do `Resource.Schema` registrado. Regras específicas
+são da operação de leitura, não uma cópia do schema CRUD: unicidade/defaults e
+callbacks de escrita não viram argumentos ou validadores de consulta. O pacote
+não adiciona exportador genérico a `rest`, nem enumera tabelas/documentos.
+
+O parser e o descritor compartilham limites e conjunto de caracteres. A restrição
+ASCII usa negação de classe inválida sem âncoras, evitando diferença de fim de
+string em regex Go/JavaScript para newline final. O output compara slug com a
+entrada no servidor; JSON Schema não expressa sozinho essa relação. Limites em
+bytes, chaves duplicadas, identidade, política, hooks e commit de auditoria também
+permanecem regras explícitas do servidor.
+
+Cada descoberta repete autorização e auditoria por `Describe`, sem consultar
+storage. Não há cache compartilhado por usuário ou conteúdo real no descritor.
+Cada chamada retorna mapas/slices novos; modificações pelo chamador não mudam a
+próxima resposta. Ausência de permissão ou falha de auditoria não entrega contratos
+nem hash. A execução continua revalidando permissões independentemente do GET.
+
+Testes compilam os schemas publicados e comparam aceitação com o parser real,
+incluindo limites, Unicode/newline, obrigatoriedade e propriedades extras. Respostas
+reais de tag encontrada, ausente e desabilitada validam no output schema; respostas
+com campos privados, campos faltantes ou enabled falso são rejeitadas. Também se
+verificam hash determinístico, isolamento de mutações, ausência de dados de usuário,
+nenhuma execução de callbacks de escrita e paridade GET/POST.
+
+É descoberta do piloto local, não conclusão do catálogo genérico ou da Fase 8.
+O próximo adapter MCP poderá reutilizar `Discover` e `Execute` sem duplicar schema
+ou autorização, após escolher cliente, transporte e versão compatíveis.
 
 ## Ensaio local da consulta e limites
 

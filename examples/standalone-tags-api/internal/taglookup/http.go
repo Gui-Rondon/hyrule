@@ -59,16 +59,16 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			inputStatus = http.StatusBadRequest
 		}
 		if inputStatus == 0 {
-			tool, err := h.executor.Describe(ctx)
+			contract, err := h.executor.Discover(ctx)
 			if err != nil {
 				writeExecutorError(w, err, 0)
 				return
 			}
-			data, _ := json.Marshal(struct {
-				Name     string `json:"name"`
-				Version  string `json:"version"`
-				ReadOnly bool   `json:"read_only"`
-			}{tool.Name, tool.Version, tool.ReadOnly})
+			data, err := json.Marshal(contract)
+			if err != nil {
+				writeExecutorError(w, ErrOutput, 0)
+				return
+			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(data)
 			return

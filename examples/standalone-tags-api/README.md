@@ -120,3 +120,12 @@ creates, but does not start, a loopback-only server with read/write/header limit
 The application owns startup/shutdown. No default route, remote deployment, TLS
 provisioning or MCP is introduced. The pilot tests include a real loopback socket
 and a partial-body timeout, so their environment must permit local listening.
+
+
+Authorized HTTP GET and `Executor.Discover` now return JSON Schema 2020-12 input
+and output contracts, actual executor limits, explicit server-only rules and a
+deterministic SHA-256 contract hash. Field types derive from registered resource
+schema; the lookup's restricted slug and result shapes are operation-specific.
+Discovery performs authorization/audit without data queries. Returned metadata is
+fresh per call; hash/schema validation never replace execution authorization.
+The schemas are tested against the real parser and SQLite lookup results.

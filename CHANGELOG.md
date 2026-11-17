@@ -18,6 +18,11 @@ the minor version instead.
 
 ### Added
 
+- Publish authorized input/output JSON Schemas, executor limits, explicit
+  server-only constraints and deterministic contract hashes in tags-pilot
+  discovery. Derive field types from the registered resource and verify schema
+  parity with actual parsing and lookup results; keep generic catalog/MCP deferred.
+
 - Add opt-in loopback HTTP transport for the tags pilot: JWT-protected GET
   discovery and POST lookup, mandatory audit, strict bounded requests, sanitized
   errors and explicit server timeouts. Verify real HTTP/RSA/SQLite integration
