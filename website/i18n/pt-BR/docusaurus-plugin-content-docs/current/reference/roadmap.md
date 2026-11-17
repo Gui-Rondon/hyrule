@@ -179,3 +179,7 @@ identificada nas fases correspondentes e não impedem revisar as propostas.
 O piloto já integra verificação JWT RS256 e política de scope, com testes de
 assinaturas reais. O sink de auditoria SQLite persistente também está disponível. Configuração
 do provedor de produção e transporte externo continuam pendentes; a Fase 7 segue parcial.
+
+O transporte HTTP local opt-in do piloto já tem descoberta e execução protegidas
+por JWT/auditoria, testes loopback reais e limites de leitura/escrita. Deploy
+remoto, provedor de produção e MCP permanecem pendentes; a Fase 7 segue parcial.

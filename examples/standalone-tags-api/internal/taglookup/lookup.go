@@ -1,6 +1,6 @@
 // Package taglookup is an opt-in, application-local read pilot. It does not
-// expose an HTTP endpoint or trust claims stored in context. Optional JWTIdentity
-// supplies token verification and policy callbacks.
+// automatically expose an endpoint or trust claims stored in context. Optional
+// JWTIdentity and HTTP helpers supply verified identity and local transport.
 // Dependencies and resource definitions must be fixed before concurrent use.
 package taglookup
 

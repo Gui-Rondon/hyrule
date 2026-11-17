@@ -7,7 +7,7 @@ sidebar_position: 23
 **Status:** Local pilot implemented in the standalone example's internal package,
 2026-11-16. JWT RS256 identity and scope policy are integrated as optional dependencies;
 audit can use the included persistent SQLite sink. No generic registry, production identity-provider
-configuration or external transport is included. This
+configuration or remote deployment is included. Local HTTP transport is opt-in. This
 does not complete Phase 7 or establish production readiness.
 
 ## Consumer and resource
@@ -146,8 +146,8 @@ including to record failed/canceled calls. Audit failure clears output and retur
 `ErrAudit`; use `errors.Is` to classify errors that may combine audit and original
 failures. Records describe operation outcome before response delivery; duration
 excludes audit persistence. Readers, hooks, callbacks and storage must cooperate
-with cancellation: blocked code is not forcibly interrupted. A future transport
-must configure its own read timeout.
+with cancellation: blocked code is not forcibly interrupted. A mounted transport
+must configure its own read timeout; the local server helper below does so.
 
 Tests use the existing YAML and real SQLite. They cover denial before storage,
 wrong scope, discovery, invalid input, a one-row bound with pagination disabled,
@@ -161,7 +161,7 @@ cd examples/standalone-tags-api
 go test -race ./...
 ```
 
-Production identity-provider configuration, external transport, production policy
+Production identity-provider configuration, remote deployment, production policy
 and multi-tenant isolation remain pending; a local persistent audit sink is available. Registry/MCP work should follow evidence from a concrete
 consumer rather than automatic generalization.
 
@@ -273,8 +273,71 @@ delivery. Failure after commit can cause a retried read to create another event.
 Retention, backup, access controls, permissions on existing files and volume
 protection belong to deployment. Do not use the resource's file as the audit file.
 WAL/synchronization availability depends on the filesystem; configuration failures
-are rejected. External transport, production provider/credentials and multi-tenant
+are rejected. Remote deployment, production provider/credentials and multi-tenant
 policy remain pending. This package starts no server and performs no deployment.
+
+## Optional local HTTP transport — 2026-11-16
+
+`NewHTTPHandler(service, identity, audit.Write)` creates a handler using configured
+`JWTIdentity`, fixed resource scope and mandatory audit. It accepts no permissive
+verifier or cookie/query/inherited-context credential fallback. Each call requires
+exactly one `Authorization: Bearer <compactJWT>` header; `main` still registers no
+tool route and starts no tool server automatically.
+
+| Request | Authorized result |
+|---|---|
+| `GET /tools/tags.lookup` | Descriptor with `name`, `version`, `read_only`; no storage query. |
+| `POST /tools/tags.lookup` | JSON input `{"slug":"go"}` and the executor result. |
+
+POST requires `application/json`. Query parameters, GET bodies and extra/duplicate
+keys are rejected; the 1 KiB limit also covers unknown-length/chunked bodies.
+Metadata/input failures pass through identity, policy and audit before responding,
+without storage access. Unknown routes return 404; methods other than GET/POST
+return 405 with `Allow`, without invoking a tool. There is no CORS, cookie auth,
+redirect or REST fallback.
+
+| Failure | HTTP |
+|---|---|
+| Missing/invalid credential | 401 with Bearer challenge |
+| Missing permission | 403 |
+| Invalid input | 400 |
+| Body over 1 KiB | 413 |
+| Unsupported Content-Type | 415 |
+| Body-read timeout / canceled invocation | 408 |
+| Executor deadline | 504 |
+| Audit failure or unavailability | 503 |
+| Inconsistent output | 500 |
+
+Errors contain stable codes, never tokens, DSNs or raw dependency errors. All
+responses use `Cache-Control: no-store`, `Vary: Authorization`, JSON and `nosniff`.
+Audit failure takes precedence and withholds both lookup output and descriptors.
+Absent/disabled tags still return HTTP 200 with `{"found":false}`.
+
+`NewLocalHTTPServer("127.0.0.1:8081", handler)` creates but does not start an
+`http.Server`. Only explicit numeric loopback addresses are accepted; wildcard,
+hostname and remote binds are rejected. It sets two-second header/read budgets,
+a five-second write budget, 30-second idle timeout and 16 KiB headers. The
+application owns listening, shutdown and closing the audit sink. If mounted in
+another server, apply equivalent read/write limits; Go context alone cannot
+interrupt a blocked reader.
+
+```go
+handler, err := taglookup.NewHTTPHandler(tagsService, identity, audit.Write)
+if err != nil {
+    return err
+}
+server, err := taglookup.NewLocalHTTPServer("127.0.0.1:8081", handler)
+if err != nil {
+    return err
+}
+// The application may call server.ListenAndServe and owns shutdown.
+```
+
+Tests cover authorized/denied GET and POST, credential isolation, no cookie/query
+fallback, oversized chunked bodies, sanitized failures and audit before output.
+An actual loopback connection test uses a signed RSA token and SQLite audit,
+including a partial-body client that times out on the server. No remote
+deployment, provisioned TLS, MCP or production credentials are included.
 
 ## Local query rehearsal and its limits
 
@@ -292,7 +355,7 @@ missing => {"found":false}
 This proves the bounded filter/projection shape works locally. It does **not**
 prove the proposed input parser, identity, permission, audit, output limits or
 failure behavior: those were acceptance requirements at the rehearsal stage. The later local
-executor is described above; production provider configuration and external transport remain pending.
+executor is described above; production provider configuration and remote deployment remain pending.
 
 To repeat, save the Go block below as `/tmp/hyrule-read-pilot/main.go` after
 creating that directory, then run from the repository root:

@@ -7,7 +7,7 @@ sidebar_position: 23
 **Status:** piloto local implementado no pacote interno do exemplo standalone,
 2026-11-16. Identidade JWT RS256 e política de scope estão integradas como dependências
 opcionais; auditoria pode usar o sink SQLite persistente incluído. Não há registry genérico, configuração
-de provedor de produção nem transporte externo.
+de provedor de produção nem deploy remoto. O transporte HTTP local é opt-in.
 Isso não conclui a Fase 7 nem comprova prontidão de produção.
 
 ## Consumidor e recurso
@@ -162,7 +162,7 @@ cd examples/standalone-tags-api
 go test -race ./...
 ```
 
-Continuam pendentes a configuração do provedor de produção, transporte externo,
+Continuam pendentes a configuração do provedor de produção, deploy remoto,
 política de produção e isolamento multi-tenant. A sugestão de registry/MCP só deve
 avançar depois de provar o consumidor concreto.
 
@@ -276,8 +276,71 @@ e produzir outro evento. Retenção, backup, proteção de acesso, permissões d
 arquivos existentes e proteção do volume são responsabilidades do deployment.
 Não usar o arquivo do recurso como arquivo de auditoria. A disponibilidade de WAL
 e sincronização depende do filesystem; falhas de configuração são recusadas.
-Transporte externo, credenciais/provedor de produção e política multi-tenant
+Deploy remoto, credenciais/provedor de produção e política multi-tenant
 continuam pendentes. O pacote não inicia servidor nem executa deploy.
+
+## Transporte HTTP local opcional — 2026-11-16
+
+`NewHTTPHandler(service, identity, audit.Write)` cria um handler usando
+`JWTIdentity` configurado, escopo fixo e auditoria obrigatória. Não aceita
+verificador permissivo nem credencial de cookie/query/contexto herdado. Exige
+exatamente um header `Authorization: Bearer <compactJWT>` por chamada; `main`
+continua sem registrar rota ou iniciar servidor de ferramentas automaticamente.
+
+| Requisição | Resultado autorizado |
+|---|---|
+| `GET /tools/tags.lookup` | Descritor com `name`, `version`, `read_only`; não consulta storage. |
+| `POST /tools/tags.lookup` | Entrada JSON `{"slug":"go"}` e resultado do executor. |
+
+POST exige `application/json`. Query parameters, corpo em GET, chaves extras ou
+duplicadas são recusados; o limite de 1 KiB também vale para corpo de tamanho
+desconhecido/chunked. Falhas de metadados/entrada passam por identidade, política e
+auditoria antes de responder, sem storage. Rotas desconhecidas retornam 404;
+métodos fora de GET/POST retornam 405 com `Allow`, sem executar ferramenta.
+Não há CORS, autenticação por cookie, redirects ou fallback REST.
+
+| Falha | HTTP |
+|---|---|
+| Credencial ausente/inválida | 401 com challenge Bearer |
+| Permissão ausente | 403 |
+| Entrada inválida | 400 |
+| Corpo maior que 1 KiB | 413 |
+| Content-Type incompatível | 415 |
+| Leitura de corpo expirada / chamada cancelada | 408 |
+| Deadline do executor | 504 |
+| Falha de auditoria ou indisponibilidade | 503 |
+| Saída inconsistente | 500 |
+
+Erros contêm somente código estável; nunca token, DSN ou erro bruto. Todas as
+respostas usam `Cache-Control: no-store`, `Vary: Authorization`, JSON e `nosniff`.
+Falha de auditoria tem precedência e retém tanto resultado quanto descritor.
+Tag ausente/desabilitada continua HTTP 200 com `{"found":false}`.
+
+`NewLocalHTTPServer("127.0.0.1:8081", handler)` cria um `http.Server`, sem
+iniciá-lo. Aceita apenas endereço IP numérico de loopback explícito; wildcard,
+hostname e bind remoto são recusados. Aplica budgets de leitura/header de dois
+segundos, escrita de cinco segundos, idle de 30 segundos e headers de 16 KiB.
+A aplicação é dona do listener, shutdown e do fechamento do sink de auditoria.
+Ao montar o handler em outro servidor, aplicar limites equivalentes de leitura e
+escrita; somente contexto Go não interrompe um reader bloqueado.
+
+```go
+handler, err := taglookup.NewHTTPHandler(tagsService, identity, audit.Write)
+if err != nil {
+    return err
+}
+server, err := taglookup.NewLocalHTTPServer("127.0.0.1:8081", handler)
+if err != nil {
+    return err
+}
+// The application may call server.ListenAndServe and owns shutdown.
+```
+
+Testes cobrem GET/POST autorizados e negados, isolamento de credenciais,
+ausência de fallback por cookie/query, corpo chunked grande, falhas sanitizadas e
+auditoria antes de liberar saída. Um teste abre conexão loopback real com token
+RSA e auditoria SQLite, incluindo cliente com corpo parcial que expira no servidor.
+Não há deploy remoto, TLS provisionado, MCP ou credenciais de produção incluídos.
 
 ## Ensaio local da consulta e limites
 
@@ -295,7 +358,7 @@ missing => {"found":false}
 Isso comprova localmente o formato de filtro/projeção limitado. **Não** comprova
 parser de entrada, identidade, permissão, auditoria, limites de saída nem falhas
 propostas: eram requisitos de aceitação naquele ensaio. O executor local posterior está
-descrito acima; o provedor de produção e o transporte externo permanecem pendentes.
+descrito acima; o provedor de produção e o deploy remoto permanecem pendentes.
 
 Para repetir, criar o diretório e salvar o bloco Go abaixo em
 `/tmp/hyrule-read-pilot/main.go`; executar na raiz do repositório:

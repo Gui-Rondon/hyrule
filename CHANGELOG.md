@@ -18,6 +18,11 @@ the minor version instead.
 
 ### Added
 
+- Add opt-in loopback HTTP transport for the tags pilot: JWT-protected GET
+  discovery and POST lookup, mandatory audit, strict bounded requests, sanitized
+  errors and explicit server timeouts. Verify real HTTP/RSA/SQLite integration
+  and slow-body timeout; keep default startup and remote deployment unchanged.
+
 - Provision the local tags pilot from an explicit public-key PEM and persist
   sanitized audit records in a separate SQLite file with WAL/FULL synchronization;
   fail closed on audit errors and verify persistence/reopening and concurrency.

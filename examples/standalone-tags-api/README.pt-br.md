@@ -96,3 +96,13 @@ credenciais de produção incluídos.
 
 Ver o [contrato do piloto](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/read-pilot.md)
 para composição, limites e critérios de aceitação.
+
+
+`NewHTTPHandler(service, identity, audit.Write)` oferece descoberta GET e consulta
+POST em `/tools/tags.lookup`, com header Bearer único e auditoria obrigatória.
+Cookie, query e token herdado no contexto não autenticam requests.
+`NewLocalHTTPServer("127.0.0.1:8081", handler)` cria, sem iniciar, servidor restrito
+a loopback com limites de leitura/escrita/header. A aplicação controla startup e
+shutdown. Não há rota automática, deploy remoto, TLS provisionado ou MCP.
+Os testes incluem socket loopback real e timeout de corpo parcial; o ambiente
+precisa permitir escuta local.

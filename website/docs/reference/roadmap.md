@@ -170,3 +170,7 @@ review of the proposals.
 The pilot now integrates RS256 JWT verification and scope policy with real
 signature tests. A persistent SQLite audit sink is also available. Production provider
 configuration and external transport remain pending; Phase 7 remains partial.
+
+The opt-in local HTTP pilot now has JWT/audit-protected discovery and invocation,
+real loopback tests and read/write limits. Remote deployment, production provider
+configuration and MCP remain pending; Phase 7 remains partial.

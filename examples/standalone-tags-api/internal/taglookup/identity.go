@@ -16,7 +16,7 @@ type tokenKey struct{}
 
 // WithToken carries an untrusted compact JWT, without a Bearer prefix. It grants
 // no identity: Verify and Authorize validate its signature and claims each time.
-// A future transport must extract credentials without logging the token.
+// Transports must extract credentials without logging the token.
 func WithToken(ctx context.Context, token string) context.Context {
 	return context.WithValue(ctx, tokenKey{}, token)
 }

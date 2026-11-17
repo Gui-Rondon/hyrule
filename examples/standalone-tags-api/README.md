@@ -65,7 +65,7 @@ it changes for a module outside Hyrule's own `go.mod`.
 ## Optional local tags lookup pilot
 
 `internal/taglookup` is an application-local executor for the single read-only
-`tags.lookup` operation. It is not registered in `main` and exposes no endpoint.
+`tags.lookup` operation. It is not registered in `main`; its HTTP handler/server helpers are opt-in.
 Construct it explicitly with an already registered tags `rest.Service`, a fixed
 resource scope, a trusted identity verifier, an authorization policy and a mandatory
 audit sink. Missing dependencies fail construction; missing identity/permission
@@ -110,3 +110,13 @@ independent committed appends. Use a separate file from resource data; close the
 sink on shutdown. New audit files use mode 0600; existing permissions, retention,
 backup and volume protection remain deployment concerns. The pilot contract
 includes startup composition and failure behavior. No credentials are bundled.
+
+
+`NewHTTPHandler(service, identity, audit.Write)` exposes authorized GET discovery
+and POST invocation at `/tools/tags.lookup`. It requires a single Bearer header,
+strict JSON input and mandatory audit; cookies, query credentials and inherited
+token contexts grant no access. `NewLocalHTTPServer("127.0.0.1:8081", handler)`
+creates, but does not start, a loopback-only server with read/write/header limits.
+The application owns startup/shutdown. No default route, remote deployment, TLS
+provisioning or MCP is introduced. The pilot tests include a real loopback socket
+and a partial-body timeout, so their environment must permit local listening.
