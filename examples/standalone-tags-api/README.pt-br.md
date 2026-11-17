@@ -132,3 +132,5 @@ existente em modo de leitura. Não gera dados/tokens nem altera o servidor REST.
 O [guia MCP](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/mcp-pilot.md)
 inclui configuração `mcpServers`, troubleshooting e limites de compatibilidade.
 `go test -race ./cmd/tags-mcp` testa o binário real com cliente SDK e fixtures locais.
+
+Recuperação opcional de documentação com pgvector: veja [configuração e limites](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/knowledge-pilot.md).

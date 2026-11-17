@@ -1,0 +1,26 @@
+[
+  {
+    "id": "architecture-decisions",
+    "source": "website/docs/reference/architecture-decisions.md",
+    "revision": "REPLACE_WITH_INDEXED_GIT_COMMIT",
+    "subjects": ["REPLACE_WITH_JWT_SUBJECT"]
+  },
+  {
+    "id": "read-pilot",
+    "source": "website/docs/reference/read-pilot.md",
+    "revision": "REPLACE_WITH_INDEXED_GIT_COMMIT",
+    "subjects": ["REPLACE_WITH_JWT_SUBJECT"]
+  },
+  {
+    "id": "mcp-pilot",
+    "source": "website/docs/reference/mcp-pilot.md",
+    "revision": "REPLACE_WITH_INDEXED_GIT_COMMIT",
+    "subjects": ["REPLACE_WITH_JWT_SUBJECT"]
+  },
+  {
+    "id": "phase-6-contract-study",
+    "source": "website/docs/reference/phase-6-contract-study.md",
+    "revision": "REPLACE_WITH_INDEXED_GIT_COMMIT",
+    "subjects": ["REPLACE_WITH_JWT_SUBJECT"]
+  }
+]

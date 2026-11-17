@@ -684,8 +684,9 @@ abertos; esta evidência não transforma o escopo completo do ADR em implementad
 
 ## ADR-0012 — Retrieval opcional, dirigido por consumidor e sincronizado por outbox
 
-**Status:** Proposto; implementação adiada até existir um caso de uso com corpus,
-política de acesso e critérios de qualidade definidos.
+**Status:** Proposto para dados vivos/outbox; um [piloto de documentação](knowledge-pilot.md)
+estática implementa ingestão pgvector, ACL de manifesto e retrieval MCP.
+A avaliação de qualidade com modelo real permanece aberta.
 
 **Contexto.** Há indexação Elasticsearch em `platform/search` e sincronização
 best-effort pós-commit em `behaviors/searchsync`. Mongo/Postgres já possuem outbox

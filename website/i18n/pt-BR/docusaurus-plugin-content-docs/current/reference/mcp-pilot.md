@@ -230,3 +230,5 @@ real da aplicação/desktop, provisionamento, operação da auditoria, isolament
 multi-tenant e transporte MCP remoto ainda dependem de evidência da aplicação.
 Mutações e RAG continuam incrementos separados e adiados. O adapter não cria
 framework de agentes, exportação automática de CRUD ou deploy de produção.
+
+O [piloto de recuperação de documentação](knowledge-pilot.md) acrescenta ferramentas de conhecimento com pgvector em executável local separado.

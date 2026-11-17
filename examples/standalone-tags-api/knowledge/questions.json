@@ -1,0 +1,7 @@
+[
+  {"query":"Which persistence backends support transactional outbox?","expected_sources":["website/docs/reference/architecture-decisions.md"]},
+  {"query":"Why is dryrun not a safe execution sandbox?","expected_sources":["website/docs/reference/architecture-decisions.md"]},
+  {"query":"How does the OpenAPI PATCH schema treat nested required fields?","expected_sources":["website/docs/reference/phase-6-contract-study.md"]},
+  {"query":"How do signed JWT permissions authorize local MCP tools?","expected_sources":["website/docs/reference/mcp-pilot.md","website/docs/reference/read-pilot.md"]},
+  {"query":"How does the Postgres adapter store resource documents?","expected_sources":["website/docs/reference/architecture-decisions.md"]}
+]

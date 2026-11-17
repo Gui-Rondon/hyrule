@@ -659,8 +659,9 @@ this evidence does not mark the entire ADR scope implemented.
 
 ## ADR-0012 — Consumer-driven retrieval synchronized through outbox
 
-**Status:** Proposed; implementation deferred until a use case defines a corpus,
-access policy and quality criteria.
+**Status:** Proposed for live application data/outbox; an optional static
+[documentation pilot](knowledge-pilot.md) now implements pgvector ingestion,
+manifest ACLs and MCP retrieval. Real-model quality evaluation remains open.
 
 **Context.** `platform/search` writes to Elasticsearch;
 `behaviors/searchsync` synchronizes after commit on a best-effort basis. Mongo and

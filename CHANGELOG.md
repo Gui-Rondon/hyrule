@@ -18,6 +18,10 @@ the minor version instead.
 
 ### Added
 
+- Add optional documentation ingestion and MCP search/fetch with pgvector, explicit
+  corpus/subject ACLs, Ollama embeddings, independent audit and a storage interface
+  for a future Qdrant implementation. Include real pgvector and stdio tests.
+
 - Add opt-in `cmd/tags-mcp` with explicit environment/file configuration,
   read-only existing SQLite data, separate audit and per-operation token-file
   refresh. Test the compiled executable with an SDK client, stdout discipline,

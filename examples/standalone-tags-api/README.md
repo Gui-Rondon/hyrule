@@ -147,3 +147,5 @@ It generates no data/tokens and does not change the REST server. The
 configuration, troubleshooting and compatibility limits.
 `go test -race ./cmd/tags-mcp` verifies the actual binary with the SDK client and
 local fixtures.
+
+Optional pgvector documentation retrieval: see [setup and limits](../../website/docs/reference/knowledge-pilot.md).

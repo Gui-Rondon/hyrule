@@ -160,3 +160,5 @@ correção. As restrições de servidor C6-02–04 continuam explícitas.
 
 O [piloto de consulta tags.lookup](read-pilot.md) define o recurso e a política
 proposta para o próximo incremento, com limites e critérios de aceitação.
+
+O [piloto de conhecimento](knowledge-pilot.md) implementa o corpus de documentação selecionado com pgvector, ACL explícita por sujeito e MCP search/fetch; não encerra critérios de outbox vivo ou qualidade semântica.

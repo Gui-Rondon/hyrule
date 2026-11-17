@@ -143,3 +143,5 @@ Server-side constraints C6-02–04 remain explicit.
 
 The [tags.lookup read pilot](read-pilot.md) defines the resource and proposed
 policy for the next increment, including limits and acceptance criteria.
+
+The optional [knowledge pilot](knowledge-pilot.md) implements the selected documentation corpus with pgvector, explicit subject ACLs and MCP search/fetch; it does not close live outbox or semantic-quality criteria.
