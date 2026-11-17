@@ -136,3 +136,21 @@ func (i *JWTIdentity) AuthorizeKnowledge(ctx context.Context, p Principal, a Act
 	}
 	return ErrForbidden
 }
+
+// AuthorizeKnowledgeWrite is the curator permission for the separate document
+// producer. It grants no MCP tool and never implies knowledge:read.
+func (i *JWTIdentity) AuthorizeKnowledgeWrite(ctx context.Context, p Principal, scope string) error {
+	claims, err := i.claims(ctx)
+	if err != nil {
+		return err
+	}
+	if claims.Subject != p.Subject || scope != i.scope {
+		return ErrForbidden
+	}
+	for _, permission := range strings.Split(claims.Scope, " ") {
+		if permission == "knowledge:write" {
+			return nil
+		}
+	}
+	return ErrForbidden
+}

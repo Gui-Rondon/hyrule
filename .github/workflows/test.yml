@@ -96,11 +96,15 @@ jobs:
         with:
           check-latest: true
           go-version: '1.27.x'
+      - name: Provision vector extension before concurrent package tests
+        env:
+          PGVECTOR_TEST_CONTAINER: ${{ job.services.pgvector.id }}
+        run: docker exec "$PGVECTOR_TEST_CONTAINER" psql -U postgres -d knowledge -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS vector'
       - name: Test real pgvector and stdio knowledge command
         working-directory: examples/standalone-tags-api
         env:
           KNOWLEDGE_TEST_DATABASE_URL: postgres://postgres:local-test-only@127.0.0.1:${{ job.services.pgvector.ports[5432] }}/knowledge?sslmode=disable
-        run: go test -race ./internal/knowledge ./cmd/knowledge-mcp -count=1
+        run: go test -race ./internal/knowledge ./internal/knowledgedocs ./cmd/knowledge-mcp ./cmd/knowledge-docs -count=1
   docs:
     name: Documentation EN and PT
     runs-on: ubuntu-latest
