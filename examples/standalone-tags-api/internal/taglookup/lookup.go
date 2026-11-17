@@ -27,7 +27,11 @@ const MaxOutput = 16 * 1024
 const minSlugLength = 1
 const maxSlugLength = 128
 const invalidSlugPattern = `[^A-Za-z0-9_-]`
-const executionTimeout = 2 * time.Second
+
+// ExecutionTimeout is shared with adapters that retrieve credentials before
+// entering the executor, so retrieval cannot extend the operation budget.
+const ExecutionTimeout = 2 * time.Second
+const executionTimeout = ExecutionTimeout
 const auditTimeout = time.Second
 
 var (

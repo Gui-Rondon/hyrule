@@ -103,7 +103,8 @@ POST em `/tools/tags.lookup`, com header Bearer único e auditoria obrigatória.
 Cookie, query e token herdado no contexto não autenticam requests.
 `NewLocalHTTPServer("127.0.0.1:8081", handler)` cria, sem iniciar, servidor restrito
 a loopback com limites de leitura/escrita/header. A aplicação controla startup e
-shutdown. Não há rota automática, deploy remoto, TLS provisionado ou MCP.
+shutdown. Não há rota automática, deploy remoto ou TLS provisionado; o adapter MCP local
+opcional está descrito abaixo.
 Os testes incluem socket loopback real e timeout de corpo parcial; o ambiente
 precisa permitir escuta local.
 
@@ -114,3 +115,10 @@ determinístico. Tipos vêm do schema do recurso; as restrições de slug e resu
 são da operação. Descoberta autoriza/audita sem consultar dados, com metadados novos
 por chamada. Hash/schema não substituem autorização. Os contratos são comparados
 com o parser real e os resultados SQLite.
+
+
+O adapter opcional `internal/tagmcp` usa SDK oficial Go v1.8.0 e protocolo
+2025-11-25. `NewServer`/`RunStdio` reutilizam descoberta e executor, com credencial
+local explícita, autorização e auditoria por operação. Os testes usam cliente SDK
+real em memória e subprocesso stdio. `main` não mudou; não há MCP HTTP/OAuth ou
+deploy remoto. Ver o [piloto MCP](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/mcp-pilot.md).

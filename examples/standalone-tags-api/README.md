@@ -117,8 +117,8 @@ and POST invocation at `/tools/tags.lookup`. It requires a single Bearer header,
 strict JSON input and mandatory audit; cookies, query credentials and inherited
 token contexts grant no access. `NewLocalHTTPServer("127.0.0.1:8081", handler)`
 creates, but does not start, a loopback-only server with read/write/header limits.
-The application owns startup/shutdown. No default route, remote deployment, TLS
-provisioning or MCP is introduced. The pilot tests include a real loopback socket
+The application owns startup/shutdown. No default route, remote deployment or TLS
+provisioning is introduced; MCP is an optional separate adapter described below. The pilot tests include a real loopback socket
 and a partial-body timeout, so their environment must permit local listening.
 
 
@@ -129,3 +129,10 @@ schema; the lookup's restricted slug and result shapes are operation-specific.
 Discovery performs authorization/audit without data queries. Returned metadata is
 fresh per call; hash/schema validation never replace execution authorization.
 The schemas are tested against the real parser and SQLite lookup results.
+
+
+The optional `internal/tagmcp` adapter pins official Go SDK v1.8.0 and protocol
+2025-11-25. `NewServer`/`RunStdio` reuse discovery/execution with an explicit local
+credential source and per-operation authorization/audit. Tests use actual SDK
+clients over memory and a stdio subprocess. `main` is unchanged; MCP HTTP/OAuth
+and remote deployment are not included. See the [MCP pilot](../../website/docs/reference/mcp-pilot.md).

@@ -599,8 +599,8 @@ when mandatory audit recording fails.
 
 ## ADR-0011 — MCP as an optional catalog adapter
 
-**Status:** Proposed; transport and SDK selected during implementation with a
-real consumer.
+**Status:** Proposed direction; local SDK/stdio pilot implemented (see dated note).
+Production client adoption and remote authorization remain open.
 
 **Context.** MCP standardizes tool/resource discovery and invocation and continues
 to evolve. The audited checkout contains no MCP server.
@@ -650,6 +650,12 @@ Primary references: [MCP tools, 2026-07-28 specification](https://github.com/mod
 and [MCP tools, 2025-06-18 version, including annotation trust](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2025-06-18/server/tools.mdx).
 Implementation must verify support in the selected SDK/client; no compatibility
 matrix has been validated in this documentation round.
+
+**Implementation note — 2026-11-16.** The [local MCP pilot](mcp-pilot.md)
+selects official SDK v1.8.0 and protocol 2025-11-25, with a separate internal
+adapter, real SDK memory/stdio clients and per-operation authorization/audit.
+Production client adoption, MCP HTTP/OAuth and multi-user isolation remain open;
+this evidence does not mark the entire ADR scope implemented.
 
 ## ADR-0012 — Consumer-driven retrieval synchronized through outbox
 

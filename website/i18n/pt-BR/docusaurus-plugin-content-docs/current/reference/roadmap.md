@@ -14,7 +14,7 @@ atual.
 ## Trabalho atual de adoção e estabilidade
 
 As Fases 0–5 abaixo são históricas; a Fase 6 tem evidência de estudo e segue
-aberta; a Fase 7 tem piloto local parcial; a Fase 8 tem descoberta local parcial; as Fases 9–11 são propostas não iniciadas. O [roadmap atual para v1](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
+aberta; a Fase 7 tem piloto local parcial; a Fase 8 tem descoberta local parcial; a Fase 9 tem adapter local parcial; as Fases 10–11 são propostas não iniciadas. O [roadmap atual para v1](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
 adiciona políticas de compatibilidade/suporte, CI Go 1.26/1.27 em PRs, scaffold
 SQLite local, composição de roteadores e releases manuais com proveniência.
 Veja [estabilidade](stability.md) e [SQLite](sqlite.md) para o comportamento atual.
@@ -125,7 +125,7 @@ apresentação para cada uma delas.
 
 A Fase 6 tem [estudo concluído](phase-6-contract-study.md), com correções de
 contrato e aceitação da decisão ainda abertas; não está Concluída. A Fase 7 tem executor local parcial com identidade/política JWT, sem transporte externo.
-A Fase 8 tem descoberta local parcial; as Fases 9–11 continuam **Propostas / não iniciadas**. Os [ADRs
+A Fase 8 tem descoberta local parcial; a Fase 9 tem adapter local parcial; as Fases 10–11 continuam **Propostas / não iniciadas**. Os [ADRs
 0007–0012](architecture-decisions.md) registram as decisões propostas; a [análise de DX
 e prontidão para IA](ai-readiness.md) registra suas evidências. Esta numeração estende o
 roadmap de framework/plataforma, sem renumerar o plano histórico de portabilidade
@@ -172,7 +172,7 @@ credenciais de IA.
 
 Consumidor inicial, recurso e política de autorização; origem e direção de eventual
 codegen; formato da API neutra de exportação de contrato; nome/distribuição dos pacotes;
-transporte, versão e SDK MCP; armazenamento de aprovações/idempotência; provedor de
+transporte MCP de produção e adoção por cliente; armazenamento de aprovações/idempotência; provedor de
 embeddings, índice, corpus e metas de RAG. Essas escolhas dependem de evidência
 identificada nas fases correspondentes e não impedem revisar as propostas.
 
@@ -186,4 +186,8 @@ remoto, provedor de produção e MCP permanecem pendentes; a Fase 7 segue parcia
 
 A descoberta local do piloto agora projeta schemas de entrada/saída e limites do
 contrato, com hash determinístico e autorização/auditoria a cada chamada. A Fase 8
-segue parcial: não há catálogo genérico, cache por perfil nem adapter MCP.
+segue parcial: catálogo genérico e cache por perfil permanecem abertos; ver adapter MCP local abaixo.
+
+O [adapter MCP local](mcp-pilot.md) implementa tools/list e tools/call reutilizando
+o executor, com SDK v1.8.0/protocolo 2025-11-25 e cliente SDK real em memória/stdio.
+A Fase 9 segue parcial quanto a adoção por consumidor de produção e MCP remoto.

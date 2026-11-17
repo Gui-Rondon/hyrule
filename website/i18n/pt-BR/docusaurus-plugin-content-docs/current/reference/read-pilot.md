@@ -386,8 +386,8 @@ verificam hash determinístico, isolamento de mutações, ausência de dados de 
 nenhuma execução de callbacks de escrita e paridade GET/POST.
 
 É descoberta do piloto local, não conclusão do catálogo genérico ou da Fase 8.
-O próximo adapter MCP poderá reutilizar `Discover` e `Execute` sem duplicar schema
-ou autorização, após escolher cliente, transporte e versão compatíveis.
+O adapter MCP local separado reutiliza `Discover` e `Execute`; SDK, transporte e
+matriz de compatibilidade estão no [piloto MCP](mcp-pilot.md).
 
 ## Ensaio local da consulta e limites
 
@@ -485,3 +485,9 @@ func main() {
 	}
 }
 ```
+
+## Adapter MCP local
+
+O [piloto MCP](mcp-pilot.md) reutiliza `Discover` e `Execute` em pacote interno
+separado, com SDK oficial fixado, protocolo 2025-11-25 e testes de cliente real
+em memória/stdio. Identidade, política e auditoria são revalidadas por operação.

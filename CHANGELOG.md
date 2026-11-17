@@ -18,6 +18,11 @@ the minor version instead.
 
 ### Added
 
+- Add an optional internal MCP adapter to the standalone example using official
+  Go SDK v1.8.0 and protocol 2025-11-25. Reuse authorized discovery and execution,
+  bound stdio frames and verify real SDK clients over memory/stdio, denial, audit
+  and cancellation. Keep the SDK outside the framework module and default startup.
+
 - Publish authorized input/output JSON Schemas, executor limits, explicit
   server-only constraints and deterministic contract hashes in tags-pilot
   discovery. Derive field types from the registered resource and verify schema

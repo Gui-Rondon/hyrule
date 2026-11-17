@@ -383,8 +383,8 @@ hashing, mutation isolation, no user data, no execution of write callbacks and
 GET/POST contract parity.
 
 This is local pilot discovery, not completion of the generic catalog or Phase 8.
-A future MCP adapter can reuse `Discover` and `Execute` without duplicating schema
-or authorization after selecting a compatible client, transport and version.
+The separate local MCP adapter reuses `Discover` and `Execute`; its selected SDK,
+transport and compatibility matrix are documented in [the MCP pilot](mcp-pilot.md).
 
 ## Local query rehearsal and its limits
 
@@ -482,3 +482,9 @@ func main() {
 	}
 }
 ```
+
+## Local MCP adapter
+
+The [MCP pilot](mcp-pilot.md) reuses `Discover` and `Execute` from a separate
+internal package, with a pinned official SDK, protocol 2025-11-25 and real
+client tests over memory/stdio. Identity, policy and audit are repeated per operation.

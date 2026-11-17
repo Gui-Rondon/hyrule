@@ -11,7 +11,7 @@ sidebar_position: 21
 This review extends ADR-0001–0006 and historical Phases 0–5. It does not restart
 that work. [ADRs 0007–0012](architecture-decisions.md) are **Proposed**;
 [Phase 6](roadmap.md) has a completed contract study with corrections still open;
-Phase 7 has a partial local executor; Phase 8 has partial local discovery; Phases 9–11 are **not started**. Acceptance and implementation are
+Phase 7 has a partial local executor; Phase 8 has partial local discovery; Phase 9 has a partial local MCP adapter; Phases 10–11 are **not started**. Acceptance and implementation are
 separate. This review adds no runtime capabilities or performance measurements. The later
 contract study uses in-memory SQLite; it does not run the services' Mongo/Postgres
 integration paths.

@@ -65,7 +65,7 @@ func (e *Executor) Discover(ctx context.Context) (Contract, error) {
 		Name: tool.Name, Version: tool.Version, ReadOnly: tool.ReadOnly,
 		Description: "Look up one enabled tag by exact, case-sensitive slug.",
 		InputSchema: input,
-		OutputSchema: map[string]any{"$schema": schemaDialect, "oneOf": []any{
+		OutputSchema: map[string]any{"$schema": schemaDialect, "type": "object", "oneOf": []any{
 			object(map[string]any{"found": map[string]any{"const": false}}, "found"),
 			object(map[string]any{"found": map[string]any{"const": true}, "tag": tag}, "found", "tag"),
 		}},

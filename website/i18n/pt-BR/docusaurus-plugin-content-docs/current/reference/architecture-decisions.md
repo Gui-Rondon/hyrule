@@ -619,8 +619,8 @@ pela aplicação.
 
 ## ADR-0011 — MCP como adaptador opcional do catálogo
 
-**Status:** Proposto; transporte e SDK a selecionar na implementação, após consumidor
-concreto.
+**Status:** Direção proposta; piloto local SDK/stdio implementado (ver nota datada).
+Adoção em produção e autorização remota permanecem abertas.
 
 **Contexto.** MCP padroniza descoberta e chamada de ferramentas e recursos. O contrato
 evolui; as versões e fontes consultadas estão indicadas abaixo. Não existe servidor MCP
@@ -675,6 +675,12 @@ e [MCP tools — versão 2025-06-18, incluindo confiança em
 annotations](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2025-06-18/server/tools.mdx).
 A implementação deve confirmar a versão suportada pelo SDK/cliente escolhido; este
 relatório não declara uma matriz de compatibilidade já validada.
+
+**Nota de implementação — 2026-11-16.** O [piloto MCP local](mcp-pilot.md)
+selecionou SDK oficial v1.8.0 e protocolo 2025-11-25, com adapter interno separado,
+cliente SDK real em memória/stdio e autorização/auditoria em cada operação.
+Adoção por cliente de produção, HTTP MCP/OAuth e isolamento multiusuário continuam
+abertos; esta evidência não transforma o escopo completo do ADR em implementado.
 
 ## ADR-0012 — Retrieval opcional, dirigido por consumidor e sincronizado por outbox
 

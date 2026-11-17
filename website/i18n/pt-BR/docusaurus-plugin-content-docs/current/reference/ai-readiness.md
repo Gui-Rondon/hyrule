@@ -10,7 +10,7 @@ sidebar_position: 21
 Esta revisão estende ADR-0001–0006 e as Fases 0–5 históricas, sem recomeçar esse
 trabalho. Os [ADRs 0007–0012](architecture-decisions.md) estão **Propostos**. A
 [Fase 6](roadmap.md) tem estudo concluído e correções de contrato abertas; a
-Fase 7 tem executor local parcial; a Fase 8 tem descoberta local parcial; as Fases 9–11 estão **não iniciadas**. Aceitação e implementação são fatos separados.
+Fase 7 tem executor local parcial; a Fase 8 tem descoberta local parcial; a Fase 9 tem adapter MCP local parcial; as Fases 10–11 estão **não iniciadas**. Aceitação e implementação são fatos separados.
 Não há novas capacidades de runtime ou medições de desempenho. O estudo posterior
 usa SQLite em memória; não executa as integrações Mongo/Postgres dos serviços.
 
