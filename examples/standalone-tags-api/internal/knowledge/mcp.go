@@ -103,7 +103,11 @@ func NewServer(c Config) (*mcp.Server, error) {
 			var payload any
 			if name == "knowledge.search" {
 				var vector []float32
-				vector, e = c.Embedder.Embed(ctx, value)
+				if queryEmbedder, ok := c.Embedder.(QueryEmbedder); ok {
+					vector, e = queryEmbedder.EmbedQuery(ctx, value)
+				} else {
+					vector, e = c.Embedder.Embed(ctx, value)
+				}
 				if e == nil {
 					var chunks []Chunk
 					chunks, e = c.Store.Search(ctx, a, vector, 5)

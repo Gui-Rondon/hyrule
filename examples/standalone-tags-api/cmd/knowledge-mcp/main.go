@@ -79,9 +79,9 @@ func run(ctx context.Context) error {
 	if err != nil || dimensions < 1 || dimensions > 4096 {
 		return errors.New("invalid embedding dimensions")
 	}
-	store.Model = settings["EMBED_MODEL"]
+	store.Model = knowledge.EmbeddingContract(settings["EMBED_MODEL"], dimensions, os.Getenv("KNOWLEDGE_EMBED_DOCUMENT_PREFIX"), os.Getenv("KNOWLEDGE_EMBED_QUERY_PREFIX"))
 	store.Dimensions = dimensions
-	embed := &knowledge.Ollama{URL: settings["EMBED_URL"], Model: store.Model, Dimensions: dimensions, Client: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	embed := &knowledge.Ollama{URL: settings["EMBED_URL"], Model: settings["EMBED_MODEL"], Dimensions: dimensions, DocumentPrefix: os.Getenv("KNOWLEDGE_EMBED_DOCUMENT_PREFIX"), QueryPrefix: os.Getenv("KNOWLEDGE_EMBED_QUERY_PREFIX"), Client: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 	if mode == "ingest" {
 		return ingest(ctx, store, embed, settings)
 	}

@@ -29,6 +29,13 @@ func (e fixedEmbed) Embed(context.Context, string) ([]float32, error) {
 	return []float32{1, 0, 0}, nil
 }
 
+type countingEmbed struct{ calls int }
+
+func (e *countingEmbed) Embed(context.Context, string) ([]float32, error) {
+	e.calls++
+	return []float32{1, 0, 0}, nil
+}
+
 type memoryStore struct {
 	chunks []EmbeddedChunk
 	doc    Document
@@ -117,9 +124,10 @@ func TestMCPIdentityACLAndAudit(t *testing.T) {
 	}
 	token := sign("knowledge:read")
 	store := &memoryStore{}
+	embed := &countingEmbed{}
 	auditFail := false
 	records := []taglookup.Record{}
-	server, e := NewServer(Config{Store: store, Embedder: fixedEmbed{}, Identity: identity, Scope: "docs", Token: func(context.Context) (string, error) { return token, nil }, Audit: func(ctx context.Context, r taglookup.Record) error {
+	server, e := NewServer(Config{Store: store, Embedder: embed, Identity: identity, Scope: "docs", Token: func(context.Context) (string, error) { return token, nil }, Audit: func(ctx context.Context, r taglookup.Record) error {
 		records = append(records, r)
 		if auditFail {
 			return errors.New("failure")
@@ -159,6 +167,12 @@ func TestMCPIdentityACLAndAudit(t *testing.T) {
 	if _, e = cs.ListTools(ctx, nil); e == nil {
 		t.Fatal("wrong permission exposed tools")
 	}
+	if _, e = cs.CallTool(ctx, &mcp.CallToolParams{Name: "knowledge.search", Arguments: map[string]any{"query": "private documents"}}); e == nil {
+		t.Fatal("wrong permission allowed processing")
+	}
+	if embed.calls != 1 {
+		t.Fatal("denied operation reached embeddings", embed.calls)
+	}
 	token = "invalid"
 	if _, e = cs.ListTools(ctx, nil); e == nil {
 		t.Fatal("invalid JWT accepted")
@@ -168,7 +182,7 @@ func TestMCPIdentityACLAndAudit(t *testing.T) {
 	if _, e = cs.CallTool(ctx, &mcp.CallToolParams{Name: "knowledge.search", Arguments: map[string]any{"query": "architecture"}}); e == nil || !strings.Contains(e.Error(), "audit unavailable") {
 		t.Fatal("audit did not withhold output", e)
 	}
-	if len(records) != 6 || records[3].Authorized || records[4].Subject != "" {
+	if len(records) != 7 || records[3].Authorized || records[4].Authorized || records[5].Subject != "" {
 		t.Fatal("invalid audit", records)
 	}
 }
@@ -253,5 +267,42 @@ func TestPostgresIsolationReplacementAndRollback(t *testing.T) {
 	h, e = p.Search(t.Context(), Access{scope, "bob"}, []float32{1, 0, 0}, 5)
 	if e != nil || len(h) != 0 {
 		t.Fatal("mixed models", h, e)
+	}
+}
+
+func TestEmbeddingTaskPrefixes(t *testing.T) {
+	inputs := []string{}
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Input string `json:"input"`
+		}
+		if json.NewDecoder(r.Body).Decode(&body) != nil {
+			t.Error("invalid request")
+		}
+		inputs = append(inputs, body.Input)
+		w.Write([]byte(`{"embeddings":[[1,0,0]]}`))
+	}))
+	defer endpoint.Close()
+	e := &Ollama{URL: endpoint.URL, Model: "test", Dimensions: 3, DocumentPrefix: "title: none | text: ", QueryPrefix: "task: search result | query: ", Client: endpoint.Client()}
+	if _, err := e.Embed(t.Context(), "document"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.EmbedQuery(t.Context(), "question"); err != nil {
+		t.Fatal(err)
+	}
+	if len(inputs) != 2 || inputs[0] != "title: none | text: document" || inputs[1] != "task: search result | query: question" {
+		t.Fatal(inputs)
+	}
+}
+
+func TestEmbeddingContract(t *testing.T) {
+	base := EmbeddingContract("m", 768, "document:", "query:")
+	for _, other := range []string{EmbeddingContract("m2", 768, "document:", "query:"), EmbeddingContract("m", 384, "document:", "query:"), EmbeddingContract("m", 768, "other:", "query:"), EmbeddingContract("m", 768, "document:", "other:")} {
+		if base == other {
+			t.Fatal("incompatible embedding contracts match")
+		}
+	}
+	if base != EmbeddingContract("m", 768, "document:", "query:") {
+		t.Fatal("unstable contract")
 	}
 }

@@ -50,6 +50,12 @@ type Embedder interface {
 	Embed(context.Context, string) ([]float32, error)
 }
 
+// QueryEmbedder optionally supplies a query-specific task prompt. Providers
+// without asymmetric prompts keep using Embed for both documents and queries.
+type QueryEmbedder interface {
+	EmbedQuery(context.Context, string) ([]float32, error)
+}
+
 var ErrNotFound = errors.New("document not found")
 
 // Ingest embeds a complete bounded document before replacing any stored data.
