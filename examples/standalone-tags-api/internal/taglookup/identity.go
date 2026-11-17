@@ -118,3 +118,21 @@ func (i *JWTIdentity) claims(ctx context.Context) (*identityClaims, error) {
 	}
 	return claims, nil
 }
+
+// AuthorizeKnowledge grants only the two read tools on the configured corpus.
+// Document ACLs remain mandatory in the retrieval store, in addition to scope.
+func (i *JWTIdentity) AuthorizeKnowledge(ctx context.Context, p Principal, a Action) error {
+	claims, err := i.claims(ctx)
+	if err != nil {
+		return err
+	}
+	if p.Subject != claims.Subject || a.Version != "1" || a.Permission != "knowledge:read" || a.Scope != i.scope || (a.Tool != "knowledge.search" && a.Tool != "knowledge.fetch") {
+		return ErrForbidden
+	}
+	for _, permission := range strings.Split(claims.Scope, " ") {
+		if permission == "knowledge:read" {
+			return nil
+		}
+	}
+	return ErrForbidden
+}
