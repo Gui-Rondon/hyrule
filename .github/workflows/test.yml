@@ -74,6 +74,37 @@ jobs:
       - name: Stop integration environment
         if: always()
         run: docker compose stop
+  knowledge:
+    name: pgvector documentation and MCP
+    runs-on: ubuntu-latest
+    services:
+      pgvector:
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+        env:
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: knowledge
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          check-latest: true
+          go-version: '1.27.x'
+      - name: Provision vector extension before concurrent package tests
+        env:
+          PGVECTOR_TEST_CONTAINER: ${{ job.services.pgvector.id }}
+        run: docker exec "$PGVECTOR_TEST_CONTAINER" psql -U postgres -d knowledge -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS vector'
+      - name: Test real pgvector and stdio knowledge command
+        working-directory: examples/standalone-tags-api
+        env:
+          KNOWLEDGE_TEST_DATABASE_URL: postgres://postgres:local-test-only@127.0.0.1:${{ job.services.pgvector.ports[5432] }}/knowledge?sslmode=disable
+        run: go test -race ./internal/knowledge ./internal/knowledgedocs ./cmd/knowledge-mcp ./cmd/knowledge-docs -count=1
   docs:
     name: Documentation EN and PT
     runs-on: ubuntu-latest

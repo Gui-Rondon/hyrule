@@ -1,0 +1,295 @@
+{
+  "chunks": 113,
+  "dimensions": 768,
+  "document_prefix": "title: none | text: ",
+  "documents_sha256": {
+    "website/docs/reference/ai-readiness.md": "de2dfcb196aff2dea41052721605d5456ff419a2063e184b14497acf08668a0a",
+    "website/docs/reference/architecture-decisions.md": "853597ad1a9c0b7faca9df86703e0abc69a37fac9a9a0367f76876edd0ee4fe2",
+    "website/docs/reference/dry-run.md": "32cfd8fff215b37da287ebe17371b6eb516777ab4b048e62fee8743610ebed14",
+    "website/docs/reference/mcp-pilot.md": "92ec00064a5eeb61bf86d57342839e1d23f57e9aaae174ebdd80b3caf5073d9e",
+    "website/docs/reference/outbox.md": "6d2524e6177cfd942275085f7325b021b8973c6f129f4b0e0819ec61e2bd9632",
+    "website/docs/reference/phase-6-contract-study.md": "2bf195df63c4c7019c56142c0f8d47516ec7e23852812bc4c24aa1aa0a2baa39",
+    "website/docs/reference/postgres-rfc.md": "b7923f5c72a043933742a52875ac8d066cd4ca3b79450b3fe56157f2631381d6",
+    "website/docs/reference/read-pilot.md": "5fab7171866c9112d11f291c334ab297b11a5be9099d8b5a9d23451498e0e592"
+  },
+  "embedding_contract": "embeddinggemma-300m-onnx-q8@5090578d9565bb06545b4552f76e6bc2c93e4a66#dc395fc180d763070aabbe8603769fc5b76e8ba26ef0580fcb9550804b58f3b3",
+  "index_ms": 41893.257,
+  "judgment": "Expected source AND any expected term in an excerpt; Hit@5/MRR@5 on curated questions, not exhaustive Recall@5 or answer quality. English PostgreSQL full-text OR baseline; includes Portuguese-to-English queries.",
+  "lexical_hit_at_5": 1,
+  "lexical_mrr_at_5": 0.7533333333333333,
+  "model": "embeddinggemma-300m-onnx-q8@5090578d9565bb06545b4552f76e6bc2c93e4a66",
+  "query_prefix": "task: search result | query: ",
+  "questions": 10,
+  "rows": [
+    {
+      "query": "Which persistence backends support transactional outbox?",
+      "vector": {
+        "sources": [
+          "website/docs/reference/outbox.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/outbox.md",
+          "website/docs/reference/outbox.md",
+          "website/docs/reference/postgres-rfc.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 121.03
+      },
+      "lexical": {
+        "sources": [
+          "website/docs/reference/outbox.md",
+          "website/docs/reference/dry-run.md",
+          "website/docs/reference/ai-readiness.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/outbox.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 16.172
+      }
+    },
+    {
+      "query": "Quais bancos suportam outbox transacional?",
+      "vector": {
+        "sources": [
+          "website/docs/reference/outbox.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/outbox.md",
+          "website/docs/reference/postgres-rfc.md",
+          "website/docs/reference/outbox.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 117.28
+      },
+      "lexical": {
+        "sources": [
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/outbox.md",
+          "website/docs/reference/postgres-rfc.md",
+          "website/docs/reference/outbox.md",
+          "website/docs/reference/postgres-rfc.md"
+        ],
+        "first_relevant_rank": 2,
+        "milliseconds": 11.906
+      }
+    },
+    {
+      "query": "Why is dryrun not a safe execution sandbox?",
+      "vector": {
+        "sources": [
+          "website/docs/reference/dry-run.md",
+          "website/docs/reference/dry-run.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/dry-run.md",
+          "website/docs/reference/architecture-decisions.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 107.844
+      },
+      "lexical": {
+        "sources": [
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/read-pilot.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/read-pilot.md",
+          "website/docs/reference/dry-run.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 11.875
+      }
+    },
+    {
+      "query": "Por que o dryrun não funciona como sandbox de execução?",
+      "vector": {
+        "sources": [
+          "website/docs/reference/dry-run.md",
+          "website/docs/reference/dry-run.md",
+          "website/docs/reference/dry-run.md",
+          "website/docs/reference/ai-readiness.md",
+          "website/docs/reference/architecture-decisions.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 108.766
+      },
+      "lexical": {
+        "sources": [
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/dry-run.md"
+        ],
+        "first_relevant_rank": 5,
+        "milliseconds": 10.737
+      }
+    },
+    {
+      "query": "How does the OpenAPI PATCH schema treat nested required fields?",
+      "vector": {
+        "sources": [
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 107.924
+      },
+      "lexical": {
+        "sources": [
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 15.398
+      }
+    },
+    {
+      "query": "Como o schema OpenAPI de PATCH trata campos aninhados obrigatórios?",
+      "vector": {
+        "sources": [
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 113.422
+      },
+      "lexical": {
+        "sources": [
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md",
+          "website/docs/reference/phase-6-contract-study.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 14.763
+      }
+    },
+    {
+      "query": "How do signed JWT permissions authorize local MCP tools?",
+      "vector": {
+        "sources": [
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/read-pilot.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 113.663
+      },
+      "lexical": {
+        "sources": [
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/mcp-pilot.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 15.766
+      }
+    },
+    {
+      "query": "Como permissões de um JWT assinado autorizam ferramentas MCP locais?",
+      "vector": {
+        "sources": [
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/read-pilot.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 115.778
+      },
+      "lexical": {
+        "sources": [
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/mcp-pilot.md",
+          "website/docs/reference/architecture-decisions.md"
+        ],
+        "first_relevant_rank": 1,
+        "milliseconds": 13.059
+      }
+    },
+    {
+      "query": "How does the Postgres adapter store resource documents?",
+      "vector": {
+        "sources": [
+          "website/docs/reference/postgres-rfc.md",
+          "website/docs/reference/postgres-rfc.md",
+          "website/docs/reference/postgres-rfc.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/architecture-decisions.md"
+        ],
+        "first_relevant_rank": 3,
+        "milliseconds": 112.123
+      },
+      "lexical": {
+        "sources": [
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/postgres-rfc.md",
+          "website/docs/reference/postgres-rfc.md"
+        ],
+        "first_relevant_rank": 3,
+        "milliseconds": 18.59
+      }
+    },
+    {
+      "query": "Como o adapter Postgres armazena documentos dos recursos?",
+      "vector": {
+        "sources": [
+          "website/docs/reference/postgres-rfc.md",
+          "website/docs/reference/postgres-rfc.md",
+          "website/docs/reference/postgres-rfc.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/architecture-decisions.md"
+        ],
+        "first_relevant_rank": 2,
+        "milliseconds": 120.261
+      },
+      "lexical": {
+        "sources": [
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/postgres-rfc.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/architecture-decisions.md",
+          "website/docs/reference/architecture-decisions.md"
+        ],
+        "first_relevant_rank": 2,
+        "milliseconds": 15.496
+      }
+    }
+  ],
+  "vector_hit_at_5": 1,
+  "vector_mrr_at_5": 0.8833333333333334,
+  "vector_p95_ms": 121.03,
+  "evaluated_on": "2026-11-16",
+  "corpus_base_commit": "eaacf6d",
+  "runtime": {
+    "onnxruntime": "1.31.1",
+    "numpy": "2.5.4",
+    "tokenizers": "0.22.2",
+    "cpu": "AMD Ryzen 9 7950X3D",
+    "intra_op_threads": 2,
+    "inter_op_threads": 1,
+    "provider": "CPUExecutionProvider",
+    "notes": "Warm model; persistent SQLite audit included in vector MCP latency. No GPU or external embedding API."
+  },
+  "model_sha256": {
+    "tokenizer.json": "4dda02faaf32bc91031dc8c88457ac272b00c1016cc679757d1c441b248b9c47",
+    "onnx/model_quantized.onnx": "172efde319fe1542dc41f31be6154910b05b78f7a861c265c4600eec906bd6d8",
+    "onnx/model_quantized.onnx_data": "705626e28e4c23c82ade34566b4197d97f534c12275fa406dfb71e9937d388c0"
+  }
+}

@@ -369,3 +369,421 @@ less time than a full rebuild; a push touching a shared path (go.mod,
 `platform/*`, `Dockerfile`) causes it to report and build all of them.
 Each service's `deploy.sh` stub runs without error and makes no real
 external change.
+
+## Proposed evolution — 2026-11-16
+
+ADRs 0007–0012 retain **Proposed** as their formal review status. Local
+implementation and formal acceptance are tracked separately: the PR #70 pilots
+implement parts of these decisions without closing their production scope.
+Package names in the proposals remain illustrative; actual code lives in the
+optional `examples/standalone-tags-api` module.
+
+| ADR | Current implementation evidence | Still open |
+|---|---|---|
+| 0007 | [21-case contract study](phase-6-contract-study.md), nested PATCH fixes and server-validation annotations | Formal acceptance; evidence for a generator |
+| 0008 | Explicit bounded `tags.lookup`, `knowledge.search` and `knowledge.fetch` | General reusable registry and public API |
+| 0009 | [Authorized tags discovery](read-pilot.md), schemas, limits and deterministic hash | Generic exporter/catalog and authorization-scoped caching |
+| 0010 | JWT/policy, read limits, mandatory read audit, source ACL/version checks; curator CRUD with ETags | Controlled MCP mutations, approval/idempotency, production domain audit and preview guarantees |
+| 0011 | [SDK/stdio pilot](mcp-pilot.md), selected protocol and real SDK clients | Target production/desktop client, MCP HTTP/OAuth and remote sessions |
+| 0012 | [pgvector retrieval](knowledge-pilot.md), [real-model evaluation](knowledge-evaluation.md), [source/outbox](knowledge-sync.md) and [article producer](knowledge-producer.md) | Production rollout, broader quality/load thresholds, operations and future Qdrant integration |
+
+The [roadmap](roadmap.md) and original [DX review](ai-readiness.md) separate
+historical audit findings from these later implementation increments.
+
+## ADR-0007 — Canonical contracts and evidence-driven generation
+
+**Status:** Proposed for formal acceptance; study and contract corrections
+implemented. Generation remains deferred pending recurring consumer evidence.
+
+**Context.** `declarative.Resource` compiles into `rest.Resource`;
+`rest.Schema` already drives validation and OpenAPI. The Go path constructs these
+types explicitly; it does not infer arbitrary domain structs. `Field.Check`,
+`Resource.Validate`, hooks and programmatic filters cannot be serialized as plain
+schema data.
+
+**Problem.** An independent AI schema or bidirectional YAML/Go generator would
+create drift. Dynamic `Doc` values may also make consumers repeat DTO definitions
+and validation, but the size of that cost has not been measured.
+
+**Alternatives considered.** Replace the core with Ent/GORM; infer everything
+from reflection and tags; maintain independent schemas; generate all models now;
+or reuse the current contract and measure duplication before generating code.
+
+**Decision.** Propose the last option. `Resource`/`Schema` remain the canonical
+runtime representation. Each resource has one chosen authoring source, YAML or
+Go, without bidirectional synchronization. Optional AI descriptors live outside
+the resource and reference its rules instead of duplicating them. Exporters
+identify custom validation as additional server-side constraints, without
+claiming full equivalence to JSON Schema.
+
+First study one declarative and one programmatic resource, covering nested
+objects, lists, nullability, required fields, defaults, uniqueness, PATCH and a
+custom validator. Measure repeated definitions, maintenance effort and detected
+drift. Only introduce generation when real consumers demonstrate recurring
+savings. Any generator must be unidirectional and deterministic, pin its version,
+keep generated files separate from manual hooks, and support a check-only mode.
+Whether YAML should generate DTOs or another source should be used remains open.
+
+**Consequences.** Discovery can proceed without generation. Input, PATCH and
+output contracts remain distinct. IDs and dates follow the resource's codecs and
+wire contract. REST schema does not acquire responsibility for DDL or data
+migration.
+
+**Risks.** Growing into a general compiler/ORM; losing Cerberus semantics such as
+`AllowEmpty`; pretending callbacks are exportable; assuming a newly required
+field is compatible with existing clients.
+
+**Validation criteria.** Compare exported contracts with actual validation for
+the cases above; diagnose unsupported constructs; avoid editing two schemas for
+one field; preserve current examples. Keep generation deferred if the study does
+not demonstrate value. Schema changes must document compatibility and migration,
+including new required fields and type changes.
+
+**Study evidence — updated 2026-11-17.** The [Phase 6 study](phase-6-contract-study.md)
+compared equivalent YAML/Go fixtures and 21 runtime/schema cases. The initial six
+differences are historical: two nested PATCH discrepancies are corrected, leaving
+four documented state/server-dependent differences. Write schemas also expose
+custom-validation annotations. There is no generator or completed formal ADR
+acceptance; the study supports keeping generation deferred.
+
+## ADR-0008 — Optional tool catalog over existing operations
+
+**Status:** Proposed for a general registry; bounded local tools implemented.
+
+**Context.** `rest.API.Register` returns a `Service`, whose `Resource()` exposes
+its definition. Services already implement operations and select storage through
+`Adapter`. Hooks are suitable for write lifecycle effects; they do not provide
+discovery, authentication or dispatch.
+
+**Problem.** Exposing Go methods directly would duplicate CRUD semantics, leak
+internal options and potentially enable operations disabled by the public
+resource contract.
+
+**Alternatives considered.** Automatically expose every resource; synthesize
+HTTP requests; build separate AI CRUD; or explicitly register bounded operations
+that call existing services.
+
+**Decision.** Propose explicit, default-deny registration. Each tool declares a
+stable name, contract version, description, permitted operation, input/output
+fields, required policy, limits and effects. Derive argument structure from the
+resource and add only operation-specific meaning. Start with one bounded read
+for a real consumer. Domain actions reference existing application functions,
+not workflows assembled through reflection.
+
+The application supplies registered services to the catalog; no access to
+private `rest.API` fields or database introspection is needed. Finalize the
+catalog before serving. Reject naming collisions, operations incompatible with
+configured resource methods and unsupported backend capabilities.
+`SkipValidation`, `SkipConcurrency`, credentials, arbitrary SQL and raw adapter
+access are never tool arguments. A package such as `aitools` is illustrative;
+the integration does not belong entirely in `behaviors/ai`.
+
+**Consequences.** The wrapper must map the relevant handler preparation:
+backend-aware parsing, mandatory filters, pagination limits, context, rendering
+and preconditions. Calling `Service` avoids a network hop but requires evidence
+of parity. If parity cannot be maintained, reconsider an authenticated HTTP
+client rather than maintaining inconsistent behavior.
+
+**Risks.** Treating public routes as automatically authorized tools; serializing
+internal fields from `Doc`; advertising Mongo query semantics on SQLite; mutating
+metadata while serving concurrent requests.
+
+**Validation criteria.** Unknown/hidden tools cannot execute; disabled methods
+cannot be re-enabled by the catalog; responses match documented fields and
+shape; invalid arguments fail before adapter access; validation, hooks and
+preconditions match the existing operation. Prove this for each enabled backend
+without claiming unsupported SQLite parity. Writes also require ADR-0010.
+
+**Implementation evidence — 2026-11-17.** The explicit pilots implement `tags.lookup` through its existing Service and
+`knowledge.search`/`knowledge.fetch` through a scoped Store. Registration stays
+inside application-local MCP adapters; there is no public general registry,
+automatic resource export or framework package named `aitools`. The
+[article producer](knowledge-producer.md) reuses Service CRUD and transaction hooks
+without adding MCP write tools.
+
+## ADR-0009 — Derived, bounded and authorized context discovery
+
+**Status:** Proposed for generic discovery; authorized local discovery implemented.
+
+**Context.** `rest/openapi.go` and `rest/swagger.go` describe registered resources
+and operations. Their document-generation functions are internal; there is no
+ready-made public generic MCP exporter.
+
+**Problem.** Clients need operation formats and restrictions without receiving
+business records, secrets or tools they cannot use.
+
+**Alternatives considered.** Introspect the database; copy schemas into prompts;
+expose the entire OpenAPI document; or project the registered contract according
+to an explicit exposure policy.
+
+**Decision.** Propose the authorized projection: permitted resources and
+operations, arguments, limits, backend semantics and synthetic examples. Do not
+include real documents by default. `DisableSwagger` and AI visibility are
+independent; hiding Swagger neither protects a route nor authorizes publication
+as a tool.
+
+During implementation, compare an external `Resource`/`Schema` projection with a
+small additive extraction of the existing OpenAPI serializer. Any new public
+export API in `rest` must be neutral to AI, reviewed as public surface and preserve
+the existing OpenAPI document. This is not a call to an already exported function.
+
+Cache static metadata by contract version/hash. A user/tenant-filtered response
+requires an authorization-scoped cache key. Never reuse a privileged view for
+another principal. Discovery filtering and execution authorization are separate
+checks.
+
+**Consequences.** Custom validators remain server-side rules. Sensitive fields
+require an exposure allowlist, not inference from names. Descriptions are reviewed
+content without unrestricted record interpolation. Retrieved content is untrusted
+data and cannot change executor policy.
+
+**Risks.** Leakage through examples, descriptions, caches or errors; drift from
+validation; treating an unchanged hash as proof of current authorization.
+
+**Validation criteria.** Different scopes receive isolated views; descriptions
+contain no secrets; exports are deterministic; incompatible changes update the
+version/hash; accepted/rejected examples match the server; unrepresentable rules
+are declared. Existing OpenAPI behavior remains unchanged.
+
+**Implementation evidence — 2026-11-17.** Tags discovery derives scalar schemas from Resource/Schema and shares operation
+constraints with execution. It publishes limits, server-only rules and a stable
+SHA-256 hash after authorization and committed audit, without reading records.
+Knowledge tools also have authorized MCP listing, with operation-specific input
+schemas; this is not a generic Resource exporter. No neutral public serialization
+API or shared authorization-scoped catalog cache has been extracted.
+
+## ADR-0010 — Safe execution with identity, policy and explicit effects
+
+**Status:** Proposed for the full execution model; local read safeguards and
+curator write safeguards implemented. Controlled MCP mutations remain open.
+
+**Context.** HTTP authentication does not run automatically in `Service`
+methods. `WriteOptions` includes internal check-bypass options. Existing dry-run
+is a deployment mode and depends on correct transactional composition.
+
+**Problem.** Reusing `Service` without a perimeter could permit cross-tenant
+reads, writes without preconditions or external effects during supposed simulation.
+
+**Alternatives considered.** Trust the model/prompt; trust MCP annotations; use
+rollback as a universal sandbox; run arbitrary operations in subprocesses; or
+provide a restricted, authorized operation wrapper.
+
+**Decision.** Propose the restricted wrapper. Authenticate at the transport,
+build a trusted principal, resolve the tool, authorize action/resource/tenant/
+fields, validate and bound input, execute the existing operation, filter/render
+the result and record the outcome. Identity comes from verified credentials; resource/corpus/tenant context comes
+from trusted application configuration or verified claims, never model-chosen
+arguments. The application supplies explicit
+policy; missing policy denies exposure.
+
+Server-enforced tenant filters cover all reads and writes and cannot be replaced
+by client filters. Projection or output filtering does not replace record-level
+authorization. Cover `Get`, `List`, `Insert`, `Patch`, `Replace` and `Delete`,
+including the resolved target and mutable fields. Forbid arbitrary queries and
+validation/concurrency bypasses.
+
+Every call has a deadline, payload/result limits and execution budget. Bound
+lists even when REST pagination is disabled. Require concrete ETags where
+applicable; do not use `*` to shortcut approval of sensitive changes. Record
+actor, tool/version, resource, correlation ID, authorization decision and outcome,
+redacting sensitive arguments.
+
+Destructive/external-effect operations require approval according to application
+policy. Bind approval evidence to principal, tool/version, canonical arguments,
+resource/ETag, expiration and a single-use identifier. Changes invalidate it;
+recheck policy and current state at execution to address TOCTOU. This is a future
+product requirement, not an approval requirement for this documentation change.
+
+Repeated mutations need durable application-provided idempotency: a key bound to
+principal/operation/arguments, conflict on different content, atomic recording
+with the mutation where possible, and a retention policy. Never blindly retry a
+write after an ambiguous timeout. ETags alone do not make inserts or external
+effects idempotent.
+
+For dry-run, begin with reads and, if needed, validation preview without executing
+side-effecting hooks. Reuse deployment-level rollback composition for Mongo and
+Postgres only after inventorying hooks; do not toggle global state for one call.
+Mongo's `WriteGuard` detects outside-transaction violations after persistence; it
+does not prevent them. Validate Postgres transaction composition separately.
+SQLite rejects dry-run. Refuse irreversible effects in this mode;
+`RefuseInDryRun` is a precedent, not automatic coverage of arbitrary Go hooks.
+
+**Consequences.** This is an allowlist of application operations, not a sandbox
+for arbitrary code or AI-generated SQL. Record denied/failed attempts outside
+aborted domain transactions; successful change events remain in the existing
+transaction/outbox.
+
+**Risks.** Authentication without domain authorization; log leakage; retries after
+timeout; writes outside transactions; external pre-hook effects; approvals reused
+with different arguments.
+
+**Validation criteria.** Deny missing identity/policy, cross-tenant access and
+forbidden fields; prove limits/cancellation; reject missing/stale ETags and
+expired/altered approval; test concurrent idempotency keys; demonstrate no
+persistent writes or external effects in advertised preview/dry-run modes. Never
+report an unknown outcome as a confirmed rollback. Define application behavior
+when mandatory audit recording fails.
+
+**Implementation evidence — 2026-11-17.** Local tools authenticate/authorize before
+query processing and embeddings, enforce deadlines and payload/result limits,
+and withhold read output when mandatory SQLite audit fails. Knowledge retrieval
+checks current source ACL, tombstone, version and indexed contract. The separate
+curator CLI requires `knowledge:write`, specific ETags and normal validation;
+resource/source/outbox writes roll back together. Its domain audit policy is
+still application work. No MCP mutation, durable approval/idempotency ledger,
+per-call sandbox or newly proven dry-run guarantee is claimed. Authelia/OIDC and
+remote delegation have not been integrated.
+
+## ADR-0011 — MCP as an optional catalog adapter
+
+**Status:** Proposed direction; local SDK/stdio pilot implemented (see dated note).
+Production client adoption and remote authorization remain open.
+
+**Context.** MCP standardizes tool/resource discovery and invocation and continues
+to evolve. The initial audited baseline had no MCP server; the optional
+standalone module now contains local SDK adapters.
+
+**Problem.** Embedding SDK/protocol concerns into the core would force unrelated
+consumers to follow AI changes and could create a second execution policy.
+
+**Alternatives considered.** Embed MCP in `rest`; replace HTTP; implement the
+entire protocol manually; or isolate an adapter using an SDK compatible with the
+chosen protocol version.
+
+**Decision.** Propose an isolated adapter, illustratively `mcpbridge`, importing
+the catalog/executor without reverse dependencies. An opt-in composition root
+starts it. `tools/list` exposes permitted tools; every `tools/call` passes through
+ADR-0010's executor. MCP resources, if needed, expose authorized discovery content,
+not unrestricted tables/documents. Prompts and notifications stay outside the MVP
+until demanded.
+
+Select one real client and initial transport: stdio locally or authenticated HTTP
+remotely. Pin protocol/SDK version, client compatibility and transport requirements
+before implementation. Remote HTTP requires its own transport authorization,
+token validation and session isolation; existing REST JWT authentication does not
+prove MCP compliance. Stdio does not automatically establish an end-user identity.
+Do not forward tokens to other services without audience validation and explicit
+delegation design.
+
+Annotations are descriptive hints, not authorization controls. Map protocol errors
+and tool execution failures according to the chosen version without leaking stack
+traces, SQL, DSNs or internal documents.
+
+**Consequences.** Other clients can reuse the same catalog. Opt-in deployments
+configure connection limits, cancellation and credentials. REST clients require
+no AI configuration. `platform/*` never imports `rest`; neither `rest` nor `app`
+imports MCP or model SDKs. If dependency-graph isolation from the root module is
+required, evaluate a separate submodule; separate packages alone do not promise it.
+
+**Risks.** Incompatible negotiation; shared sessions between users; trusting
+annotations; unfiltered catalogs; duplicate policies.
+
+**Validation criteria.** A real client discovers and invokes the bounded read;
+direct calls to hidden tools are denied; users are isolated; disconnect/deadline
+cancels work; malformed input and unsupported versions fail predictably; all calls
+use the same executor. Add mutations only after ADR-0010's criteria pass.
+
+Primary references: [MCP tools, 2026-07-28 specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx),
+[MCP authorization, 2026-07-28 specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/basic/authorization/index.mdx),
+and [MCP tools, 2025-06-18 version, including annotation trust](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2025-06-18/server/tools.mdx).
+The [pilot compatibility matrix](mcp-pilot.md) records the selected SDK/protocol
+and real SDK clients. Additional clients/transports require their own validation.
+
+**Implementation note — 2026-11-16.** The [local MCP pilot](mcp-pilot.md)
+selects official SDK v1.8.0 and protocol 2025-11-25, with a separate internal
+adapter, real SDK memory/stdio clients and per-operation authorization/audit.
+Production client adoption, MCP HTTP/OAuth and remote multi-user sessions remain open;
+this evidence does not mark the entire ADR scope implemented.
+
+## ADR-0012 — Consumer-driven retrieval synchronized through outbox
+
+**Status:** Proposed for formal acceptance/generalization; local retrieval,
+real-model evaluation, versioned Postgres source/outbox and a concrete producer
+implemented. Production rollout and broader quality acceptance remain open.
+
+**Context.** The initial audit found Elasticsearch write-side search and existing
+Mongo/Postgres outboxes, without a vector retrieval consumer. The selected
+consumer now includes repository documentation and curator-managed articles in
+the optional standalone module. This supersedes the initial implementation deferral.
+
+**Problem.** A universal retrieval abstraction would hide authorization,
+consistency, cost and quality choices before a corpus is known. External embedding
+calls inside synchronous writes increase latency and cannot share the database's
+atomic commit.
+
+**Alternatives considered.** Embed synchronously in hooks; turn `searchsync` into
+a generic durable pipeline; create a universal vector store; select pgvector or
+Elasticsearch for convenience; or defer implementation with a minimal direction
+for a concrete consumer.
+
+**Decision for the bounded pilot.** Use pgvector with the existing MCP SDK and a
+storage interface, explicit corpus/subject ACLs and source-version checks. Keep
+embeddings outside source/index transactions and response generation in the
+client's model. The [local evaluation](knowledge-evaluation.md) used cached q8
+EmbeddingGemma 300M, 768 dimensions, eight documents/113 chunks and ten bilingual
+questions: both vector and lexical Hit@5 10/10, MRR@5 0.883 versus 0.753.
+These exploratory results justify this local increment, not general superiority
+or production acceptance. Qdrant is a future backend/integration, not installed.
+
+For the first consumer, keep workers and retrieval optional above infrastructure
+adapters. Compare lexical, vector and hybrid retrieval on the same corpus. Build
+one consumer-specific implementation before extracting public framework contracts;
+a second real backend would supply evidence for generalization. The current Store
+interface is internal to the standalone consumer.
+
+The reference flow writes the document and minimal reindex event in the same
+local transaction. The current producer calls QueueSource from its pre-write hooks
+and uses `outboxpostgres`; other resources may use `behaviors/events` with their
+existing outbox. A worker
+consumes at least once, rereads the authorized version, selects permitted fields,
+chunks and embeds outside that transaction. Stable chunk IDs and document/model
+versions support idempotence; keys include tenant/resource. Handle duplicates,
+concurrent updates and out-of-order delivery with version checks/tombstones. The
+Postgres outbox does not guarantee per-key ordering.
+
+Do not rely exclusively on `ConditionalHooks` for deletion: the observed hooks
+cover insert/update/replace, while `events.Hooks` also covers delete. Deletion and
+ACL changes require suitable explicit events. Stale events must not resurrect
+deleted records; backfill shares version rules and reconciles live updates.
+
+Version embedding model/dimension, chunker, indexed fields and index contract.
+The local pilot rebuilds explicitly per document and hides incompatible versions.
+A staged new-index switch for a whole corpus remains a production design task. Bound retries
+and backoff; use quarantine/DLQ according to actual backend support. Mongo does
+not already have the same DLQ as Postgres. Index failures never undo an already
+committed source mutation.
+
+Authorize before retrieval, apply tenant/ACL restrictions to search and recheck
+source documents before returning context. The index is not an authorization
+authority. Bound top-k, context size and token budget. Propagate deletion and
+revocation; scope caches by authorization and version. Results carry document
+references, versions and excerpts for citations. Retrieved content is untrusted
+data and cannot change policy, approvals or available tools. Any generation step
+belongs to the application, with explicit unsupported-answer/abstention behavior.
+
+**Consequences.** Eventual consistency must be documented and measured; the local
+pilot proves version/revocation behavior, with no production freshness SLA or
+exactly-once guarantee. SQLite is excluded from the transactional pipeline until it supports
+outbox. Catalog/MCP adoption does not require RAG.
+
+**Risks.** Cross-tenant leakage; sensitive data sent to a provider; reindex cost;
+out-of-order events; deleted content remaining searchable; plausible unsupported
+answers; silent quality regressions.
+
+**Production acceptance criteria.** Before broader adoption, define Recall@k/nDCG, citation quality/abstention, p95
+latency, query/indexing cost and freshness thresholds. The local measurement did not predeclare a production quality gate.
+Evaluate representative queries with documented judgments against the lexical
+baseline. Require no unauthorized results in the isolation suite and immediate
+source-based denial of deleted/revoked records even with a stale index. Test
+duplicate/reordered delivery, replay, crash after indexing and resumed backfill.
+Keep broader rollout conditional on measured gains and a viable operating budget.
+
+**Implementation evidence — 2026-11-17.** The [source/outbox path](knowledge-sync.md)
+implements atomic source/event writes, current ACL/version/indexed-state checks,
+tombstones, retries/DLQ/replay and version comparison during indexing. The
+[article producer](knowledge-producer.md) maps explicit title/body/readers through
+Service pre-write hooks in the same transaction, excludes private notes and
+isolates corpora. Real Postgres and MCP tests cover these paths. Reindexing is
+explicit per document/contract; there is no full-corpus shadow-index switch,
+filesystem watcher, automatic mapping of other applications, hybrid retrieval or
+production deployment. Future Qdrant integration must preserve source authorization.

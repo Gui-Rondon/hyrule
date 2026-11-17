@@ -9,7 +9,96 @@ the minor version instead.
 
 ## [Unreleased]
 
+### Fixed
+
+- Align homepage card links at the bottom of each card so Guide, Reference and
+  Blog calls to action share the same baseline.
+
+- Reconcile ADR-0007–0012 and EN/PT audit/pilot documentation with the implemented
+  PR #70 increments, separating historical audit context, current local evidence,
+  formal decision status and remaining production scope.
+
+- Validate and read each knowledge document through a single descriptor, removing
+  the reopen window during ingestion. Share regular-file and bounded-read checks
+  across the knowledge and tags MCP/curator commands.
+
+- Preserve nested required fields in OpenAPI PATCH request schemas, including
+  object items in lists, while allowing omitted root fields. This aligns the
+  published contract with existing validation; runtime behavior and response
+  schemas remain unchanged.
+
 ### Added
+
+- Add a concrete Postgres article producer using Hyrule Service pre-write hooks
+  to commit resource/source/outbox together. Include a curator CLI with distinct
+  JWT write permission, ETag enforcement, private-field projection and corpus
+  isolation; exercise the producer through authenticated MCP retrieval.
+
+- Add versioned knowledge sources with transactional Postgres outbox updates,
+  authoritative ACL/version checks during retrieval, tombstones and replay-safe
+  indexing. Add `knowledge-mcp enqueue|worker`, optimistic source writes and tests
+  for revocation before indexing, rollback, concurrent updates, DLQ and replay.
+
+- Support separate document/query embedding prompts and hash their storage
+  contract. Add opt-in cached ONNX evaluation with bilingual questions, a lexical
+  baseline and recorded local EmbeddingGemma results (10/10 Hit@5).
+
+- Add optional documentation ingestion and MCP search/fetch with pgvector, explicit
+  corpus/subject ACLs, Ollama embeddings, independent audit and a storage interface
+  for a future Qdrant implementation. Include real pgvector and stdio tests.
+
+- Add opt-in `cmd/tags-mcp` with explicit environment/file configuration,
+  read-only existing SQLite data, separate audit and per-operation token-file
+  refresh. Test the compiled executable with an SDK client, stdout discipline,
+  startup errors and EOF/interrupt shutdown; document EN/PT client setup.
+
+- Add an optional internal MCP adapter to the standalone example using official
+  Go SDK v1.8.0 and protocol 2025-11-25. Reuse authorized discovery and execution,
+  bound stdio frames and verify real SDK clients over memory/stdio, denial, audit
+  and cancellation. Keep the SDK outside the framework module and default startup.
+
+- Publish authorized input/output JSON Schemas, executor limits, explicit
+  server-only constraints and deterministic contract hashes in tags-pilot
+  discovery. Derive field types from the registered resource and verify schema
+  parity with actual parsing and lookup results; keep generic catalog/MCP deferred.
+
+- Add opt-in loopback HTTP transport for the tags pilot: JWT-protected GET
+  discovery and POST lookup, mandatory audit, strict bounded requests, sanitized
+  errors and explicit server timeouts. Verify real HTTP/RSA/SQLite integration
+  and slow-body timeout; keep default startup and remote deployment unchanged.
+
+- Provision the local tags pilot from an explicit public-key PEM and persist
+  sanitized audit records in a separate SQLite file with WAL/FULL synchronization;
+  fail closed on audit errors and verify persistence/reopening and concurrency.
+
+- Integrate RS256 JWT identity and exact scope-based policy into the local tags
+  pilot, requiring pinned keys, issuer/audience, expiration and subject. Test real
+  signatures, rejected credentials and resource/action binding without changing
+  REST authentication or exposing an endpoint.
+
+- Add the application-local `tags.lookup` executor under the standalone example
+  with injected identity/policy, mandatory audit, bounded strict JSON input,
+  allowlisted output and SQLite-backed authorization/failure/concurrency tests.
+  No external endpoint, identity-provider integration or framework API is added.
+
+- Define the proposed `tags.lookup` read pilot, its explicit access policy and
+  bounded input/output, with a reproducible SQLite query rehearsal preceding the
+  local executor above. Authentication integration and MCP transport remain open.
+
+- Mark full-write and PATCH OpenAPI input objects with
+  `x-hyrule-custom-validation: true` when `Resource.Validate` is configured,
+  distinguishing document-wide server validation from per-field `Field.Check`.
+  This annotation does not execute callbacks or change runtime validation.
+
+- Record the Phase 6 contract study in English and Brazilian Portuguese: 21
+  SQLite-backed cases, six structural-schema/HTTP differences, a reproduction
+  harness, and evidence for keeping code generation deferred. The PATCH exporter
+  correction is recorded above; ADR acceptance remains open.
+
+- Document proposed ADR-0007–0012 and framework/platform Phases 6–11 in
+  English and Brazilian Portuguese, with a DX comparison and audit corrections.
+  Tool execution, discovery, MCP, code generation and RAG remain unimplemented
+  proposals; this documentation adds no runtime capability.
 
 - `resources.yaml`'s declarative resources now take an optional `backend:`
   field (`mongo`, the default, `postgres` or `sqlite`), dispatched through a

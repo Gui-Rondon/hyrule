@@ -21,8 +21,19 @@ func (a *API) openAPIDocument() map[string]any {
 		// Hex is injective even for names containing slashes or punctuation, and
 		// is safe in both component keys and JSON pointers.
 		key := "Resource_" + hex.EncodeToString([]byte(r.Name+"\x00"+r.URL))
-		schemas[key+"Input"] = openAPIObject(r.Schema, r.AllowUnknown, false)
-		schemas[key+"Patch"] = openAPIObject(r.Schema, r.AllowUnknown, true)
+		input := openAPIObject(r.Schema, r.AllowUnknown, false)
+		// PATCH permits omitted root fields, but supplied nested objects and
+		// list items still receive full validation (validateValue).
+		patch := openAPIObject(r.Schema, r.AllowUnknown, false)
+		delete(patch, "required")
+		// Resource.Validate can impose document-wide rules that structural
+		// schemas cannot express, just as Field.Check can for one field.
+		if r.Validate != nil {
+			input["x-hyrule-custom-validation"] = true
+			patch["x-hyrule-custom-validation"] = true
+		}
+		schemas[key+"Input"] = input
+		schemas[key+"Patch"] = patch
 		output := openAPIObject(r.Schema, true, true)
 		props := output["properties"].(map[string]any)
 		for k, v := range openAPIMeta(r) {

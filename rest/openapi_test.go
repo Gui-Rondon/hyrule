@@ -256,12 +256,18 @@ func TestSwaggerContractAndSchemas(t *testing.T) {
 				t.Fatal("list rules lost")
 			}
 		case strings.HasSuffix(key, "Patch"):
-			if s["required"] != nil || docsMap(props["profile"])["required"] != nil {
-				t.Fatal("PATCH requires omitted fields")
+			if s["required"] != nil {
+				t.Fatal("PATCH requires omitted root fields")
+			}
+			if !reflect.DeepEqual(docsMap(props["profile"])["required"], []any{"title"}) {
+				t.Fatal("PATCH omits required fields in supplied nested objects")
 			}
 		case strings.HasSuffix(key, "Document"):
 			if props["_id"] == nil || props["_deleted"] == nil || props["_etag"] == nil {
 				t.Fatal("response metadata missing")
+			}
+			if docsMap(props["profile"])["required"] != nil {
+				t.Fatal("response schema unexpectedly requires nested input fields")
 			}
 		}
 	}
@@ -409,6 +415,142 @@ func TestSwaggerFieldSchemaMatchesEmptyAndNullRules(t *testing.T) {
 				if err = s.Validate(v); err == nil {
 					t.Errorf("accepted %#v", v)
 				}
+			}
+		})
+	}
+}
+
+// PATCH only relaxes required fields at the document root. Supplied nested
+// objects and replacement list items still go through full runtime validation.
+func TestSwaggerPatchNestedRequiredMatchesValidation(t *testing.T) {
+	schema := Schema{
+		"name": {Type: TypeString, Required: true},
+		"profile": {Type: TypeDict, Required: true, Nullable: true, Schema: Schema{
+			"label":  {Type: TypeString, Required: true},
+			"active": {Type: TypeBoolean, Required: true, Default: true},
+			"detail": {Type: TypeDict, Schema: Schema{
+				"code": {Type: TypeString, Required: true},
+			}},
+		}},
+		"rows": {Type: TypeList, Items: &Field{Type: TypeDict, Schema: Schema{
+			"label": {Type: TypeString, Required: true},
+		}}},
+		"matrix": {Type: TypeList, Items: &Field{Type: TypeList, Items: &Field{
+			Type: TypeDict, Schema: Schema{"label": {Type: TypeString, Required: true}},
+		}}},
+	}
+	a := New(Options{})
+	a.Register(&Resource{Name: "items", Adapter: &mongoAdapter{}, Schema: schema,
+		ResourceMethods: []string{"GET", "POST"}, ItemMethods: []string{"GET", "PATCH"}})
+	doc := docsJSON(t, a)
+	validateOpenAPI(t, doc)
+	operation := docsOperation(doc, "/items/{lookup}", "patch")
+	content := docsMap(docsMap(operation["requestBody"])["content"])
+	ref := docsMap(docsMap(content["application/json"])["schema"])["$ref"].(string)
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource("urn:patch-regression", doc); err != nil {
+		t.Fatal(err)
+	}
+	contract, err := compiler.Compile("urn:patch-regression" + ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, body string
+		valid      bool
+	}{
+		{"omit root required", `{}`, true},
+		{"root partial update", `{"name":"new"}`, true},
+		{"missing nested required", `{"profile":{}}`, false},
+		{"required with default omitted", `{"profile":{"label":"L"}}`, true},
+		{"nullable object", `{"profile":null}`, true},
+		{"missing deep required", `{"profile":{"label":"L","detail":{}}}`, false},
+		{"valid deep object", `{"profile":{"label":"L","detail":{"code":"C"}}}`, true},
+		{"missing list item required", `{"rows":[{}]}`, false},
+		{"valid list item", `{"rows":[{"label":"R"}]}`, true},
+		{"empty list", `{"rows":[]}`, true},
+		{"missing nested list item required", `{"matrix":[[{}]]}`, false},
+		{"valid nested list item", `{"matrix":[[{"label":"M"}]]}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var payload map[string]any
+			if err := json.Unmarshal([]byte(tc.body), &payload); err != nil {
+				t.Fatal(err)
+			}
+			contractErr := contract.Validate(payload)
+			issues := ValidateDictPartial(context.Background(), schema, payload, false)
+			if got := len(issues) == 0; got != tc.valid {
+				t.Fatalf("runtime acceptance=%t, want %t: %v", got, tc.valid, issues)
+			}
+			if got := contractErr == nil; got != tc.valid {
+				t.Errorf("contract acceptance=%t, want %t (runtime issues=%v): %v", got, tc.valid, issues, contractErr)
+			}
+		})
+	}
+}
+
+func TestSwaggerDistinguishesFieldAndResourceValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		field, resource bool
+	}{
+		{"structural only", false, false},
+		{"field callback", true, false},
+		{"resource callback", false, true},
+		{"both callbacks", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			field := Field{Type: TypeString, Required: true}
+			if tc.field {
+				field.Check = func(context.Context, any, Doc) any {
+					calls++
+					return "server-only rejection"
+				}
+			}
+			res := &Resource{Name: "items", Adapter: &mongoAdapter{}, Schema: Schema{"name": field},
+				ResourceMethods: []string{"GET", "POST"}, ItemMethods: []string{"GET", "PATCH", "PUT"}}
+			if tc.resource {
+				res.Validate = func(context.Context, Doc, Doc, bool) (Issues, error) {
+					calls++
+					return Issues{"name": "server-only rejection"}, nil
+				}
+			}
+			a := New(Options{})
+			a.Register(res)
+			doc := docsJSON(t, a)
+			validateOpenAPI(t, doc)
+			compiler := jsonschema.NewCompiler()
+			if err := compiler.AddResource("urn:custom-validation", doc); err != nil {
+				t.Fatal(err)
+			}
+			for key, value := range docsMap(docsMap(doc["components"])["schemas"]) {
+				schema := docsMap(value)
+				input := strings.HasSuffix(key, "Input") || strings.HasSuffix(key, "Patch")
+				_, marked := schema["x-hyrule-custom-validation"]
+				if marked != (input && tc.resource) {
+					t.Errorf("%s: document-wide validation marker=%t", key, marked)
+				}
+				if !input {
+					continue
+				}
+				property := docsMap(docsMap(schema["properties"])["name"])
+				_, fieldMarked := property["x-hyrule-custom-validation"]
+				if fieldMarked != tc.field {
+					t.Errorf("%s: field validation marker=%t", key, fieldMarked)
+				}
+				contract, err := compiler.Compile("urn:custom-validation#/components/schemas/" + key)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Extensions describe server rules; structural validation must
+				// neither claim to enforce nor execute those callbacks.
+				if err := contract.Validate(map[string]any{"name": "valid structurally"}); err != nil {
+					t.Errorf("%s: structural validation rejected valid input: %v", key, err)
+				}
+			}
+			if calls != 0 {
+				t.Fatalf("contract generation/validation invoked server callbacks %d times", calls)
 			}
 		})
 	}

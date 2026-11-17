@@ -262,3 +262,11 @@ veja [`examples/blog-apis/README.pt-br.md`](examples/blog-apis/README.pt-br.md).
 ## Licença
 
 [MIT](LICENSE) — © 2026 Guilherme Rondon.
+
+O trabalho opcional de IA/MCP está nos [ADRs 0007–0012](website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/architecture-decisions.md).
+Consulte o [guia MCP](website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/mcp-pilot.md),
+[setup pgvector](website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/knowledge-pilot.md),
+[operação fonte/outbox](website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/knowledge-sync.md) e
+[produtor de artigos](website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/knowledge-producer.md).
+Os pilotos ficam no exemplo standalone; implantação e mutações MCP controladas
+continuam abertas.
