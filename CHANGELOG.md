@@ -11,6 +11,9 @@ the minor version instead.
 
 ### Fixed
 
+- Align homepage card links at the bottom of each card so Guide, Reference and
+  Blog calls to action share the same baseline.
+
 - Reconcile ADR-0007–0012 and EN/PT audit/pilot documentation with the implemented
   PR #70 increments, separating historical audit context, current local evidence,
   formal decision status and remaining production scope.
