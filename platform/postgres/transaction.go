@@ -29,7 +29,23 @@ var (
 	// ErrForeignTransaction reports that ctx carries a transaction, but
 	// from a different pool than this Transactor's.
 	ErrForeignTransaction = errors.New("postgres: context carries a transaction from a different pool")
+	// ErrNoTransaction reports that the context has no Postgres transaction.
+	ErrNoTransaction = errors.New("postgres: context has no transaction")
 )
+
+// TransactionQuerier returns the executor for custom SQL inside a transaction
+// on t.Pool. It rejects missing or foreign transactions without falling back
+// to the pool. Use the callback context from WithTransaction or a REST pre-hook.
+func (t Transactor) TransactionQuerier(ctx context.Context) (Querier, error) {
+	entry, ok := ctx.Value(txKey{}).(txEntry)
+	if !ok {
+		return nil, ErrNoTransaction
+	}
+	if entry.pool != t.Pool {
+		return nil, ErrForeignTransaction
+	}
+	return struct{ Querier }{entry.tx}, nil
+}
 
 // Transactor runs fn inside a single Postgres transaction, exposed to fn
 // (and to anything fn calls, such as Store's methods) via ctx. It never

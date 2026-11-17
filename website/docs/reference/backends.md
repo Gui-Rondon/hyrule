@@ -7,7 +7,7 @@ sidebar_position: 0
 Both backends use `app.Main`/`app.Build`, `rest.Resource`, HTTP validation,
 ETags, hooks, authentication, health checks, metrics and rollback-based dry run.
 Choose a backend explicitly in Go; Mongo remains the zero-value default for
-existing services. Equal support does not mean identical storage semantics.
+existing services. See [SQLite](sqlite.md) for the experimental local backend and its capabilities.
 
 | Integration point | Mongo | Postgres |
 |---|---|---|
@@ -30,10 +30,8 @@ make env-up
 ```
 
 The standard compose starts Mongo (27018), Postgres (5433), Pub/Sub (8085) and
-Redis (6380). It is separate from the manual HA lab, which this workspace uses
-on **5540**. Do not point HA commands at 5434 here; another project owns it.
-For an external module, install a release or commit containing this integration;
-`main` is not assumed to contain it yet. In that module, save **one** of the
+Redis (6380). The manual HA lab uses a separate Compose project. For an
+external module, select a compatible Hyrule release. Save **one** of the
 following complete programs as `main.go` and run `go mod tidy`.
 
 ## Mongo: register and run a service

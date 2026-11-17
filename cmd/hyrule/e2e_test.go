@@ -30,6 +30,7 @@ func TestScaffoldBuilds(t *testing.T) {
 	repoRoot := filepath.Dir(strings.TrimSpace(string(gomod)))
 
 	dir := t.TempDir()
+	t.Setenv("GIT_CEILING_DIRECTORIES", dir)
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}

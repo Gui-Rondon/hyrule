@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +21,9 @@ func TestSingleScaffoldRunsWithoutInfrastructure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Chdir(t.TempDir())
+	dir := t.TempDir()
+	t.Setenv("GIT_CEILING_DIRECTORIES", dir)
+	t.Chdir(dir)
 	if err := runNew([]string{"my-api", "--framework-version=v0.0.0"}); err != nil {
 		t.Fatal(err)
 	}
@@ -53,9 +57,17 @@ func TestSingleScaffoldRunsWithoutInfrastructure(t *testing.T) {
 	if string(after) != string(original) {
 		t.Fatal("existing resource changed")
 	}
+	run("mod", "tidy")
 	run("vet", "./...")
-	run("build", "-o", "api", ".")
-	bin, _ := filepath.Abs("api")
+	name := "api"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	run("build", "-o", name, ".")
+	bin, err := filepath.Abs(name)
+	if err != nil {
+		t.Fatal(err)
+	}
 	start := func() (string, func()) {
 		t.Helper()
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -65,7 +77,9 @@ func TestSingleScaffoldRunsWithoutInfrastructure(t *testing.T) {
 		port := listener.Addr().(*net.TCPAddr).Port
 		listener.Close()
 		cmd := exec.Command(bin)
-		cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", port), "CONFIG_FILE=", "CONFIGSERVER_ADDRESS=", "SQLITE_PATH=hyrule.db", "DRY_RUN=false")
+		cmd.Env = append(slices.DeleteFunc(os.Environ(), func(entry string) bool {
+			return strings.HasPrefix(strings.ToUpper(entry), "LISTEN_HOST=")
+		}), fmt.Sprintf("PORT=%d", port), "CONFIG_FILE=", "CONFIGSERVER_ADDRESS=", "SQLITE_PATH=hyrule.db", "DRY_RUN=false")
 		log, err := os.CreateTemp(t.TempDir(), "server-log")
 		if err != nil {
 			t.Fatal(err)
@@ -75,7 +89,17 @@ func TestSingleScaffoldRunsWithoutInfrastructure(t *testing.T) {
 		if err := cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
-		stop := func() { _ = cmd.Process.Signal(os.Interrupt); _ = cmd.Wait(); _ = log.Close() }
+		stop := func() {
+			if runtime.GOOS == "windows" || cmd.Process.Signal(os.Interrupt) != nil {
+				_ = cmd.Process.Kill()
+			}
+			_ = cmd.Wait()
+			_ = log.Close()
+			raw, err := os.ReadFile(log.Name())
+			if err != nil || !strings.Contains(string(raw), fmt.Sprintf("127.0.0.1:%d", port)) {
+				t.Errorf("expected loopback listener: %s (%v)", raw, err)
+			}
+		}
 		t.Cleanup(func() { _ = cmd.Process.Kill() })
 		address := fmt.Sprintf("http://127.0.0.1:%d", port)
 		for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); {

@@ -811,3 +811,18 @@ Postgres/MCP cobrem esses caminhos. Reindexação é explícita por documento/co
 não há troca de shadow index do corpus inteiro, watcher de arquivos, mapeamento
 automático de outras aplicações, retrieval híbrido ou implantação em produção.
 A futura integração Qdrant deve preservar a autorização na fonte.
+
+## ADR-0013 — Escopo transacional e boot PostgreSQL em dry run
+
+**Status:** Implementado para o boot gerenciado pelo framework e SQL personalizado opt-in.
+
+O framework instala as funções SQL compartilhadas no boot normal. O dry run usa
+um schema provisionado e verifica os índices declarados. O serviço de comentários
+também pula o DDL do outbox em dry run.
+
+Escritas PostgreSQL personalizadas podem exigir a transação do contexto via
+`Transactor.TransactionQuerier`, que rejeita transações ausentes ou de outro pool.
+O pool permanece disponível para compatibilidade e administração. Setup do
+aplicativo, uso direto do pool, efeitos externos e alocação de sequências ficam
+fora do rollback gerenciado. O WriteGuard do Mongo é diagnóstico. SQLite rejeita
+dry run no boot. Veja [Dry run](dry-run.md) para migração e uso.

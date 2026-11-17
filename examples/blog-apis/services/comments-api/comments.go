@@ -71,8 +71,10 @@ func setupWithTables(table, outboxTable string) func(context.Context, *app.Env) 
 		if err != nil {
 			return fmt.Errorf("comments-api: %w", err)
 		}
-		if err := outboxpostgres.EnsureTable(ctx, env.Postgres, outboxTable); err != nil {
-			return err
+		if !env.DryRun {
+			if err := outboxpostgres.EnsureTable(ctx, env.Postgres, outboxTable); err != nil {
+				return err
+			}
 		}
 		box := &outboxpostgres.Outbox{Pool: env.Postgres, Table: outboxTable}
 		topic := env.Config.String("pubsub.to_publish", "comments-to-publish")

@@ -277,3 +277,59 @@ func TestWithTransactionCommitFailureIsReturnedAndRollbackIsAQuietNoop(t *testin
 		t.Fatalf("count after a failed commit = %d, want 0 (the server must have aborted the whole transaction)", n)
 	}
 }
+
+func TestTransactionQuerierRequiresTransaction(t *testing.T) {
+	if _, err := (Transactor{}).TransactionQuerier(context.Background()); !errors.Is(err, ErrNoTransaction) {
+		t.Fatalf("missing transaction: %v", err)
+	}
+}
+
+func TestTransactionQuerierComposedWrites(t *testing.T) {
+	pool := testPool(t)
+	table := "tx_custom_sql_test"
+	setupTable(t, pool, table, "CREATE TABLE "+table+" (name TEXT NOT NULL)")
+	ctx := context.Background()
+	store := NewStore(pool, table)
+	failure := errors.New("abort composed write")
+	for _, tc := range []struct {
+		name    string
+		dryRun  bool
+		failure error
+		count   int64
+	}{
+		{name: "rollback_on_failure", failure: failure},
+		{name: "dry_run", dryRun: true},
+		{name: "commit", count: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tx := Transactor{Pool: pool, Rollback: tc.dryRun}
+			err := tx.WithTransaction(ctx, func(txCtx context.Context) error {
+				if _, err := (Transactor{}).TransactionQuerier(txCtx); !errors.Is(err, ErrForeignTransaction) {
+					t.Fatalf("foreign transaction: %v", err)
+				}
+				q, err := tx.TransactionQuerier(txCtx)
+				if err != nil {
+					return err
+				}
+				if _, err := q.Exec(txCtx, "INSERT INTO "+table+" (name) VALUES ($1)", "custom"); err != nil {
+					return err
+				}
+				if err := store.InsertMany(txCtx, []map[string]any{{"name": "store"}}); err != nil {
+					return err
+				}
+				n, err := store.CountDocuments(txCtx, nil)
+				if err != nil || n != 2 {
+					t.Fatalf("within transaction: %d, %v", n, err)
+				}
+				return tc.failure
+			})
+			if !errors.Is(err, tc.failure) {
+				t.Fatalf("transaction error = %v, want %v", err, tc.failure)
+			}
+			n, err := store.CountDocuments(ctx, nil)
+			if err != nil || n != tc.count {
+				t.Fatalf("persisted: %d, %v, want %d", n, err, tc.count)
+			}
+		})
+	}
+}

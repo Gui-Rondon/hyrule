@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -32,14 +33,14 @@ func Run(handler http.Handler) error {
 }
 
 // Serve serves handler on PORT (default 8080) until ctx is done, then drains
-// the in-flight requests.
+// the in-flight requests. LISTEN_HOST optionally selects the bind address.
 func Serve(ctx context.Context, handler http.Handler) error {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 	srv := &http.Server{
-		Addr:              ":" + port,
+		Addr:              net.JoinHostPort(os.Getenv("LISTEN_HOST"), port),
 		Handler:           AccessLog(handler),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

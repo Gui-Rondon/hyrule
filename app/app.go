@@ -131,7 +131,8 @@ type Env struct {
 	Config   config.Config
 	// DB is set only for [BackendMongo].
 	DB *mongo.Database
-	// Postgres is set only for [BackendPostgres].
+	// Postgres is set only for [BackendPostgres]. Direct calls bypass request
+	// transactions. Use PostgresTx.TransactionQuerier for custom writes.
 	Postgres *pgxpool.Pool
 	// PostgresTx is the Transactor already wired into API's Options --
 	// a BackendPostgres Setup passes this same value to
@@ -428,12 +429,14 @@ func buildPostgres(ctx context.Context, spec Spec, deps Deps, authn *auth.Authen
 	if deps.Postgres == nil {
 		return nil, errors.New("app: Deps.Postgres must not be nil for the Postgres backend")
 	}
-	if err := postgres.EnsureFunctions(ctx, deps.Postgres); err != nil {
-		return nil, err
-	}
 	dryRun := deps.DryRun
 	if dryRun && spec.NoDryRun != "" {
 		return nil, fmt.Errorf("%s does not run in dry run: %s", spec.Name, spec.NoDryRun)
+	}
+	if !dryRun {
+		if err := postgres.EnsureFunctions(ctx, deps.Postgres); err != nil {
+			return nil, err
+		}
 	}
 	queryTimeout, err := time.ParseDuration(deps.Config.String("postgres.query_timeout", defaultQueryTimeout.String()))
 	if err != nil {

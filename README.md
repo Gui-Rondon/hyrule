@@ -62,7 +62,9 @@ curl localhost:8080/products
 
 `service create` resolves module dependencies; downloads need network access.
 Data persists in `hyrule.db` (override with `SQLITE_PATH`); local authentication
-is disabled unless a configuration source is supplied. SQLite has no outbox,
+is disabled unless a configuration source is supplied. Newly generated projects
+bind to loopback by default. Configure authentication before changing
+`LISTEN_HOST` to expose the API. SQLite has no outbox,
 dry run, soft delete or advanced query parity. See [SQLite](website/docs/reference/sqlite.md).
 
 This flow ships in the next release containing this change; older published

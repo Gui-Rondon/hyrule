@@ -18,6 +18,7 @@ import (
 
 	"github.com/Gui-Rondon/hyrule/app"
 	"github.com/Gui-Rondon/hyrule/outbox"
+	"github.com/Gui-Rondon/hyrule/outboxpostgres"
 	"github.com/Gui-Rondon/hyrule/platform/config"
 	ps "github.com/Gui-Rondon/hyrule/platform/pubsub"
 	"github.com/Gui-Rondon/hyrule/rest"
@@ -54,6 +55,11 @@ func buildEventService(t *testing.T, dry bool, start func(string, func(context.C
 	table := "comments"
 	box := table + "_outbox"
 	t.Cleanup(func() { pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+table+", "+box) })
+	if dry {
+		if err := outboxpostgres.EnsureTable(context.Background(), pool, box); err != nil {
+			t.Fatal(err)
+		}
+	}
 	setup := setupWithTables(table, box)
 	spec := app.Spec{Name: "comments-api", Backend: app.BackendPostgres, Setup: func(ctx context.Context, env *app.Env) error {
 		if err := setup(ctx, env); err != nil {

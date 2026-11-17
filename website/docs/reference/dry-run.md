@@ -26,8 +26,10 @@ continues answering. Custom writes must still join the request transaction.
 
 `app.Build` sets `env.PostgresTx` to `postgres.Transactor{Pool: pool,
 Rollback: true}`. Pass that same value to `restpostgres.NewAdapter`. Custom
-writes must use `postgres.NewStore(env.Postgres, table).Querier(ctx)` and the
-request context so they join the same transaction. Use `Deps{Postgres: pool,
+writes in pre-write hooks should obtain SQL access with
+`env.PostgresTx.TransactionQuerier(ctx)`. It rejects missing transactions
+and transactions on another pool. For a custom route, open the transaction
+with `env.PostgresTx.WithTransaction` and use its callback context. Use `Deps{Postgres: pool,
 DryRun: true}` when building in tests; no Mongo client/WriteGuard is required.
 A raw `pool.Exec` bypasses the transaction and can persist writes: Postgres
 has no WriteGuard-equivalent to detect it. Dry run protects the transactional
@@ -44,9 +46,11 @@ request path, not arbitrary database calls or administrative DDL.
 - `DRY_RUN_TIMEOUT` caps each request (default 3s). HTTP/database timeouts do
   not undo external effects; [outbox](outbox.md) is the delivery boundary.
 - Declared indexes use check instead of create, unless mode is already off.
-  Setup still runs: shared Postgres functions and application setup DDL can
-  write outside request transactions. Prepare compatible schemas explicitly
-  and keep Setup free of irreversible external effects.
+  Postgres dry-run startup skips installing the shared SQL helpers. Run
+  `postgres.EnsureFunctions` during provisioning or start in normal mode
+  before mirroring traffic. Provision resource and outbox tables in advance.
+  Application Setup still runs and must use `env.DryRun` to avoid DDL and
+  irreversible effects.
 - Postgres sequences/identity allocation may leave gaps even after rollback.
   Dry run promises no committed transactional business rows, not unchanged
   server metadata or counters.

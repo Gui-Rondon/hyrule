@@ -63,7 +63,9 @@ curl localhost:8080/products
 
 `service create` resolve as dependências do módulo; o download exige rede. Os dados
 persistem em `hyrule.db` (altere com `SQLITE_PATH`); a autenticação local fica
-desativada quando nenhuma fonte de configuração é fornecida. SQLite não oferece
+desativada quando nenhuma fonte de configuração é fornecida. Projetos novos
+escutam em loopback por padrão. Configure autenticação antes de alterar
+`LISTEN_HOST` para expor a API. SQLite não oferece
 outbox, dry run, soft delete nem paridade de consultas avançadas.
 Veja [SQLite](website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/sqlite.md).
 

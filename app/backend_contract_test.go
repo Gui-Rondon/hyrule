@@ -16,8 +16,10 @@ import (
 
 	"github.com/Gui-Rondon/hyrule/app"
 	"github.com/Gui-Rondon/hyrule/platform/postgres"
+	"github.com/Gui-Rondon/hyrule/platform/sqlite"
 	"github.com/Gui-Rondon/hyrule/rest"
 	"github.com/Gui-Rondon/hyrule/restpostgres"
+	"github.com/Gui-Rondon/hyrule/restsqlite"
 	"github.com/Gui-Rondon/hyrule/testkit"
 )
 
@@ -33,25 +35,33 @@ func TestUnknownBackendFailsBeforeDependencies(t *testing.T) {
 	}
 }
 
-// Exercise the documented Go registration path against both actual databases.
+// Exercise the documented Go registration paths against the actual databases.
 // IDs and ETags remain backend-specific; the shared HTTP contract does not.
 func TestBackendHTTPContract(t *testing.T) {
-	for _, backend := range []app.Backend{app.BackendMongo, app.BackendPostgres} {
+	for _, backend := range []app.Backend{app.BackendMongo, app.BackendPostgres, app.BackendSQLite} {
 		name := "mongo-default"
-		if backend == app.BackendPostgres {
-			name = "postgres"
+		if backend != app.BackendMongo {
+			name = string(backend)
 		}
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 			deps := app.Deps{Auth: testkit.DisabledAuth(t)}
 			table := "items"
-			if backend == app.BackendMongo {
+			switch backend {
+			case app.BackendMongo:
 				db := testkit.Mongo(t)
 				deps.DB = db
 				deps.Mongo = db.Client()
-			} else {
+			case app.BackendPostgres:
 				deps.Postgres = postgresTestPool(t)
 				table = postgresTestTable(t, deps.Postgres)
+			case app.BackendSQLite:
+				db, err := sqlite.Open(ctx, ":memory:")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { db.Close() })
+				deps.SQLite = db
 			}
 			schema := rest.Schema{"name": {Type: rest.TypeString, Required: true}}
 			spec := app.Spec{Name: "contract-api", Backend: backend, URLPrefix: "api", Setup: func(_ context.Context, env *app.Env) error {
@@ -62,16 +72,23 @@ func TestBackendHTTPContract(t *testing.T) {
 					})
 				})
 				res := &rest.Resource{Name: "items", Schema: schema, ResourceMethods: []string{http.MethodGet, http.MethodPost}, ItemMethods: []string{http.MethodGet, http.MethodPatch, http.MethodPut, http.MethodDelete}}
-				if backend == app.BackendMongo {
+				switch backend {
+				case app.BackendMongo:
 					if env.DB == nil || env.Postgres != nil {
 						t.Fatal("Mongo env mixed dependencies")
 					}
 					res.Store = env.Store(table)
-				} else {
+				case app.BackendPostgres:
 					if env.DB != nil || env.Postgres != deps.Postgres || env.PostgresTx.Pool != deps.Postgres {
 						t.Fatal("Postgres env mixed dependencies")
 					}
 					adapter, err := restpostgres.NewAdapter(postgres.NewStore(env.Postgres, table), env.PostgresTx, restpostgres.Options{Schema: schema, Retry: rest.DefaultRetryOptions()})
+					if err != nil {
+						return err
+					}
+					res.Adapter = adapter
+				case app.BackendSQLite:
+					adapter, err := restsqlite.NewAdapter(ctx, env.SQLite, table, res)
 					if err != nil {
 						return err
 					}
@@ -122,7 +139,22 @@ func TestBackendHTTPContract(t *testing.T) {
 			if got := request("GET", path, nil, 200); got.String("name") != "third" {
 				t.Fatal("replace not persisted")
 			}
-			request("GET", `/api/items?where={"name":"third"}&sort=name&max_results=1`, nil, 200)
+			request("POST", "/api/items", map[string]any{"name": "another"}, 201)
+			for _, tc := range []struct{ query, name string }{
+				{query: "sort=name&max_results=1&page=1", name: "another"},
+				{query: "sort=name&max_results=1&page=2", name: "third"},
+				{query: url.Values{"where": {`{"name":"third"}`}}.Encode(), name: "third"},
+			} {
+				list := request("GET", "/api/items?"+tc.query, nil, 200)
+				items, _ := list.Map()["_items"].([]any)
+				if len(items) != 1 {
+					t.Fatalf("query %s: %s", tc.query, list.Raw)
+				}
+				item, _ := items[0].(map[string]any)
+				if item["name"] != tc.name {
+					t.Fatalf("query %s: got %v, want %q", tc.query, item, tc.name)
+				}
+			}
 			request("DELETE", path, nil, 204, "If-Match", `"`+etag+`"`)
 			request("GET", path, nil, 404)
 			request("GET", "/api/status", nil, 200)
