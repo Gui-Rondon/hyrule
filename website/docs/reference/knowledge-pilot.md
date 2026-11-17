@@ -142,3 +142,5 @@ measurements. See [versioned source/outbox](knowledge-sync.md) for the new local
 Example corpus manifest and evaluation questions are checked in under `examples/standalone-tags-api/knowledge/`; replace subject/revision placeholders before ingesting.
 
 Optional `KNOWLEDGE_EMBED_DOCUMENT_PREFIX` and `KNOWLEDGE_EMBED_QUERY_PREFIX` support asymmetric models. The storage contract includes these settings; see [prompts and reingestion](knowledge-evaluation.md#task-prompts-and-reingestion).
+
+A [concrete article producer](knowledge-producer.md) now connects Hyrule Service writes and pre-write hooks to this pipeline, with curator permission and explicit reader ACLs.

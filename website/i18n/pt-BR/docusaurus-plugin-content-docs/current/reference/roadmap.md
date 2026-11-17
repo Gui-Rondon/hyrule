@@ -4,17 +4,14 @@ sidebar_position: 11
 
 # Roteiro de evolução: framework e plataforma
 
-Esta página é um plano, não uma lista de funcionalidades — a maioria
-das fases abaixo é trabalho proposto, não algo já construído; cada uma
-diz explicitamente quando isso muda. Ela existe para que as [Decisões
-arquiteturais](architecture-decisions.md) tenham uma sequência para se
-encaixar, e para que ninguém confunda uma fase futura com comportamento
-atual.
+Esta página registra a base já concluída e a evolução proposta. Os resumos
+separam evidência de implementação, adoção em produção e aceitação formal das
+[decisões arquiteturais](architecture-decisions.md).
 
 ## Trabalho atual de adoção e estabilidade
 
 As Fases 0–5 abaixo são históricas; a Fase 6 tem evidência de estudo e segue
-aberta; a Fase 7 tem piloto local parcial; a Fase 8 tem descoberta local parcial; a Fase 9 tem adapter local parcial; as Fases 10–11 são propostas não iniciadas. O [roadmap atual para v1](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
+aberta; as Fases 7–9 têm provas locais de identidade, descoberta e MCP; a Fase 10 de mutações MCP controladas segue proposta; a Fase 11 tem retrieval local, avaliação de modelo, fonte/outbox e produtor concreto. Adoção em produção permanece aberta. O [roadmap atual para v1](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
 adiciona políticas de compatibilidade/suporte, CI Go 1.26/1.27 em PRs, scaffold
 SQLite local, composição de roteadores e releases manuais com proveniência.
 Veja [estabilidade](stability.md) e [SQLite](sqlite.md) para o comportamento atual.
@@ -123,20 +120,22 @@ apresentação para cada uma delas.
 
 ## Evolução proposta — Fase 6+ (2026-11-16)
 
-A Fase 6 tem [estudo concluído](phase-6-contract-study.md), com correções de
-contrato e aceitação da decisão ainda abertas; não está Concluída. A Fase 7 tem executor local parcial com identidade/política JWT, sem transporte externo.
-A Fase 8 tem descoberta local parcial; a Fase 9 tem adapter local parcial; as Fases 10–11 continuam **Propostas / não iniciadas**. Os [ADRs
-0007–0012](architecture-decisions.md) registram as decisões propostas; a [análise de DX
-e prontidão para IA](ai-readiness.md) registra suas evidências. Esta numeração estende o
-roadmap de framework/plataforma, sem renumerar o plano histórico de portabilidade
-Postgres. Complexidade é relativa, sem compromisso de prazo ou equipe. O roadmap de
-estabilização v1 continua independente: as novas fases não se tornam requisito de v1 por
-implicação e não substituem seus gates.
+A Fase 6 tem [estudo concluído](phase-6-contract-study.md) e correções de
+contrato; a aceitação formal permanece aberta. As Fases 7–8 possuem JWT/política,
+leituras limitadas, descoberta autorizada e helpers HTTP loopback opcionais. A
+Fase 9 tem provas SDK MCP em memória/stdio; cliente de produção/transporte remoto continuam
+abertos. A Fase 10 de mutações MCP controladas não foi iniciada. A Fase 11 possui
+retrieval documental, avaliação local com modelo real, fonte Postgres versionada/
+outbox e [produtor concreto de artigos](knowledge-producer.md). Implantação e
+aceitação mais ampla de qualidade permanecem abertas. Esses incrementos não
+significam aceitação integral dos [ADRs 0007–0012](architecture-decisions.md) ou
+conclusão de todas as fases. Os gates v1 e a numeração histórica de portabilidade
+Postgres são independentes. Complexidade é relativa, sem prazo/equipe prometidos.
 
 | Fase | Problema / benefício | Complexidade | Risco principal | Dependências | Done-when |
 |---|---|---|---|---|---|
 | **6 — Contrato e DX** | Evitar schema paralelo; melhorar diagnóstico e decidir codegen com evidência | Média | Expandir para ORM/compilador | ADR-0007; consumidor de recurso declarativo e Go | Comparação de contratos validada; limites não serializáveis documentados; origem por recurso definida; decisão de gerar ou adiar baseada no estudo. |
-| **7 — Executor seguro e consulta opt-in** | Reutilizar `Service` sem perder autenticação, política e limites | Alta | Acesso entre tenants ou bypass do handler | ADR-0008 e ADR-0010; consumidor e política definidos | Uma consulta real registrada explicitamente; identidade/política fail-closed; limites, isolamento, projeção e paridade com REST verificados. Escritas continuam desabilitadas. |
+| **7 — Executor seguro e consulta opt-in** | Reutilizar `Service` sem perder autenticação, política e limites | Alta | Acesso entre tenants ou bypass do handler | ADR-0008 e ADR-0010; consumidor e política definidos | Uma consulta real registrada explicitamente; identidade/política fail-closed; limites, isolamento, projeção e paridade com REST verificados. Mutações por ferramentas continuam desabilitadas. |
 | **8 — Context Discovery** | Oferecer contratos úteis e autorizados | Média | Vazamento de metadados/cache | Fases 6–7; ADR-0009 | Catálogo determinístico por escopo, contratos de entrada/saída e restrições corretos; cache isolado; sem dados sensíveis; OpenAPI sem regressão. |
 | **9 — Piloto MCP de leitura** | Validar interoperabilidade com cliente real | Média/alta | Compatibilidade de protocolo e sessão | Fases 7–8; ADR-0011; SDK/versão/transporte escolhidos | Cliente real lista e chama a consulta; autenticação e política comprovadas; erros/cancelamento/isolamento validados; configuração inteiramente opt-in. |
 | **10 — Mutações controladas** | Permitir ação útil com concorrência e rastreabilidade | Alta | Duplicação e efeitos externos indevidos | Fases 7–9; consumidor de escrita; ADR-0010 completo | Uma mutação real preserva ETag, autorização, validação/hooks e outbox quando aplicável; idempotência e aprovação vinculada validadas; timeout ambíguo tratado; dry-run anunciado apenas onde demonstrado. |
@@ -170,10 +169,10 @@ credenciais de IA.
 
 ### Decisões que continuam explicitamente abertas
 
-Consumidor inicial, recurso e política de autorização; origem e direção de eventual
+Implantação de consumidores/políticas em produção; origem e direção de eventual
 codegen; formato da API neutra de exportação de contrato; nome/distribuição dos pacotes;
 transporte MCP de produção e adoção por cliente; armazenamento de aprovações/idempotência; provedor de
-embeddings, índice, corpus e metas de RAG. Essas escolhas dependem de evidência
+embeddings em produção e metas ampliadas de qualidade/carga RAG. Essas escolhas dependem de evidência
 identificada nas fases correspondentes e não impedem revisar as propostas.
 
 O piloto já integra verificação JWT RS256 e política de scope, com testes de

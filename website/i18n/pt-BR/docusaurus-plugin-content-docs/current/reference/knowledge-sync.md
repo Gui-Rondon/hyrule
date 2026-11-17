@@ -136,3 +136,5 @@ sua versão esperada atual (ou use `ingest` síncrono serializado). Um snapshot
 idêntico não cria evento: repetir `enqueue` sem mudanças não dispara reindexação
 de modelo. A versão da fonte muda e trechos antigos ficam bloqueados até a nova
 indexação.
+
+Um [produtor concreto de artigos](knowledge-producer.md) conecta escritas Service e hooks de pré-escrita do Hyrule a este pipeline, com permissão de curador e ACL explícita de leitores.

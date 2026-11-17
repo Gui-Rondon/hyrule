@@ -18,6 +18,11 @@ the minor version instead.
 
 ### Added
 
+- Add a concrete Postgres article producer using Hyrule Service pre-write hooks
+  to commit resource/source/outbox together. Include a curator CLI with distinct
+  JWT write permission, ETag enforcement, private-field projection and corpus
+  isolation; exercise the producer through authenticated MCP retrieval.
+
 - Add versioned knowledge sources with transactional Postgres outbox updates,
   authoritative ACL/version checks during retrieval, tombstones and replay-safe
   indexing. Add `knowledge-mcp enqueue|worker`, optimistic source writes and tests

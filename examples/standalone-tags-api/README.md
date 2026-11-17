@@ -151,3 +151,5 @@ local fixtures.
 Optional pgvector documentation retrieval: see [setup and limits](../../website/docs/reference/knowledge-pilot.md).
 
 For source changes, immediate ACL/deletion denial and background indexing, see [versioned source/outbox](../../website/docs/reference/knowledge-sync.md) (`enqueue` and `worker`).
+
+The optional [article producer and curator CLI](../../website/docs/reference/knowledge-producer.md) connects concrete Service CRUD to source/outbox using transaction hooks.

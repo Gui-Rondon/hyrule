@@ -4,16 +4,14 @@ sidebar_position: 11
 
 # Roadmap: framework and platform
 
-This page is a plan, not a feature list — most phases below are
-proposed work, not something already built; each one says explicitly
-when that changes. It exists so the
-[Architecture decisions](architecture-decisions.md) have a sequence to
-sit in, and so nobody mistakes a future phase for current behavior.
+This page records completed foundation work and proposed evolution. Phase
+summaries distinguish implementation evidence from production adoption and formal
+decision acceptance. See [architecture decisions](architecture-decisions.md).
 
 ## Current adoption and stability work
 
 Phases 0–5 below are historical; Phase 6 has study evidence but remains open;
-Phase 7 has a partial local pilot; Phase 8 has partial local discovery; Phase 9 has a partial local adapter; Phases 10–11 are proposed and not started. The current [v1 roadmap](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
+Phases 7–9 have local identity, discovery and MCP proofs; Phase 10 controlled MCP mutations remains proposed; Phase 11 has local retrieval, model evaluation, source/outbox and a concrete producer. Production adoption remains open. The current [v1 roadmap](https://github.com/Gui-Rondon/hyrule/blob/main/ROADMAP.md)
 adds explicit compatibility/support policy, Go 1.26/1.27 PR gates, SQLite local
 scaffolding, router composition and manual attested releases. See
 [stability](stability.md) and [SQLite](sqlite.md) for current behavior and limits.
@@ -116,20 +114,22 @@ presentation for each of them.
 
 ## Proposed evolution — Fase 6+ (2026-11-16)
 
-Phase 6 has a [completed study](phase-6-contract-study.md), with contract
-corrections and decision acceptance still open; it is not Done. Phase 7 has a partial local executor with JWT identity/policy but no external transport;
-Phase 8 has partial local discovery; Phase 9 has a partial local adapter; Phases 10–11 remain **Proposed / not started**. Complexity is relative, without
-schedule or staffing commitments. [ADRs 0007–0012](architecture-decisions.md)
-record the proposed decisions; the [DX and AI-readiness review](ai-readiness.md)
-records their evidence. The v1 stabilization roadmap remains independent:
-these phases neither replace existing gates nor implicitly add AI as a v1 gate.
-This numbering extends the framework/platform roadmap, not the historical
-Postgres portability plan.
+Phase 6 has a [completed study](phase-6-contract-study.md) and contract fixes;
+formal decision acceptance remains open. Phases 7–8 have local JWT/policy,
+bounded reads, authorized discovery and optional loopback HTTP helpers. Phase 9
+has SDK MCP memory/stdio proofs; production client/remote transport adoption remains open.
+Phase 10 controlled MCP mutations is not started. Phase 11 now has documentation
+retrieval, local real-model evaluation, versioned Postgres source/outbox and a
+[concrete article producer](knowledge-producer.md). Production rollout and broader
+quality acceptance remain open. These increments do not mark all proposed
+[ADRs 0007–0012](architecture-decisions.md) accepted or all phases Done. The v1
+stabilization gates and historical Postgres portability numbering are independent.
+Complexity is relative, with no staffing or schedule commitment.
 
 | Phase | Problem / benefit | Complexity | Main risk | Dependencies | Done when |
 |---|---|---|---|---|---|
 | **6 — Contracts and DX** | Avoid parallel schemas; improve diagnostics and decide codegen from evidence | Medium | Growing into an ORM/compiler | ADR-0007; declarative and Go resource consumers | Contract comparison validated; unrepresentable rules documented; authoring source chosen per resource; generation or deferral justified by the study. |
-| **7 — Safe executor and opt-in read** | Reuse `Service` while preserving identity, policy and limits | High | Cross-tenant access or handler bypass | ADR-0008/0010; real consumer and policy | One real bounded read registered explicitly; fail-closed identity/policy; limits, isolation, projection and REST parity verified. Writes remain disabled. |
+| **7 — Safe executor and opt-in read** | Reuse `Service` while preserving identity, policy and limits | High | Cross-tenant access or handler bypass | ADR-0008/0010; real consumer and policy | One real bounded read registered explicitly; fail-closed identity/policy; limits, isolation, projection and REST parity verified. Tool writes remain disabled. |
 | **8 — Context discovery** | Provide useful authorized contracts | Medium | Metadata/cache leakage | Phases 6–7; ADR-0009 | Deterministic scoped catalog; correct input/output and restrictions; isolated cache; no secrets or OpenAPI regression. |
 | **9 — Read-only MCP pilot** | Validate interoperability with a real client | Medium/high | Protocol/session compatibility | Phases 7–8; ADR-0011; chosen SDK/version/transport | A real client lists and invokes the read; authentication/policy, errors, cancellation and isolation verified; entirely opt-in. |
 | **10 — Controlled mutations** | Enable useful action with concurrency and traceability | High | Duplicate writes and external effects | Phases 7–9; write consumer; ADR-0010 complete | One real mutation preserves ETag, policy, validation/hooks and outbox where applicable; idempotency/bound approval verified; ambiguous timeout handled; dry-run advertised only where proved. |
@@ -161,9 +161,9 @@ examples without AI credentials too.
 
 ### Explicitly open decisions
 
-Initial consumer/resource/policy; eventual codegen source/direction; neutral
+Production consumer/policy rollout; eventual codegen source/direction; neutral
 contract-export API; package names/distribution; production MCP transport/client adoption;
-approval/idempotency storage; embedding provider/index/corpus and RAG thresholds.
+approval/idempotency storage; broader RAG quality/load thresholds and production provider choices.
 These choices require evidence in the corresponding phase; they do not prevent
 review of the proposals.
 

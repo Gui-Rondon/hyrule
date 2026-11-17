@@ -136,3 +136,5 @@ inclui configuração `mcpServers`, troubleshooting e limites de compatibilidade
 Recuperação opcional de documentação com pgvector: veja [configuração e limites](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/knowledge-pilot.md).
 
 Para mudanças da fonte, bloqueio imediato por ACL/exclusão e indexação em segundo plano, veja [fonte versionada/outbox](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/knowledge-sync.md) (`enqueue` e `worker`).
+
+O [produtor de artigos e CLI de curadoria](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/knowledge-producer.md) conecta CRUD concreto do Service a fonte/outbox por hooks transacionais.

@@ -138,3 +138,5 @@ its current expected version (or use serialized synchronous `ingest`). An identi
 snapshot intentionally creates no new event, so rerunning unchanged `enqueue`
 is not a model-reindex trigger. Source versions change and old chunks stay hidden
 until the new contract is indexed.
+
+A [concrete article producer](knowledge-producer.md) now connects Hyrule Service writes and pre-write hooks to this pipeline, with curator permission and explicit reader ACLs.

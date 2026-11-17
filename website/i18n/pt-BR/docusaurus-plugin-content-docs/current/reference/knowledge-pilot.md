@@ -140,3 +140,5 @@ aproximados e busca híbrida dependem de avaliação. Veja [fonte versionada/out
 Manifesto de corpus e perguntas de avaliação estão em `examples/standalone-tags-api/knowledge/`; substitua os placeholders de sujeito/revisão antes de ingerir.
 
 Os opcionais `KNOWLEDGE_EMBED_DOCUMENT_PREFIX` e `KNOWLEDGE_EMBED_QUERY_PREFIX` atendem modelos assimétricos. O contrato inclui esses valores; veja [prompts e reingestão](knowledge-evaluation.md#prompts-e-reingestão).
+
+Um [produtor concreto de artigos](knowledge-producer.md) conecta escritas Service e hooks de pré-escrita do Hyrule a este pipeline, com permissão de curador e ACL explícita de leitores.
