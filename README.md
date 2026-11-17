@@ -270,3 +270,11 @@ separately to `.local/coverage-all.out`; the framework profile remains
 ## License
 
 [MIT](LICENSE) — © 2026 Guilherme Rondon.
+
+Optional AI/MCP work is tracked in [ADRs 0007–0012](website/docs/reference/architecture-decisions.md).
+See the [MCP runbook](website/docs/reference/mcp-pilot.md),
+[pgvector setup](website/docs/reference/knowledge-pilot.md),
+[source/outbox operations](website/docs/reference/knowledge-sync.md) and
+[article producer](website/docs/reference/knowledge-producer.md). These pilots
+live in the standalone example; production rollout and controlled MCP mutations
+remain open.

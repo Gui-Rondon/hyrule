@@ -11,6 +11,10 @@ the minor version instead.
 
 ### Fixed
 
+- Reconcile ADR-0007–0012 and EN/PT audit/pilot documentation with the implemented
+  PR #70 increments, separating historical audit context, current local evidence,
+  formal decision status and remaining production scope.
+
 - Validate and read each knowledge document through a single descriptor, removing
   the reopen window during ingestion. Share regular-file and bounded-read checks
   across the knowledge and tags MCP/curator commands.

@@ -163,8 +163,8 @@ go test -race ./...
 ```
 
 Continuam pendentes a configuração do provedor de produção, deploy remoto,
-política de produção e isolamento multi-tenant. A sugestão de registry/MCP só deve
-avançar depois de provar o consumidor concreto.
+política de produção e isolamento multi-tenant. O [adapter MCP local](mcp-pilot.md) está implementado; extrair um registry
+genérico reutilizável ainda exige evidência de consumidores.
 
 ## Integração JWT e política — 2026-11-16
 

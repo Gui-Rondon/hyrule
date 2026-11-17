@@ -194,3 +194,23 @@ A Fase 9 segue parcial quanto a adoção por consumidor de produção e MCP remo
 O comando opt-in `cmd/tags-mcp` agora permite iniciar o piloto por cliente stdio,
 com configuração explícita, origem SQLite somente leitura e auditoria separada.
 O executável foi validado por cliente SDK real; adoção desktop/produção segue aberta.
+
+### Documentação ainda necessária para adoção em produção
+
+Os guias atuais cobrem configuração local, grants, ingestão, fonte/outbox, CRUD de
+curadoria e avaliação. A documentação específica de produção deve acompanhar
+integrações comprovadas:
+
+- Configuração do cliente MCP escolhido e matriz de transporte/autenticação testada.
+- Topologia de implantação entre setup-tools, risotto-site e hub, incluindo recursos,
+  NetworkPolicies, rotas, segredos e rollback.
+- Desenho Authelia: identidade confiável, tipo/audiência/scopes de token, rotação de
+  chaves e autorização documental. Headers forwardAuth não são aceitos implicitamente
+  pelo verificador JWT atual; essa integração não foi implementada.
+- Backup/restore, retenção de auditoria/tombstones, alertas de worker/DLQ e procedimentos
+  de replay específicos do ambiente, acompanhados de testes de recuperação.
+- Critérios acordados de qualidade/carga/freshness além do experimento local registrado.
+
+São entregas abertas de documentação/integração; não significam ausência da
+fonte/outbox ou do produtor de artigos já implementados. A aceitação formal dos
+ADRs continua como decisão de revisão independente da evidência de implementação.

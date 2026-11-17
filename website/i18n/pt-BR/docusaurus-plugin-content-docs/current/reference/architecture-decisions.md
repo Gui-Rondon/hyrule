@@ -390,18 +390,28 @@ mudança externa real.
 
 ## Evolução proposta — 2026-11-16
 
-Os ADRs 0007–0012 abaixo estão **Propostos**, sem aceitação ou implementação implícita.
-Estendem o histórico acima e correspondem às Fases 6–11 do [roadmap](roadmap.md). A
-[análise de DX e prontidão para IA](ai-readiness.md) registra o benchmark de desenho e
-as correções da auditoria. A implementação exige consumidor e critérios de validação;
-geração de código e RAG permanecem condicionados à evidência. Nomes de pacotes novos são
-ilustrativos.
+Os ADRs 0007–0012 mantêm **Proposto** como status formal de revisão. Implementação
+local e aceitação formal são fatos separados: os pilotos do PR #70 implementam
+partes dessas decisões sem concluir seu escopo de produção. Os nomes sugeridos
+continuam ilustrativos; o código atual fica no módulo opcional
+`examples/standalone-tags-api`.
 
+| ADR | Evidência atual de implementação | Ainda aberto |
+|---|---|---|
+| 0007 | [Estudo de 21 casos](phase-6-contract-study.md), correções PATCH aninhadas e annotations de validação do servidor | Aceitação formal e evidência para gerador |
+| 0008 | Registro explícito e limitado de `tags.lookup`, `knowledge.search` e `knowledge.fetch` | Registry genérico reutilizável e API pública |
+| 0009 | [Descoberta autorizada de tags](read-pilot.md), schemas, limites e hash determinístico | Exportador/catálogo genérico e cache isolado por autorização |
+| 0010 | JWT/política, limites de leitura, auditoria obrigatória de leituras, ACL/versão da fonte e CRUD de curadoria com ETags | Mutações MCP controladas, aprovação/idempotência, auditoria de domínio em produção e garantias de preview |
+| 0011 | [Piloto SDK/stdio](mcp-pilot.md), protocolo escolhido e clientes SDK reais | Cliente de produção/desktop, HTTP MCP/OAuth e sessões remotas |
+| 0012 | [Retrieval pgvector](knowledge-pilot.md), [avaliação com modelo real](knowledge-evaluation.md), [fonte/outbox](knowledge-sync.md) e [produtor de artigos](knowledge-producer.md) | Implantação, critérios ampliados de qualidade/carga, operação e futura integração Qdrant |
+
+O [roadmap](roadmap.md) e a [análise de DX](ai-readiness.md) distinguem os achados
+históricos da auditoria dos incrementos posteriores de implementação.
 
 ## ADR-0007 — Contrato canônico e geração condicionada à evidência
 
-**Status:** Proposto; direção de contrato recomendada, gerador adiado até validação de
-consumo.
+**Status:** Proposto para aceitação formal; estudo e correções de contrato
+implementados. Geração segue adiada até evidência recorrente de consumidores.
 
 **Contexto.** `declarative.Resource` compila dados em `rest.Resource`; `rest.Schema` já
 alimenta validação e OpenAPI. `Field.Check`, `Resource.Validate`, hooks e filtros
@@ -444,15 +454,16 @@ schemas para o mesmo campo; manter exemplos atuais funcionando. Geração perman
 se o estudo não demonstrar ganho. Alterações de schema devem explicitar migração e
 compatibilidade, inclusive campos requeridos e mudanças de tipo.
 
-**Evidência do estudo — 2026-11-16.** O [estudo da Fase 6](phase-6-contract-study.md)
-encontrou schemas de runtime iguais no fixture YAML/Go equivalente e seis
-diferenças entre schema estrutural e HTTP em 21 casos. Priorizar correções de
-contrato de PATCH e manter geração adiada. É evidência para revisão, não aceitação
-do ADR-0007 nem conclusão de seus critérios de validação.
+**Evidência do estudo — atualizada em 2026-11-17.** O [estudo da Fase 6](phase-6-contract-study.md)
+comparou fixtures YAML/Go equivalentes e 21 casos de runtime/schema. As seis
+diferenças originais são históricas: duas divergências PATCH aninhadas foram
+corrigidas; restam quatro diferenças documentadas dependentes de estado/servidor.
+Schemas de escrita também sinalizam validação customizada. Não há gerador nem
+aceitação formal concluída; o estudo sustenta manter a geração adiada.
 
 ## ADR-0008 — Catálogo opcional de ferramentas sobre operações existentes
 
-**Status:** Proposto; sem implementação.
+**Status:** Proposto para registry genérico; ferramentas locais limitadas implementadas.
 
 **Contexto.** `rest.API.Register` retorna um `Service`; `Service.Resource()` permite
 consultar a definição. Serviços já implementam operações e selecionam o backend via
@@ -497,9 +508,15 @@ validações, hooks e precondições da operação REST são observadas. Rodar p
 backend habilitado, sem exigir paridade que SQLite não oferece. Escritas dependem também
 do ADR-0010.
 
+**Evidência de implementação — 2026-11-17.** Os pilotos explícitos implementam `tags.lookup` pelo Service existente e
+`knowledge.search`/`knowledge.fetch` por Store com escopo. O registro fica nos
+adapters MCP locais; não há registry genérico público, exportação automática de
+recursos ou pacote de framework `aitools`. O [produtor de artigos](knowledge-producer.md)
+reutiliza CRUD Service e hooks transacionais sem criar ferramentas MCP de escrita.
+
 ## ADR-0009 — Context Discovery derivada, limitada e autorizada
 
-**Status:** Proposto; sem implementação.
+**Status:** Proposto para descoberta genérica; descoberta local autorizada implementada.
 
 **Contexto.** `rest/openapi.go` e `rest/swagger.go` já descrevem recursos e operações a
 partir das definições registradas. As funções de geração são internas ao pacote; não
@@ -542,10 +559,17 @@ altera versão/hash; amostras de entrada aceitas/rejeitadas correspondem ao serv
 estruturas não representáveis são declaradas como tais. OpenAPI atual mantém seu
 contrato.
 
+**Evidência de implementação — 2026-11-17.** A descoberta de tags deriva schemas escalares de Resource/Schema e compartilha
+restrições de operação com a execução. Publica limites, regras do servidor e hash
+SHA-256 estável após autorização/auditoria confirmada, sem ler registros. As
+ferramentas de conhecimento também possuem listagem MCP autorizada e schemas de
+entrada específicos; não são um exportador genérico de Resource. Não foi extraída
+API pública neutra de serialização nem cache de catálogo compartilhado por autorização.
+
 ## ADR-0010 — Safe Execution com identidade, autorização e efeitos explícitos
 
-**Status:** Proposto; pré-requisito para expor qualquer ferramenta a clientes externos e
-para habilitar escritas.
+**Status:** Proposto para o modelo completo; proteção de leituras locais e escritas
+de curadoria implementada. Mutações MCP controladas continuam abertas.
 
 **Contexto.** A autenticação HTTP não está embutida em cada método de `Service`.
 `WriteOptions` contém opções internas que podem desabilitar checks. O dry-run existente
@@ -561,8 +585,9 @@ genérico; wrapper autorizado por operação com capacidades restritas.
 **Decisão proposta.** Usar o wrapper restrito. Pipeline obrigatório: autenticar no
 transporte → construir principal confiável → localizar ferramenta → autorizar ação,
 recurso, tenant e campos → validar e limitar argumentos → executar a operação existente
-→ filtrar/renderizar resposta → registrar resultado. Principal e tenant vêm de
-credenciais verificadas, não de argumentos escolhidos pelo modelo. A aplicação injeta
+→ filtrar/renderizar resposta → registrar resultado. Principal vem de credenciais verificadas; contexto de recurso/corpus/tenant vem
+de configuração confiável da aplicação ou claims verificados, nunca de argumentos
+escolhidos pelo modelo. A aplicação injeta
 política explícita; ausência de política nega exposição.
 
 Filtros de tenant são impostos pelo servidor em todas as leituras e escritas; sua
@@ -617,14 +642,23 @@ anunciados como preview/dry-run. Falha desconhecida não pode ser reportada como
 confirmado. Falha de auditoria obrigatória precisa de comportamento explícito definido
 pela aplicação.
 
+**Evidência de implementação — 2026-11-17.** Ferramentas locais autenticam/autorizam
+antes do processamento da consulta e embeddings, limitam tempo/entrada/saída e
+retêm a saída quando a auditoria SQLite obrigatória falha. Retrieval verifica ACL,
+tombstone, versão e contrato indexado atuais da fonte. A CLI separada de curadoria
+exige `knowledge:write`, ETags específicos e validação normal; recurso/fonte/outbox
+revertem juntos. Auditoria do domínio continua como política da aplicação. Não há
+mutação MCP, ledger durável de aprovação/idempotência, sandbox por chamada ou nova
+garantia de dry-run comprovada. Authelia/OIDC e delegação remota não foram integrados.
+
 ## ADR-0011 — MCP como adaptador opcional do catálogo
 
 **Status:** Direção proposta; piloto local SDK/stdio implementado (ver nota datada).
 Adoção em produção e autorização remota permanecem abertas.
 
 **Contexto.** MCP padroniza descoberta e chamada de ferramentas e recursos. O contrato
-evolui; as versões e fontes consultadas estão indicadas abaixo. Não existe servidor MCP
-no checkout auditado.
+evolui; as versões e fontes consultadas estão indicadas abaixo. A base inicialmente
+auditada não continha servidor MCP; o módulo standalone agora contém adapters SDK locais.
 
 **Problema.** Acoplar protocolo e SDK ao núcleo obrigaria todos os consumidores do
 framework a acompanhar a evolução de IA e poderia introduzir uma segunda política de
@@ -673,25 +707,25 @@ Fontes primárias consultadas: [MCP tools — especificação
 2026-07-28](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/basic/authorization/index.mdx)
 e [MCP tools — versão 2025-06-18, incluindo confiança em
 annotations](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2025-06-18/server/tools.mdx).
-A implementação deve confirmar a versão suportada pelo SDK/cliente escolhido; este
-relatório não declara uma matriz de compatibilidade já validada.
+A [matriz do piloto](mcp-pilot.md) registra SDK/protocolo e clientes SDK reais
+validados. Outros clientes/transportes exigem validação própria.
 
 **Nota de implementação — 2026-11-16.** O [piloto MCP local](mcp-pilot.md)
 selecionou SDK oficial v1.8.0 e protocolo 2025-11-25, com adapter interno separado,
 cliente SDK real em memória/stdio e autorização/auditoria em cada operação.
-Adoção por cliente de produção, HTTP MCP/OAuth e isolamento multiusuário continuam
+Adoção por cliente de produção, HTTP MCP/OAuth e sessões remotas multiusuário continuam
 abertos; esta evidência não transforma o escopo completo do ADR em implementado.
 
 ## ADR-0012 — Retrieval opcional, dirigido por consumidor e sincronizado por outbox
 
-**Status:** Proposto para integração geral com aplicações; um [piloto de documentação](knowledge-pilot.md)
-estática implementa ingestão pgvector, ACL de manifesto e retrieval MCP.
-A avaliação de qualidade com modelo real permanece aberta.
+**Status:** Proposto para aceitação formal/generalização; retrieval local, avaliação
+com modelo real, fonte Postgres versionada/outbox e produtor concreto implementados.
+Implantação e aceitação ampliada de qualidade permanecem abertas.
 
-**Contexto.** Há indexação Elasticsearch em `platform/search` e sincronização
-best-effort pós-commit em `behaviors/searchsync`. Mongo/Postgres já possuem outbox
-transacional e hooks compartilhados. Não foi identificado no código um consumidor de
-embeddings, busca vetorial ou RAG.
+**Contexto.** A auditoria inicial encontrou indexação Elasticsearch e outboxes
+Mongo/Postgres, sem consumidor vetorial. O consumidor escolhido agora inclui
+documentação do repositório e artigos de curadoria no módulo standalone opcional.
+Isso substitui o adiamento inicial da implementação para esse consumidor.
 
 **Problema.** Uma abstração universal de embeddings/retrieval antes de conhecer corpus e
 consultas esconderia decisões sobre autorização, consistência, custo e qualidade.
@@ -703,20 +737,25 @@ mecanismo durável genérico; criar vector store universal; escolher pgvector ou
 Elasticsearch por conveniência; adiar implementação, registrando uma composição mínima
 para um consumidor concreto.
 
-**Decisão proposta.** Adiar implementação. Gatilho: equipe apresenta corpus permitido,
-consultas reais, expectativa de freshness, política de tenant/campos, orçamento e
-avaliação de busca lexical atual. Só avançar para vetores se o teste demonstrar
-benefício relevante. Não há provedor, dimensão de embedding, extensão Postgres ou banco
-vetorial escolhido por este ADR.
+**Decisão do piloto limitado.** Usar pgvector com o SDK MCP existente e interface
+de armazenamento, ACL explícita por corpus/sujeito e verificação de versão da fonte.
+Embeddings ficam fora das transações de fonte/índice e a geração de respostas no
+modelo do cliente. A [avaliação local](knowledge-evaluation.md) usou EmbeddingGemma
+300M q8 já disponível, 768 dimensões, oito documentos/113 trechos e dez perguntas
+bilíngues: ambas as buscas tiveram Hit@5 10/10; MRR@5 foi 0,883 versus 0,753.
+São resultados exploratórios para este incremento local, não superioridade geral
+ou aceitação de produção. Qdrant é backend/integração futura, sem instalação atual.
 
 No primeiro consumidor, worker e retrieval ficam opcionais e acima dos adapters de
 infraestrutura. Comparar lexical, vetorial e híbrido usando o mesmo corpus. Escolher uma
-implementação concreta antes de generalizar interfaces; uma segunda implementação real é
-o gatilho para extrair contratos comuns.
+implementação específica do consumidor antes de extrair contratos públicos de
+framework. Um segundo backend real fornece evidência para generalização; a
+interface Store atual é interna ao consumidor standalone.
 
-**Fluxo proposto quando o gatilho ocorrer.** A escrita do documento e um evento mínimo
-de reindexação entram na mesma transação local usando `behaviors/events` com `outbox` ou
-`outboxpostgres`. Um worker consome ao menos uma vez, relê a versão autorizada,
+**Fluxo de referência e implementação local.** A escrita do documento e um evento mínimo
+de reindexação entram na mesma transação local. O produtor atual chama QueueSource
+em seus hooks de pré-escrita e usa `outboxpostgres`; outros recursos podem usar
+`behaviors/events` com seu outbox existente. Um worker consome ao menos uma vez, relê a versão autorizada,
 seleciona campos permitidos, particiona em chunks e calcula embeddings fora da
 transação. IDs de chunk e versão do documento/modelo tornam o processamento idempotente.
 A chave inclui tenant e recurso. Duplicação, atualização concorrente e entrega fora de
@@ -730,7 +769,9 @@ Documento apagado não deve ser ressuscitado por evento antigo; um backfill prec
 compartilhar as mesmas regras de versão e conciliar com alterações ao vivo.
 
 Manter versionados modelo de embedding, dimensão, chunker, campos indexados e contrato
-do índice. Mudanças exigem reindexação com índice novo e troca controlada. Lidar com
+do índice. O piloto reconstrói explicitamente por documento e bloqueia versões
+incompatíveis. Troca controlada de um índice novo para o corpus inteiro permanece
+como desenho de produção. Lidar com
 indisponibilidade do provedor por retry limitado, backoff e quarentena/DLQ conforme
 suporte real do backend; Mongo não deve ser descrito como tendo a mesma DLQ já oferecida
 pelo Postgres. Nenhuma falha do índice reverte a mutação já confirmada no banco fonte.
@@ -758,9 +799,15 @@ de índice. Medir em conjunto de consultas representativas com julgamentos docum
 comparar com baseline lexical. Critérios obrigatórios de segurança: nenhum retorno não
 autorizado na suíte de isolamento; exclusão/revogação bloqueia o retorno mesmo com
 índice atrasado. Testar duplicação, reordenação, replay, crash após escrita de índice e
-retomada de backfill. Sem ganho mensurável ou orçamento viável, manter adiado.
+retomada de backfill. A medição local não predefiniu um gate de produção; ampliar
+a adoção depende de ganho mensurável e orçamento operacional viável.
 
-**Nota de implementação do ADR-0012 — 2026-11-16.** O consumidor local de documentação
-agora possui [fonte Postgres versionada e outbox](knowledge-sync.md), verificação
-de ACL/versão na leitura, tombstones e indexação segura sob replay. Produtores
-de aplicações e operação de produção continuam como integração explícita.
+**Evidência de implementação — 2026-11-17.** O [caminho fonte/outbox](knowledge-sync.md)
+implementa escrita atômica de fonte/evento, verificação de ACL/versão/estado indexado,
+tombstones, retries/DLQ/replay e comparação de versão na indexação. O
+[produtor de artigos](knowledge-producer.md) mapeia título/corpo/leitores por hooks
+Service na mesma transação, exclui notas privadas e isola corpora. Testes reais de
+Postgres/MCP cobrem esses caminhos. Reindexação é explícita por documento/contrato;
+não há troca de shadow index do corpus inteiro, watcher de arquivos, mapeamento
+automático de outras aplicações, retrieval híbrido ou implantação em produção.
+A futura integração Qdrant deve preservar a autorização na fonte.

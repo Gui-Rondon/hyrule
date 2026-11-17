@@ -7,12 +7,18 @@ sidebar_position: 21
 **Data da revisão:** 2026-11-16. **Base:** `970b7f141a4eb7eb0865865191acd3d4ee53a9b7` de
 `github.com/Gui-Rondon/hyrule`.
 
-Esta revisão estende ADR-0001–0006 e as Fases 0–5 históricas, sem recomeçar esse
-trabalho. Os [ADRs 0007–0012](architecture-decisions.md) estão **Propostos**. A
-[Fase 6](roadmap.md) tem estudo concluído e correções de contrato abertas; a
-Fase 7 tem executor local parcial; a Fase 8 tem descoberta local parcial; a Fase 9 tem adapter MCP local parcial; as Fases 10–11 estão **não iniciadas**. Aceitação e implementação são fatos separados.
-Não há novas capacidades de runtime ou medições de desempenho. O estudo posterior
-usa SQLite em memória; não executa as integrações Mongo/Postgres dos serviços.
+Esta análise registra a auditoria inicial da base acima e estende os ADRs
+0001–0006 sem refazer trabalho concluído. A análise original não implementou
+runtime; o estudo da Fase 6 usou SQLite em memória.
+
+**Atualização de implementação — 2026-11-17.** Incrementos posteriores do PR #70
+acrescentaram correções de contrato, JWT/política e descoberta locais, SDK MCP/stdio,
+retrieval pgvector, avaliação com modelo real, fonte/outbox versionados e produtor
+concreto de artigos. A [tabela dos ADRs](architecture-decisions.md) e o
+[roadmap](roadmap.md) registram evidências e pendências atuais. Os ADRs 0007–0012
+seguem formalmente Propostos; a Fase 10 de mutações MCP controladas não foi
+implementada. Implantação, registry/exportadores genéricos e aceitação ampliada
+de qualidade continuam abertos.
 
 ## Correções da auditoria
 
@@ -103,8 +109,9 @@ Hooks existentes ─────> auditoria de domínio e outbox transacional
 Worker opcional ──────> embeddings / índice / retrieval
 ```
 
-As setas representam dependências e chamadas propostas, não pacotes implementados. O
-catálogo, o executor e os adaptadores são opt-in. `platform/*` continua sem importar
+As setas descrevem a composição pretendida. Executores, adapters MCP e worker
+de fonte/índice locais estão implementados no módulo standalone opcional; o
+catálogo/exportador genérico reutilizável segue proposto. Os componentes são opt-in. `platform/*` continua sem importar
 `rest`; `rest` e `app` não importam MCP ou SDK de modelo. Clientes sem IA não
 inicializam esses componentes nem configuram credenciais de provedores. Se manter SDK
 fora do grafo de dependências do módulo principal se tornar requisito, avaliar submódulo
@@ -123,11 +130,12 @@ externos. Retrieval é um ramo opcional independente de MCP.
 
 ## Escolhas abertas e compatibilidade
 
-Consumidor/recurso/política, direção de eventual codegen, API neutra de exportação de
-contrato, nomes/distribuição dos pacotes, transporte/versão/SDK MCP, armazenamento de
-aprovações/idempotência e provedor/índice/corpus de embeddings continuam abertos. RAG
-exige corpus permitido, consultas reais, baseline lexical, orçamento e metas de
-qualidade antes de começar.
+Os consumidores locais, SDK v1.8.0/protocolo 2025-11-25, backend pgvector e uma
+avaliação local de embeddings já foram escolhidos e implementados. Permanecem
+abertos consumidores/políticas de produção, transporte/cliente real, aceitação
+ampliada de modelo/qualidade, exportador/registry público neutro, eventual codegen
+e armazenamento durável de aprovação/idempotência. A medição exploratória não
+estabelece gate de qualidade de produção nem escolhe a implantação no homelab.
 
 A direção é aditiva: descritores externos, pacotes opcionais e composição explícita. Não
 se propõe mudar assinaturas de `rest.Adapter`, `rest.Store`, `Service` ou `app.Spec`. Um
@@ -144,8 +152,9 @@ store,mongoadapter,openapi,swagger}.go`, `declarative/{declarative,backend}.go`,
 `behaviors/{events,searchsync}/`, `outbox/`, `outboxpostgres/`,
 `platform/search/elasticsearch.go`, a referência SQLite e os workflows existentes.
 Evidências históricas de implementação permanecem na [revisão
-integrada](integration-review.md). Não se afirma novo sucesso de CI, resultado de
-desempenho ou matriz MCP validada.
+integrada](integration-review.md). A revisão inicial não afirmava novas evidências
+de CI/desempenho/MCP. Os incrementos posteriores registram [matriz de clientes](mcp-pilot.md),
+[avaliação de modelo](knowledge-evaluation.md) e testes de integração no módulo standalone.
 
 ## Resultados do estudo da Fase 6
 

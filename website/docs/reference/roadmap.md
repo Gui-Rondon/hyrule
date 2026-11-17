@@ -186,3 +186,23 @@ Phase 9 remains partial for production consumer adoption and remote MCP.
 The opt-in `cmd/tags-mcp` command now launches the pilot for stdio clients with
 explicit configuration, read-only SQLite source and separate audit. The executable
 is verified with a real SDK client; desktop/production adoption remains open.
+
+### Documentation still needed for production adoption
+
+The existing runbooks cover local configuration, grants, ingestion, source/outbox,
+curator CRUD and evaluation. Production-specific documentation must follow actual
+integration evidence:
+
+- Selected MCP client setup and its tested transport/authentication matrix.
+- Homelab deployment topology across setup-tools, risotto-site and hub, including
+  resources, NetworkPolicies, routes, secrets and rollback.
+- Authelia integration design: trusted identity mapping, token type/audience/scopes,
+  key rotation and document authorization. ForwardAuth headers are not implicitly
+  accepted by the current JWT verifier; this integration is not implemented.
+- Deployment-specific backup/restore, audit/tombstone retention, worker/DLQ alerts
+  and replay procedures, with recovery tests.
+- Agreed quality/load/freshness thresholds beyond the recorded local experiment.
+
+These are open documentation/integration deliverables, not claims that the local
+pilot lacks the implemented source/outbox or article producer. Formal acceptance
+of ADRs remains a review decision independent of implementation evidence.

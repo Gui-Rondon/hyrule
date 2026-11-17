@@ -229,7 +229,9 @@ and interruption. Production credentials are not bundled.
 Phase 9 has a local interoperability proof, not a production rollout. Selecting
 an actual application/desktop client, provisioning credentials, operating audit,
 multi-tenant isolation and any remote MCP transport still need application evidence.
-Mutations and RAG remain separate, deferred increments. The adapter creates no
+Controlled MCP mutations remain a future increment. Retrieval is implemented in
+the separate [knowledge pilot](knowledge-pilot.md), with source/outbox and an
+article producer. The adapter creates no
 general agent framework, automatic CRUD export or production deployment.
 
 The optional [documentation retrieval pilot](knowledge-pilot.md) adds pgvector-backed knowledge tools in a separate local executable.

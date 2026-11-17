@@ -8,13 +8,17 @@ sidebar_position: 21
 `970b7f141a4eb7eb0865865191acd3d4ee53a9b7` of
 `github.com/Gui-Rondon/hyrule`.
 
-This review extends ADR-0001–0006 and historical Phases 0–5. It does not restart
-that work. [ADRs 0007–0012](architecture-decisions.md) are **Proposed**;
-[Phase 6](roadmap.md) has a completed contract study with corrections still open;
-Phase 7 has a partial local executor; Phase 8 has partial local discovery; Phase 9 has a partial local MCP adapter; Phases 10–11 are **not started**. Acceptance and implementation are
-separate. This review adds no runtime capabilities or performance measurements. The later
-contract study uses in-memory SQLite; it does not run the services' Mongo/Postgres
-integration paths.
+This review records the initial audit against the baseline above and extends
+ADRs 0001–0006 without restarting completed work. Its original analysis did not
+implement runtime features; the Phase 6 study used in-memory SQLite.
+
+**Implementation update — 2026-11-17.** Later PR #70 increments added contract
+fixes, local JWT/policy and discovery, SDK MCP/stdio, pgvector retrieval, a real-model
+evaluation, a versioned source/outbox and a concrete article producer. See the
+[ADR implementation table](architecture-decisions.md) and [roadmap](roadmap.md)
+for current evidence and open scope. ADRs 0007–0012 remain formally Proposed;
+Phase 10 controlled MCP mutations remains unimplemented. Production rollout,
+generic registry/export APIs and broader quality acceptance remain open.
 
 ## Audit corrections
 
@@ -93,24 +97,27 @@ Existing hooks ------> domain audit / transactional outbox
 Optional worker -----> embeddings / index / retrieval
 ```
 
-This is a proposed composition, not implemented packages. Tool registration is
-explicit; hooks handle lifecycle effects while a wrapper handles authorization,
+This diagram describes the target composition. Local executors, MCP adapters
+and the source/index worker are implemented in the optional standalone module;
+the general reusable catalog/export API remains proposed. Tool registration is explicit; hooks handle lifecycle effects while a wrapper handles authorization,
 limits and dispatch. AI metadata references the existing resource contract.
 `platform/*` never imports `rest`; neither `rest` nor `app` imports MCP/model SDKs.
 Consider a separate submodule if root-module dependency isolation is required;
 package separation alone does not guarantee it.
 
-The first consumer should supply one real resource, one bounded read and its
-access policy. Prove authorized execution before external MCP exposure. Add
+The current local consumers supply explicit resources, bounded reads and access
+policies. Production MCP exposure requires its own client/transport validation. Add
 mutations only after concurrency, idempotency, approval and external effects are
 validated. Retrieval is an independent optional branch; it does not require MCP.
 
 ## Open choices and compatibility
 
-Consumer/resource/policy, eventual codegen direction, neutral contract-export API,
-package names/distribution, MCP transport/version/SDK, approval/idempotency storage
-and any embedding provider/index/corpus remain open. RAG needs a permitted corpus,
-real queries, a lexical baseline, budget and quality thresholds before work starts.
+The local consumers, SDK v1.8.0/protocol 2025-11-25, pgvector backend and a local
+embedding evaluation are selected and implemented. Remaining choices concern
+production consumers/policy and transport/client adoption, broader model/quality
+acceptance, a neutral public exporter/registry, eventual codegen and durable
+approval/idempotency storage. The exploratory measurement does not establish a
+production quality gate or select infrastructure for the homelab deployment.
 
 The direction is additive: external descriptors, optional packages and explicit
 composition. No signature change to `rest.Adapter`, `rest.Store`, `Service` or
@@ -128,7 +135,9 @@ store,mongoadapter,openapi,swagger}.go`, `declarative/{declarative,backend}.go`,
 `behaviors/{events,searchsync}/`, `outbox/`, `outboxpostgres/`,
 `platform/search/elasticsearch.go`, the SQLite reference and existing workflows.
 Historical implementation evidence remains in [the integration review](integration-review.md).
-No new CI success, performance result or MCP compatibility matrix is claimed.
+The initial review claimed no new CI/performance/MCP evidence. Later increments
+record a [client matrix](mcp-pilot.md), [model evaluation](knowledge-evaluation.md)
+and executable integration tests in the standalone module.
 
 ## Phase 6 study results
 

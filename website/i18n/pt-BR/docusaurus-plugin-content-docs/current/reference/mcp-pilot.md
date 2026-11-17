@@ -228,7 +228,9 @@ erros de startup, EOF e interrupção. Não há credenciais de produção inclu�
 A Fase 9 tem prova local de interoperabilidade, não rollout de produção. Cliente
 real da aplicação/desktop, provisionamento, operação da auditoria, isolamento
 multi-tenant e transporte MCP remoto ainda dependem de evidência da aplicação.
-Mutações e RAG continuam incrementos separados e adiados. O adapter não cria
+Mutações MCP controladas continuam como incremento futuro. Retrieval está
+implementado no [piloto de conhecimento](knowledge-pilot.md), com fonte/outbox e
+produtor de artigos. O adapter não cria
 framework de agentes, exportação automática de CRUD ou deploy de produção.
 
 O [piloto de recuperação de documentação](knowledge-pilot.md) acrescenta ferramentas de conhecimento com pgvector em executável local separado.

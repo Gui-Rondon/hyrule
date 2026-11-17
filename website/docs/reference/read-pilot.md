@@ -162,8 +162,8 @@ go test -race ./...
 ```
 
 Production identity-provider configuration, remote deployment, production policy
-and multi-tenant isolation remain pending; a local persistent audit sink is available. Registry/MCP work should follow evidence from a concrete
-consumer rather than automatic generalization.
+and multi-tenant isolation remain pending; a local persistent audit sink is available. The [local MCP adapter](mcp-pilot.md) is implemented. A reusable generic registry
+still requires consumer evidence before extraction.
 
 ## JWT identity and policy integration — 2026-11-16
 
