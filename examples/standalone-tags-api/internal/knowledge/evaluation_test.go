@@ -66,7 +66,12 @@ func TestRealModelEvaluation(t *testing.T) {
 	}
 	scope := fmt.Sprintf("eval-%d", time.Now().UnixNano())
 	subject := "evaluation-owner"
-	defer pool.Exec(context.Background(), `DELETE FROM hyrule_knowledge_chunks WHERE scope=$1`, scope)
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		pool.Exec(cleanup, `DELETE FROM hyrule_knowledge_chunks WHERE scope=$1`, scope)
+		pool.Exec(cleanup, `DELETE FROM hyrule_knowledge_documents WHERE scope=$1`, scope)
+	}()
 	embed := &Ollama{URL: endpoint, Model: model, Dimensions: 768, DocumentPrefix: "title: none | text: ", QueryPrefix: "task: search result | query: ", Client: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 	root := filepath.Clean("../../../..")
 	filenames := []string{"architecture-decisions", "read-pilot", "mcp-pilot", "phase-6-contract-study", "ai-readiness", "outbox", "dry-run", "postgres-rfc"}
@@ -163,7 +168,11 @@ func TestRealModelEvaluation(t *testing.T) {
 			t.Fatal(e)
 		}
 		start = time.Now()
-		lex, e := pool.Query(ctx, `SELECT id,source,revision,content FROM hyrule_knowledge_chunks WHERE scope=$1 AND $2=ANY(subjects) AND model=$3 AND vector_dims(embedding)=768 AND to_tsvector('english',content) @@ websearch_to_tsquery('english',$4) ORDER BY ts_rank_cd(to_tsvector('english',content),websearch_to_tsquery('english',$4)) DESC,id LIMIT 5`, scope, principal.Subject, store.Model, strings.Join(strings.Fields(q.Query), " OR "))
+		lex, e := pool.Query(ctx, `SELECT c.id,c.source,c.revision,c.content FROM hyrule_knowledge_chunks c
+ JOIN hyrule_knowledge_documents d ON d.scope=c.scope AND d.document_id=c.document_id
+ WHERE c.scope=$1 AND $2=ANY(d.subjects) AND NOT d.deleted AND d.version=c.source_version AND d.indexed_version=d.version AND d.indexed_model=c.model
+ AND c.model=$3 AND vector_dims(c.embedding)=768 AND to_tsvector('english',c.content) @@ websearch_to_tsquery('english',$4)
+ ORDER BY ts_rank_cd(to_tsvector('english',c.content),websearch_to_tsquery('english',$4)) DESC,c.id LIMIT 5`, scope, principal.Subject, store.Model, strings.Join(strings.Fields(q.Query), " OR "))
 		if e != nil {
 			t.Fatal(e)
 		}

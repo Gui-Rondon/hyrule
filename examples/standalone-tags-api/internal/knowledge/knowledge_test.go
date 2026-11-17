@@ -204,7 +204,12 @@ func TestPostgresIsolationReplacementAndRollback(t *testing.T) {
 		t.Fatal(e)
 	}
 	scope := fmt.Sprintf("test-%d", time.Now().UnixNano())
-	defer pool.Exec(context.Background(), `DELETE FROM hyrule_knowledge_chunks WHERE scope=$1`, scope)
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		pool.Exec(cleanup, `DELETE FROM hyrule_knowledge_chunks WHERE scope=$1`, scope)
+		pool.Exec(cleanup, `DELETE FROM hyrule_knowledge_documents WHERE scope=$1`, scope)
+	}()
 	d := Document{ID: "adr", Source: "adr.md", Revision: "v1", Subjects: []string{"alice"}, Text: strings.Repeat("a", 1201)}
 	if e = Ingest(t.Context(), p, fixedEmbed{}, scope, d); e != nil {
 		t.Fatal(e)
@@ -222,6 +227,17 @@ func TestPostgresIsolationReplacementAndRollback(t *testing.T) {
 		if _, e = p.Fetch(t.Context(), a, oldID); !errors.Is(e, ErrNotFound) {
 			t.Fatal("fetch leak", e)
 		}
+	}
+	before, err := p.LoadSource(t.Context(), scope, d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Ingest(t.Context(), p, fixedEmbed{}, scope, d); err != nil {
+		t.Fatal(err)
+	}
+	after, err := p.LoadSource(t.Context(), scope, d.ID)
+	if err != nil || before.Version != after.Version {
+		t.Fatal("identical snapshot advanced source version", before, after, err)
 	}
 	// Failed replacement must preserve previously committed content and ACL.
 	e = p.Replace(t.Context(), scope, d, []EmbeddedChunk{{Chunk: Chunk{ID: "invalid", Text: "x"}, Vector: []float32{1, 0}}})
