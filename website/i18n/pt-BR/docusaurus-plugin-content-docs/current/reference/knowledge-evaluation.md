@@ -92,7 +92,7 @@ versão do chunker. Configurações incompatíveis não consultam/leem vetores a
 modelo, e após qualquer mudança no contrato. Trocar pesos sem mudar o ID ainda
 não é detectado: fixe a revisão do artefato.
 
-Os testes comprovam explicitamente que uma chamada sem `knowledge:read` não chega
-ao provedor de embeddings. O filtro de ACL dos documentos ocorre após o embedding
-de uma pergunta autorizada. Mudanças de permissão ainda exigem reingestão; ACL
-na origem/outbox são outra etapa. Esta medição não encerra essas garantias.
+Os testes comprovam que chamadas sem `knowledge:read` não chegam ao provedor de
+embeddings. O novo caminho de [fonte versionada/outbox](knowledge-sync.md) bloqueia
+versões antigas após o commit de mudanças. As medições acima precedem esse
+incremento e não garantem a latência do caminho atualizado.

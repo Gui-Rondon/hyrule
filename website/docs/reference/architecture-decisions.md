@@ -659,7 +659,7 @@ this evidence does not mark the entire ADR scope implemented.
 
 ## ADR-0012 — Consumer-driven retrieval synchronized through outbox
 
-**Status:** Proposed for live application data/outbox; an optional static
+**Status:** Proposed for general application integration; an optional static
 [documentation pilot](knowledge-pilot.md) now implements pgvector ingestion,
 manifest ACLs and MCP retrieval. Real-model quality evaluation remains open.
 
@@ -730,3 +730,8 @@ baseline. Require no unauthorized results in the isolation suite and immediate
 source-based denial of deleted/revoked records even with a stale index. Test
 duplicate/reordered delivery, replay, crash after indexing and resumed backfill.
 Keep implementation deferred without measurable gains or a viable budget.
+
+**ADR-0012 implementation note — 2026-11-16.** The local documentation consumer
+now has a [versioned Postgres source and outbox](knowledge-sync.md), source ACL/version
+checks on retrieval, tombstones and replay-safe indexing. General application
+producer wiring and production operations remain explicit integration work.

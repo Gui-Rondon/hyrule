@@ -134,3 +134,5 @@ inclui configuração `mcpServers`, troubleshooting e limites de compatibilidade
 `go test -race ./cmd/tags-mcp` testa o binário real com cliente SDK e fixtures locais.
 
 Recuperação opcional de documentação com pgvector: veja [configuração e limites](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/knowledge-pilot.md).
+
+Para mudanças da fonte, bloqueio imediato por ACL/exclusão e indexação em segundo plano, veja [fonte versionada/outbox](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/knowledge-sync.md) (`enqueue` e `worker`).

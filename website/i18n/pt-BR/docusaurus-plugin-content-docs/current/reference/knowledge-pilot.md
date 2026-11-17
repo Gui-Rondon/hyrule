@@ -30,14 +30,12 @@ limitadas e rejeitam campos extras/duplicados. O orçamento de execução é de 
 segundos e a auditoria tem um segundo independente. Falha de auditoria impede a
 liberação do resultado. Conteúdo recuperado é dado não confiável e não altera política.
 
-Neste piloto estático, a ACL persistida do manifesto é a autoridade. Reingerir
-um documento substitui ACL e todos os trechos atomicamente, removendo trechos
-antigos. Alterar arquivos/manifesto sem reingestão não altera o banco. Revisões
-são rótulos opacos: execute os jobs serialmente na ordem desejada. Remover uma
-entrada do manifesto não exclui conteúdo já ingerido; o operador deve excluir
-explicitamente documentos retirados no PostgreSQL antes de voltar a servi-los.
-Dados vivos, revalidação da ACL na origem, ordenação de eventos, tombstones e
-sincronização por outbox continuam como evolução do ADR-0012.
+O [caminho de fonte versionada/outbox](knowledge-sync.md) agora permite mudanças
+assíncronas de conteúdo, ACL e exclusões. Busca/leitura verificam versão e ACL da
+fonte, bloqueando trechos antigos após o commit mesmo com worker parado. `ingest`
+continua para snapshots serializados. Editar arquivos ou omitir entradas não
+atualiza a fonte: use `enqueue`/`QueueSource`. Mapeamento de produtores de aplicações
+continua como integração explícita.
 
 ## Executar
 
@@ -51,6 +49,7 @@ A partir de `examples/standalone-tags-api`:
 ```sh
 go build -o /tmp/knowledge-mcp ./cmd/knowledge-mcp
 export KNOWLEDGE_DATABASE_URL='postgres://USER:PASSWORD@localhost:5432/knowledge?sslmode=disable'
+export KNOWLEDGE_SCOPE='hyrule-docs'
 /tmp/knowledge-mcp init
 
 export KNOWLEDGE_SCOPE='hyrule-docs'
@@ -136,8 +135,7 @@ A interface `Store` separa substituição atômica de documento, busca e leitura
 autorizadas de MCP/embeddings. Uma futura implementação Qdrant deve preservar
 essas garantias. Adotar seu servidor MCP oficial requer integração própria de
 identidade, ACL e auditoria obrigatória. O piloto usa busca cosseno exata; índices
-aproximados e busca híbrida dependem de avaliação. Migração de produção e pipeline
-outbox para dados vivos não fazem parte deste incremento.
+aproximados e busca híbrida dependem de avaliação. Veja [fonte versionada/outbox](knowledge-sync.md) para o novo pipeline local e atualização de schema; produtores de produção exigem integração explícita.
 
 Manifesto de corpus e perguntas de avaliação estão em `examples/standalone-tags-api/knowledge/`; substitua os placeholders de sujeito/revisão antes de ingerir.
 

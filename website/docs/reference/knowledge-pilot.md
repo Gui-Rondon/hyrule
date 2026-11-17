@@ -28,14 +28,12 @@ Output is capped at 16 KiB; large results fail closed rather than silently trunc
 Input is bounded and rejects unknown/duplicate keys. Each operation has a 10-second
 budget plus a separate one-second audit budget. Failed audit withholds all output.
 
-For this static pilot, the persisted manifest ACL is authoritative. Reingesting a
-document atomically replaces its ACL and all chunks, removing stale excerpts.
-Changes to files or manifest alone do not update the database. Revisions are
-opaque labels; ingestion jobs must run serially in intended revision order.
-Removing an entry from the manifest does not delete previously ingested data.
-An operator must explicitly delete withdrawn documents in PostgreSQL before
-serving them again. Live application data, source ACL rechecks, event ordering,
-tombstones and outbox synchronization remain future work under ADR-0012.
+The [versioned source/outbox path](knowledge-sync.md) now supports asynchronous
+source, ACL and deletion updates. Search/fetch check the authoritative source
+version and ACL, blocking stale chunks after a change commits even while the
+worker is paused. The synchronous `ingest` mode remains for serialized snapshots.
+Editing files or omitting manifest entries alone does not change the source;
+use `enqueue`/`QueueSource`. General application producer mapping remains open.
 
 ## Run the optional executable
 
@@ -49,6 +47,7 @@ From `examples/standalone-tags-api`:
 ```sh
 go build -o /tmp/knowledge-mcp ./cmd/knowledge-mcp
 export KNOWLEDGE_DATABASE_URL='postgres://USER:PASSWORD@localhost:5432/knowledge?sslmode=disable'
+export KNOWLEDGE_SCOPE='hyrule-docs'
 /tmp/knowledge-mcp init
 
 export KNOWLEDGE_SCOPE='hyrule-docs'
@@ -138,7 +137,7 @@ fetch from MCP and embeddings. A future Qdrant implementation must preserve thos
 semantics. Adopting its official MCP server is a separate integration decision:
 identity, document ACLs and fail-closed audit must still be enforced. This pilot
 uses exact cosine search; approximate indexes and hybrid retrieval need their own
-measurements. No production migration or live outbox pipeline is included.
+measurements. See [versioned source/outbox](knowledge-sync.md) for the new local pipeline and schema upgrade; general production producer wiring remains open.
 
 Example corpus manifest and evaluation questions are checked in under `examples/standalone-tags-api/knowledge/`; replace subject/revision placeholders before ingesting.
 

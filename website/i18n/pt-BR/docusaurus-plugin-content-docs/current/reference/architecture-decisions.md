@@ -684,7 +684,7 @@ abertos; esta evidência não transforma o escopo completo do ADR em implementad
 
 ## ADR-0012 — Retrieval opcional, dirigido por consumidor e sincronizado por outbox
 
-**Status:** Proposto para dados vivos/outbox; um [piloto de documentação](knowledge-pilot.md)
+**Status:** Proposto para integração geral com aplicações; um [piloto de documentação](knowledge-pilot.md)
 estática implementa ingestão pgvector, ACL de manifesto e retrieval MCP.
 A avaliação de qualidade com modelo real permanece aberta.
 
@@ -759,3 +759,8 @@ comparar com baseline lexical. Critérios obrigatórios de segurança: nenhum re
 autorizado na suíte de isolamento; exclusão/revogação bloqueia o retorno mesmo com
 índice atrasado. Testar duplicação, reordenação, replay, crash após escrita de índice e
 retomada de backfill. Sem ganho mensurável ou orçamento viável, manter adiado.
+
+**Nota de implementação do ADR-0012 — 2026-11-16.** O consumidor local de documentação
+agora possui [fonte Postgres versionada e outbox](knowledge-sync.md), verificação
+de ACL/versão na leitura, tombstones e indexação segura sob replay. Produtores
+de aplicações e operação de produção continuam como integração explícita.

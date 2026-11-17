@@ -149,3 +149,5 @@ configuration, troubleshooting and compatibility limits.
 local fixtures.
 
 Optional pgvector documentation retrieval: see [setup and limits](../../website/docs/reference/knowledge-pilot.md).
+
+For source changes, immediate ACL/deletion denial and background indexing, see [versioned source/outbox](../../website/docs/reference/knowledge-sync.md) (`enqueue` and `worker`).

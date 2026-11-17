@@ -18,6 +18,11 @@ the minor version instead.
 
 ### Added
 
+- Add versioned knowledge sources with transactional Postgres outbox updates,
+  authoritative ACL/version checks during retrieval, tombstones and replay-safe
+  indexing. Add `knowledge-mcp enqueue|worker`, optimistic source writes and tests
+  for revocation before indexing, rollback, concurrent updates, DLQ and replay.
+
 - Support separate document/query embedding prompts and hash their storage
   contract. Add opt-in cached ONNX evaluation with bilingual questions, a lexical
   baseline and recorded local EmbeddingGemma results (10/10 Hit@5).

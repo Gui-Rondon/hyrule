@@ -27,5 +27,5 @@ parity or v1 release date is promised.
 plan with contracts/DX, an authorized tool catalog, discovery, optional MCP and
 consumer-driven retrieval. The standalone example now contains a local `tags.lookup` executor prototype;
 external authentication/transport and the broader proposals remain open. Code
-generation requires consumer evidence. An optional [pgvector documentation pilot](website/docs/reference/knowledge-pilot.md) now provides manifest ingestion, subject ACLs and MCP search/fetch; real-model quality and live outbox remain open. They are independent of the v1 gates above.
+generation requires consumer evidence. An optional [pgvector documentation pilot](website/docs/reference/knowledge-pilot.md) now provides manifest ingestion, subject ACLs and MCP search/fetch; local model evaluation and a versioned Postgres source/outbox path are implemented; broader quality acceptance and production producer wiring remain open. They are independent of the v1 gates above.
 See the [review and audit corrections](website/docs/reference/ai-readiness.md).

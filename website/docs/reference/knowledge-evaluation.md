@@ -91,7 +91,7 @@ version. Incompatible settings cannot search/fetch old vectors. **Reingest data
 from the previous raw-model-ID pilot**, and after any contract change. Weight
 changes behind an unchanged model ID remain undetectable: pin the artifact revision.
 
-Tests explicitly verify that a request denied `knowledge:read` never reaches the
-embedding provider. Document ACL filtering follows embedding of an authorized
-query. Permission changes still need reingestion; live ACL checks/outbox remain
-separate work. This measurement does not complete those consistency guarantees.
+Tests explicitly verify that denied `knowledge:read` requests never reach the
+embedding provider. The newer [versioned source/outbox](knowledge-sync.md) path
+now denies stale document versions after source updates commit. The measurements
+above predate that increment and are not latency guarantees for the updated path.
