@@ -140,3 +140,5 @@ is not a model-reindex trigger. Source versions change and old chunks stay hidde
 until the new contract is indexed.
 
 A [concrete article producer](knowledge-producer.md) now connects Hyrule Service writes and pre-write hooks to this pipeline, with curator permission and explicit reader ACLs.
+
+Manifest metadata is validated before writes. Each source file is then opened once through the confined root; type, size and bounded content are checked using that same descriptor. File validation happens per document, so a later file error may follow earlier commits. In-place edits to an open file are not an atomic snapshot; use immutable source revisions when a consistent corpus snapshot is required.

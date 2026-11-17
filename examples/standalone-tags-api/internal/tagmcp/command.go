@@ -4,13 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"example.com/standalone-tags-api/internal/boundedfile"
 	"example.com/standalone-tags-api/internal/taglookup"
 	"github.com/Gui-Rondon/hyrule/declarative"
 	"github.com/Gui-Rondon/hyrule/platform/sqlite"
@@ -136,7 +136,7 @@ func readCommandToken(ctx context.Context, path string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	data, err := readCommandFile(path, taglookup.MaxToken+2)
+	data, err := boundedfile.Read(path, taglookup.MaxToken+2)
 	if err != nil {
 		return "", err
 	}
@@ -148,22 +148,6 @@ func readCommandToken(ctx context.Context, path string) (string, error) {
 		return "", err
 	}
 	return token, nil
-}
-func readCommandFile(path string, limit int) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, errors.New("tags-mcp: cannot read configured file")
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		return nil, errors.New("tags-mcp: expected a regular file")
-	}
-	data, err := io.ReadAll(io.LimitReader(f, int64(limit+1)))
-	if err != nil || len(data) > limit {
-		return nil, errors.New("tags-mcp: invalid configured file size")
-	}
-	return data, nil
 }
 
 type commandSQLiteBackend struct{ db *sql.DB }
@@ -177,7 +161,7 @@ func (b commandSQLiteBackend) Attach(ctx context.Context, res *rest.Resource, so
 	return nil
 }
 func openCommandResource(ctx context.Context, schemaPath, dataPath string) (*rest.Service, *sql.DB, error) {
-	raw, err := readCommandFile(schemaPath, 64*1024)
+	raw, err := boundedfile.Read(schemaPath, 64*1024)
 	if err != nil {
 		return nil, nil, errors.New("tags-mcp: cannot read resource schema")
 	}

@@ -138,3 +138,5 @@ de modelo. A versão da fonte muda e trechos antigos ficam bloqueados até a nov
 indexação.
 
 Um [produtor concreto de artigos](knowledge-producer.md) conecta escritas Service e hooks de pré-escrita do Hyrule a este pipeline, com permissão de curador e ACL explícita de leitores.
+
+Os metadados do manifesto são validados antes das escritas. Cada arquivo é aberto uma única vez pela raiz confinada; tipo, tamanho e conteúdo limitado são verificados pelo mesmo descritor. A validação do arquivo ocorre por documento, portanto um erro posterior pode ocorrer após commits anteriores. Alterações no conteúdo de um arquivo aberto não formam um snapshot atômico; use revisões imutáveis da origem quando precisar de um corpus consistente.

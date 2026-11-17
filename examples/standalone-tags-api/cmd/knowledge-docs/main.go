@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/standalone-tags-api/internal/boundedfile"
 	"example.com/standalone-tags-api/internal/knowledge"
 	"example.com/standalone-tags-api/internal/knowledgedocs"
 	"example.com/standalone-tags-api/internal/taglookup"
@@ -58,7 +59,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, output 
 		if err != nil {
 			return errors.New("invalid identity configuration")
 		}
-		raw, err := readFile(env["TOKEN_FILE"], taglookup.MaxToken+2)
+		raw, err := boundedfile.Read(env["TOKEN_FILE"], taglookup.MaxToken+2)
 		if err != nil {
 			return err
 		}
@@ -93,7 +94,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, output 
 		if path == "" {
 			return errors.New("missing KNOWLEDGE_DOCUMENT_FILE")
 		}
-		raw, err = readFile(path, knowledgedocs.MaxInput)
+		raw, err = boundedfile.Read(path, int64(knowledgedocs.MaxInput))
 		if err != nil {
 			return err
 		}
@@ -113,20 +114,4 @@ func run(ctx context.Context, args []string, getenv func(string) string, output 
 		result["id"] = getenv("KNOWLEDGE_DOCUMENT_ID")
 	}
 	return json.NewEncoder(output).Encode(result)
-}
-func readFile(path string, limit int) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, errors.New("configured file unavailable")
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		return nil, errors.New("regular file required")
-	}
-	raw, err := io.ReadAll(io.LimitReader(f, int64(limit)+1))
-	if err != nil || len(raw) > limit {
-		return nil, errors.New("configured file exceeds limit")
-	}
-	return raw, nil
 }

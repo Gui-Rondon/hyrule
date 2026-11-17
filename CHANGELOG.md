@@ -11,6 +11,10 @@ the minor version instead.
 
 ### Fixed
 
+- Validate and read each knowledge document through a single descriptor, removing
+  the reopen window during ingestion. Share regular-file and bounded-read checks
+  across the knowledge and tags MCP/curator commands.
+
 - Preserve nested required fields in OpenAPI PATCH request schemas, including
   object items in lists, while allowing omitted root fields. This aligns the
   published contract with existing validation; runtime behavior and response

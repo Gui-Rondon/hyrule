@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/standalone-tags-api/internal/boundedfile"
 	"example.com/standalone-tags-api/internal/knowledge"
 	"example.com/standalone-tags-api/internal/taglookup"
 	"github.com/Gui-Rondon/hyrule/outboxpostgres"
@@ -141,7 +141,7 @@ func run(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
-		raw, e := readFile(settings["TOKEN_FILE"], taglookup.MaxToken+2)
+		raw, e := boundedfile.Read(settings["TOKEN_FILE"], taglookup.MaxToken+2)
 		return strings.TrimSpace(string(raw)), e
 	}})
 	if err != nil {
@@ -156,24 +156,8 @@ func run(ctx context.Context) error {
 	}
 	return nil
 }
-func readFile(path string, limit int64) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, errors.New("cannot read configured file")
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		return nil, errors.New("regular file required")
-	}
-	raw, err := io.ReadAll(io.LimitReader(f, limit+1))
-	if err != nil || int64(len(raw)) > limit {
-		return nil, errors.New("file exceeds limit")
-	}
-	return raw, nil
-}
 func ingest(ctx context.Context, store knowledge.Store, embed knowledge.Embedder, c map[string]string) error {
-	raw, err := readFile(c["MANIFEST"], 1024*1024)
+	raw, err := boundedfile.Read(c["MANIFEST"], 1024*1024)
 	if err != nil {
 		return err
 	}
@@ -203,28 +187,14 @@ func ingest(ctx context.Context, store knowledge.Store, embed knowledge.Embedder
 			if c["ASYNC"] != "true" {
 				return errors.New("tombstones require enqueue")
 			}
-			continue
-		}
-		f, e := root.Open(d.Source)
-		if e != nil {
-			return errors.New("document outside root or unavailable")
-		}
-		info, e := f.Stat()
-		f.Close()
-		if e != nil || !info.Mode().IsRegular() || info.Size() > 1024*1024 {
-			return errors.New("invalid document file")
 		}
 	}
+	// Read each document exactly once; its descriptor is validated before reading.
 	for _, d := range docs {
 		if !d.Deleted {
-			f, e := root.Open(d.Source)
+			raw, e := boundedfile.ReadRoot(root, d.Source, 1024*1024)
 			if e != nil {
-				return errors.New("document unavailable")
-			}
-			raw, e := io.ReadAll(io.LimitReader(f, 1024*1024+1))
-			f.Close()
-			if e != nil || len(raw) > 1024*1024 {
-				return errors.New("document read failed")
+				return errors.New("document outside root, unavailable or invalid")
 			}
 			d.Text = string(raw)
 		}
