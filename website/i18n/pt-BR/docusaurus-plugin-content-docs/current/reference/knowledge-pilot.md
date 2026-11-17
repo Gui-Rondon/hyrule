@@ -114,6 +114,8 @@ rollback, remoção de trechos antigos, troca de ACL, isolamento de usuário/cor
 e separação de modelos. Um subprocesso stdio real valida list/search/fetch após
 a ingestão pelo comando. O HTTP de embeddings usa fixture determinística no
 formato Ollama: isso valida integração e isolamento, **não qualidade semântica**.
+Uma [avaliação local separada com EmbeddingGemma](knowledge-evaluation.md) agora
+registra modelo real: Hit@5 10/10, MRR@5 0,883 versus textual 0,753, em dez perguntas.
 
 Execute com banco descartável e permissão para instalar a extensão:
 
@@ -127,8 +129,8 @@ Antes da adoção, meça Recall@5 contra busca lexical com modelo real. Pergunta
 iniciais: quais backends têm outbox transacional; por que dryrun não é sandbox;
 como PATCH/OpenAPI trata campos aninhados obrigatórios; como permissões JWT
 controlam ferramentas; e como Postgres armazena documentos de recursos. Registre
-seções esperadas, latência e custos de embedding/indexação. Ainda não há ganho
-de qualidade comprovado nem ingestão automática no startup.
+seções esperadas, latência e custos de embedding/indexação. Não há superioridade geral ou aceitação de produção comprovadas, nem ingestão
+automática no startup.
 
 A interface `Store` separa substituição atômica de documento, busca e leitura
 autorizadas de MCP/embeddings. Uma futura implementação Qdrant deve preservar
@@ -138,3 +140,5 @@ aproximados e busca híbrida dependem de avaliação. Migração de produção e
 outbox para dados vivos não fazem parte deste incremento.
 
 Manifesto de corpus e perguntas de avaliação estão em `examples/standalone-tags-api/knowledge/`; substitua os placeholders de sujeito/revisão antes de ingerir.
+
+Os opcionais `KNOWLEDGE_EMBED_DOCUMENT_PREFIX` e `KNOWLEDGE_EMBED_QUERY_PREFIX` atendem modelos assimétricos. O contrato inclui esses valores; veja [prompts e reingestão](knowledge-evaluation.md#prompts-e-reingestão).

@@ -114,7 +114,9 @@ Unicode chunking, transaction rollback, stale-chunk removal, ACL replacement,
 subject/scope isolation, model separation, and SDK list/search/fetch. The command
 suite ingests a manifest and uses an actual stdio subprocess; an Ollama-shaped
 HTTP fixture makes these tests deterministic. This verifies plumbing and isolation,
-**not semantic quality of a real embedding model**.
+**not semantic quality of a real embedding model**. A separate
+[local EmbeddingGemma evaluation](knowledge-evaluation.md) now records real-model
+results: 10/10 Hit@5, MRR@5 0.883 versus lexical 0.753, on ten curated questions.
 
 Run against a disposable database, whose credential can create the extension:
 
@@ -128,8 +130,8 @@ Before adoption, evaluate real-model Recall@5 against lexical search using at
 least these questions: which backends support transactional outbox; why dryrun
 is not a sandbox; how OpenAPI PATCH handles nested required fields; how JWT tool
 permissions work; and how Postgres stores resource documents. Record expected
-source sections, latency and embedding/indexing costs. No quality gain is claimed
-yet, and no document is automatically ingested at startup.
+source sections, latency and embedding/indexing costs. No general quality gain or production acceptance is claimed, and no document
+is automatically ingested at startup.
 
 `Store` separates atomic document replacement, authorized search and authorized
 fetch from MCP and embeddings. A future Qdrant implementation must preserve those
@@ -139,3 +141,5 @@ uses exact cosine search; approximate indexes and hybrid retrieval need their ow
 measurements. No production migration or live outbox pipeline is included.
 
 Example corpus manifest and evaluation questions are checked in under `examples/standalone-tags-api/knowledge/`; replace subject/revision placeholders before ingesting.
+
+Optional `KNOWLEDGE_EMBED_DOCUMENT_PREFIX` and `KNOWLEDGE_EMBED_QUERY_PREFIX` support asymmetric models. The storage contract includes these settings; see [prompts and reingestion](knowledge-evaluation.md#task-prompts-and-reingestion).

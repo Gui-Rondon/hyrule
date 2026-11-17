@@ -1,7 +1,118 @@
 [
-  {"query":"Which persistence backends support transactional outbox?","expected_sources":["website/docs/reference/architecture-decisions.md"]},
-  {"query":"Why is dryrun not a safe execution sandbox?","expected_sources":["website/docs/reference/architecture-decisions.md"]},
-  {"query":"How does the OpenAPI PATCH schema treat nested required fields?","expected_sources":["website/docs/reference/phase-6-contract-study.md"]},
-  {"query":"How do signed JWT permissions authorize local MCP tools?","expected_sources":["website/docs/reference/mcp-pilot.md","website/docs/reference/read-pilot.md"]},
-  {"query":"How does the Postgres adapter store resource documents?","expected_sources":["website/docs/reference/architecture-decisions.md"]}
+  {
+    "query": "Which persistence backends support transactional outbox?",
+    "expected_sources": [
+      "website/docs/reference/outbox.md"
+    ],
+    "expected_terms": [
+      "MongoDB",
+      "Postgres"
+    ]
+  },
+  {
+    "query": "Quais bancos suportam outbox transacional?",
+    "expected_sources": [
+      "website/docs/reference/outbox.md"
+    ],
+    "expected_terms": [
+      "MongoDB",
+      "Postgres"
+    ]
+  },
+  {
+    "query": "Why is dryrun not a safe execution sandbox?",
+    "expected_sources": [
+      "website/docs/reference/ai-readiness.md",
+      "website/docs/reference/architecture-decisions.md",
+      "website/docs/reference/dry-run.md"
+    ],
+    "expected_terms": [
+      "after they have persisted",
+      "not a sandbox",
+      "external effects",
+      "external side effects",
+      "outside-transaction"
+    ]
+  },
+  {
+    "query": "Por que o dryrun não funciona como sandbox de execução?",
+    "expected_sources": [
+      "website/docs/reference/ai-readiness.md",
+      "website/docs/reference/architecture-decisions.md",
+      "website/docs/reference/dry-run.md"
+    ],
+    "expected_terms": [
+      "after they have persisted",
+      "not a sandbox",
+      "external effects",
+      "external side effects",
+      "outside-transaction"
+    ]
+  },
+  {
+    "query": "How does the OpenAPI PATCH schema treat nested required fields?",
+    "expected_sources": [
+      "website/docs/reference/phase-6-contract-study.md"
+    ],
+    "expected_terms": [
+      "nested",
+      "required"
+    ]
+  },
+  {
+    "query": "Como o schema OpenAPI de PATCH trata campos aninhados obrigatórios?",
+    "expected_sources": [
+      "website/docs/reference/phase-6-contract-study.md"
+    ],
+    "expected_terms": [
+      "nested",
+      "required"
+    ]
+  },
+  {
+    "query": "How do signed JWT permissions authorize local MCP tools?",
+    "expected_sources": [
+      "website/docs/reference/mcp-pilot.md",
+      "website/docs/reference/read-pilot.md"
+    ],
+    "expected_terms": [
+      "tags:read",
+      "RS256",
+      "issuer"
+    ]
+  },
+  {
+    "query": "Como permissões de um JWT assinado autorizam ferramentas MCP locais?",
+    "expected_sources": [
+      "website/docs/reference/mcp-pilot.md",
+      "website/docs/reference/read-pilot.md"
+    ],
+    "expected_terms": [
+      "tags:read",
+      "RS256",
+      "issuer"
+    ]
+  },
+  {
+    "query": "How does the Postgres adapter store resource documents?",
+    "expected_sources": [
+      "website/docs/reference/ai-readiness.md",
+      "website/docs/reference/architecture-decisions.md",
+      "website/docs/reference/postgres-rfc.md"
+    ],
+    "expected_terms": [
+      "JSONB"
+    ]
+  },
+  {
+    "query": "Como o adapter Postgres armazena documentos dos recursos?",
+    "expected_sources": [
+      "website/docs/reference/ai-readiness.md",
+      "website/docs/reference/architecture-decisions.md",
+      "website/docs/reference/postgres-rfc.md"
+    ],
+    "expected_terms": [
+      "JSONB"
+    ]
+  }
 ]

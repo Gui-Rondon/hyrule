@@ -18,6 +18,10 @@ the minor version instead.
 
 ### Added
 
+- Support separate document/query embedding prompts and hash their storage
+  contract. Add opt-in cached ONNX evaluation with bilingual questions, a lexical
+  baseline and recorded local EmbeddingGemma results (10/10 Hit@5).
+
 - Add optional documentation ingestion and MCP search/fetch with pgvector, explicit
   corpus/subject ACLs, Ollama embeddings, independent audit and a storage interface
   for a future Qdrant implementation. Include real pgvector and stdio tests.
