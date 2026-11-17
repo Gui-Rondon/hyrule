@@ -6,9 +6,10 @@ sidebar_position: 20
 SQLite is an experimental backend, available in the next release containing this
 work. `hyrule new my-api` generates a single API; `hyrule service create products`
 adds a registered resource and downloads dependencies. `go run .` serves on port
-8080. Data persists in hyrule.db; SQLITE_PATH overrides it. No Docker or C compiler
+8080 on loopback by default for newly generated projects. Data persists in hyrule.db; SQLITE_PATH overrides it. No Docker or C compiler
 is required. Without CONFIG_FILE or CONFIGSERVER_ADDRESS, local authentication
-is disabled. Supply configuration explicitly when exposing the service.
+is disabled. Configure authentication before setting `LISTEN_HOST` to a
+non-loopback address.
 
 `app.BackendSQLite` uses a caller-owned `Deps.SQLite` in Build; Run opens and
 closes its own connection. Resource setup calls

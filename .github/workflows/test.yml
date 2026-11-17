@@ -28,6 +28,13 @@ jobs:
         with:
           check-latest: true
           go-version: ${{ matrix.go }}
+      - name: Check Go formatting
+        run: |
+          unformatted=$(git ls-files -z '*.go' | xargs -0 gofmt -l)
+          if [[ -n "$unformatted" ]]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
       - name: Start real backend integrations
         run: make env-up
       - name: Require ready databases and emulators
@@ -49,6 +56,8 @@ jobs:
             make test
           fi
       - run: make vet
+      - name: Build blog services
+        run: go build ./examples/blog-apis/services/...
       - name: Refresh example module graphs for this checkout
         run: make examples-tidy
       - run: make router-example-test
@@ -141,6 +150,6 @@ jobs:
           go-version: '1.27.x'
       - run: go test ./platform/sqlite ./restsqlite
       - run: go test ./app -run 'TestSQLite|Example'
-      - run: go test ./cmd/hyrule -run 'TestRunDispatch|TestRunNew|TestRunService|TestProjectAndVersionValidation'
+      - run: go test ./cmd/hyrule -run 'TestRunDispatch|TestRunNew|TestRunService|TestProjectAndVersionValidation|TestSingleScaffoldRunsWithoutInfrastructure'
       - run: go build -o hyrule.exe ./cmd/hyrule
       - run: ./hyrule.exe --help

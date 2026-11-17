@@ -17,6 +17,8 @@ curl localhost:8080/products
 
 SQLite persists to `hyrule.db`; set `SQLITE_PATH` to change it. Authentication
 is disabled for local experimentation when no configuration source is supplied.
+The generated program listens on loopback by default. Configure authentication
+before setting `LISTEN_HOST` to expose the API.
 SQLite is experimental: no outbox, dry run, soft delete or advanced queries.
 See https://gui-rondon.github.io/hyrule/docs/reference/sqlite for limitations.
 Use Mongo or Postgres for the existing production-oriented backend paths.

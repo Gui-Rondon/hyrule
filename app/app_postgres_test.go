@@ -389,3 +389,41 @@ func TestBuildPostgresRejectsInvalidConfigurationAndSetup(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildPostgresDryRunSkipsHelperDDL(t *testing.T) {
+	pool := postgresTestPool(t)
+	ctx := context.Background()
+	schema := "app_dry_run_" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	if _, err := pool.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pool.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE") })
+	cfg := pool.Config()
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	isolated, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(isolated.Close)
+	spec := app.Spec{Name: "dry-run-schema", Backend: app.BackendPostgres, Setup: func(context.Context, *app.Env) error { return nil }}
+	deps := app.Deps{Postgres: isolated, Auth: testkit.DisabledAuth(t)}
+	for _, dryRun := range []bool{true, false} {
+		deps.DryRun = dryRun
+		if _, err := app.Build(ctx, spec, deps); err != nil {
+			t.Fatal(err)
+		}
+		var count int
+		if err := isolated.QueryRow(ctx, `SELECT count(*) FROM pg_proc
+			WHERE pronamespace = current_schema()::regnamespace
+			AND proname IN ('hyrule_safe_integer', 'hyrule_safe_numeric', 'hyrule_safe_timestamptz')`).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		want := 3
+		if dryRun {
+			want = 0
+		}
+		if count != want {
+			t.Fatalf("DryRun=%t: created %d helper functions, want %d", dryRun, count, want)
+		}
+	}
+}

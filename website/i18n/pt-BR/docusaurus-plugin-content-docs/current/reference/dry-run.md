@@ -26,8 +26,10 @@ respondendo. Escritas personalizadas devem participar da transação da requisi�
 
 `app.Build` configura `env.PostgresTx` como `postgres.Transactor{Pool: pool,
 Rollback: true}`. Passe esse mesmo valor a `restpostgres.NewAdapter`. Escritas
-personalizadas devem usar `postgres.NewStore(env.Postgres, table).Querier(ctx)`
-e o contexto da requisição para participar da mesma transação. Nos testes,
+personalizadas em hooks anteriores à escrita devem obter o executor com
+`env.PostgresTx.TransactionQuerier(ctx)`. O método rejeita contextos sem
+transação ou com transação de outro pool. Em rotas personalizadas, abra a
+transação com `env.PostgresTx.WithTransaction` e use o contexto do callback. Nos testes,
 use `Deps{Postgres: pool, DryRun: true}`; não precisa de cliente Mongo/WriteGuard.
 `pool.Exec` direto ignora a transação e pode persistir dados: Postgres não tem
 WriteGuard equivalente para detectar isso. Dry run protege o fluxo transacional
@@ -44,9 +46,11 @@ da requisição, não chamadas arbitrárias ao banco nem DDL administrativo.
 - `DRY_RUN_TIMEOUT` limita cada requisição (padrão 3s). Timeouts HTTP/banco não
   revertem efeitos externos; o [outbox](outbox.md) é a fronteira de entrega.
 - Índices declarados usam check em vez de create, salvo mode já off.
-  Configuração ainda executa: funções Postgres compartilhadas e DDL do aplicativo
-  podem escrever fora das transações de requisição. Prepare schemas compatíveis
-  explicitamente e mantenha efeitos externos irreversíveis fora do Configuração.
+  O boot do PostgreSQL em dry run pula a instalação das funções SQL. Execute
+  `postgres.EnsureFunctions` no provisionamento ou inicie em modo normal antes
+  de espelhar tráfego. Prepare as tabelas dos recursos e do outbox previamente.
+  O Setup do aplicativo ainda executa e deve usar `env.DryRun` para evitar
+  DDL e efeitos irreversíveis.
 - Sequences/identity Postgres podem deixar lacunas após rollback. Dry run
   promete ausência de linhas de negócio confirmadas, não metadados/contadores
   do servidor inalterados.

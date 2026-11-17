@@ -787,3 +787,18 @@ isolates corpora. Real Postgres and MCP tests cover these paths. Reindexing is
 explicit per document/contract; there is no full-corpus shadow-index switch,
 filesystem watcher, automatic mapping of other applications, hybrid retrieval or
 production deployment. Future Qdrant integration must preserve source authorization.
+
+## ADR-0013 — Transaction scope and Postgres dry-run startup
+
+**Status:** Implemented for framework-managed startup and opt-in custom SQL.
+
+The framework provisions shared SQL helpers on normal startup. Dry-run startup
+uses a provisioned schema and checks declared indexes. The comments service
+also skips outbox DDL in dry run.
+
+Custom Postgres writes can require the ambient transaction through
+`Transactor.TransactionQuerier`, which rejects missing or foreign transactions.
+The pool remains available for compatibility and explicit administrative work.
+Application-owned setup, raw pools, external effects and sequence allocation
+remain outside managed rollback. Mongo's WriteGuard is diagnostic, and SQLite
+rejects dry-run startup. See [Dry run](dry-run.md) for migration and usage.
