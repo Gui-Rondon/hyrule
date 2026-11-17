@@ -182,3 +182,7 @@ generic catalog/profile cache remain open; the local MCP bridge is described bel
 The [local MCP adapter](mcp-pilot.md) implements tools/list and tools/call through
 the executor with SDK v1.8.0/protocol 2025-11-25 and real memory/stdio SDK clients.
 Phase 9 remains partial for production consumer adoption and remote MCP.
+
+The opt-in `cmd/tags-mcp` command now launches the pilot for stdio clients with
+explicit configuration, read-only SQLite source and separate audit. The executable
+is verified with a real SDK client; desktop/production adoption remains open.

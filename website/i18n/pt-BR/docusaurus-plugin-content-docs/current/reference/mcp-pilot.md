@@ -18,7 +18,7 @@ standalone; framework e `taglookup` não importam MCP.
 | Cliente e transporte | Comportamento verificado |
 |---|---|
 | Cliente oficial Go SDK v1.8.0, transporte em memória, proposta 2025-11-25 | Negociação, listagem autorizada, chamada e cancelamento. |
-| Mesmo cliente, subprocesso stdio real, proposta 2025-11-25 | Negociação, listagem, consulta com token assinado e auditoria SQLite persistente. |
+| Mesmo cliente, subprocesso stdio e executável compilado `cmd/tags-mcp`, proposta 2025-11-25 | Negociação, listagem, consulta com token assinado e auditoria SQLite persistente. |
 | Mesmo cliente, proposta 2026-07-28, em memória | SDK negocia 2025-11-25 e a descoberta funciona. É fallback, não validação do protocolo novo. |
 
 Esta é a matriz explícita do piloto; não comprova compatibilidade com ChatGPT,
@@ -124,6 +124,104 @@ O SDK selecionado é analisado pelo workflow de vulnerabilidades existente.
 Usar toolchain Go corrigida no scan local: o Go 1.27.2 antigo reporta advisories
 da biblioteca padrão independentemente da dependência MCP. O piloto não altera
 a configuração global de Go.
+
+## Comando executável
+
+O módulo standalone agora fornece `cmd/tags-mcp`. Ele inicia somente MCP stdio;
+o servidor REST original e seu `main` continuam inalterados. Na pasta do exemplo:
+
+```sh
+mkdir -p .local
+go build -o .local/tags-mcp ./cmd/tags-mcp
+.local/tags-mcp --help
+```
+
+`--help` escreve em stderr. Outros argumentos são recusados sem ecoar seus valores.
+Toda configuração é explícita por ambiente/arquivos, sem credenciais na linha de
+comando. Usar caminhos absolutos no cliente, cujo diretório de trabalho pode variar.
+
+| Variável obrigatória | Conteúdo |
+|---|---|
+| `TAGS_MCP_RESOURCES_FILE` | YAML existente com um recurso `name: tags`, `collection: tags` e os campos esperados. Backend omitido é vinculado explicitamente a SQLite neste comando; backend explícito diferente de sqlite é recusado. |
+| `TAGS_MCP_DATA_FILE` | Arquivo SQLite existente, com tabela/índice compatíveis já provisionados por uma aplicação Hyrule. É aberto com `mode=ro`; o comando não cria dados, seeds ou migrações. |
+| `TAGS_MCP_AUDIT_FILE` | Arquivo de auditoria separado, com diretório pai existente e gravável. Pode ser criado no startup. |
+| `TAGS_MCP_PUBLIC_KEY_FILE` | Arquivo regular com chave pública RSA PEM confiável. |
+| `TAGS_MCP_KEY_ID` | `kid` correspondente à chave pública provisionada. |
+| `TAGS_MCP_ISSUER` | Issuer esperado, igual ao claim `iss`. |
+| `TAGS_MCP_AUDIENCE` | Audience esperada, presente no claim `aud`. |
+| `TAGS_MCP_SCOPE` | Escopo fixo do recurso, por exemplo `local:tags`; não é o claim de permissão. |
+| `TAGS_MCP_TOKEN_FILE` | Arquivo regular com JWT compacto do dono local, sem prefixo Bearer. Exige `scope` contendo exatamente `tags:read`. |
+
+O schema canônico do exemplo está em `resources.yaml`. O modo SQLite deste comando
+é uma escolha explícita do launcher; não muda o default Mongo da API standalone.
+Preparar o banco com as APIs/adapter SQLite existentes antes de iniciar o comando;
+ver [SQLite](sqlite.md) e [backends YAML](yaml-backends.md). Startup verifica a
+compatibilidade em conexão somente leitura e falha se precisar criar tabela/índice.
+Não há garantia de paridade ou migração de produção do SQLite experimental.
+
+A configuração, os arquivos regulares e a autorização inicial do token são
+verificados antes de iniciar o protocolo. Auditoria não pode apontar para dados,
+schema, chave ou token; alias por symlink/hardlink de arquivo existente também é
+recusado. Chave pública é carregada no startup; token é relido por operação,
+limitado a 8 KiB mais newline opcional. Para substituir o token durante a sessão,
+preferir troca atômica de arquivo e restringir acesso ao seu conteúdo. Token
+inválido/expirado no meio da sessão nega a próxima operação sem conceder dados.
+
+O processo responde a EOF, interrupção e SIGTERM, fechando sessão, auditoria e
+conexão de dados. Inicialização tem budget de cinco segundos; requests mantêm
+budgets do executor e auditoria. Operações de arquivo/hook precisam cooperar com
+o ambiente local, sem promessa de sandbox de filesystem ou interrupção forçada.
+
+## Configuração de cliente
+
+O formato abaixo se aplica a clientes que aceitam `mcpServers` com `command`,
+`args` e `env`, conforme o [guia oficial de servidores locais](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/docs/2026-07-28/develop/connect-local-servers.mdx).
+Substituir todos os caminhos e valores de identidade pelos provisionados na
+aplicação; o JSON não contém token nem chave privada.
+
+```json
+{
+  "mcpServers": {
+    "hyrule-tags": {
+      "command": "/absolute/path/to/tags-mcp",
+      "args": [],
+      "env": {
+        "TAGS_MCP_RESOURCES_FILE": "/absolute/path/to/resources.yaml",
+        "TAGS_MCP_DATA_FILE": "/absolute/path/to/tags.db",
+        "TAGS_MCP_AUDIT_FILE": "/absolute/path/to/audit.db",
+        "TAGS_MCP_PUBLIC_KEY_FILE": "/absolute/path/to/public.pem",
+        "TAGS_MCP_KEY_ID": "replace-with-provisioned-key-id",
+        "TAGS_MCP_ISSUER": "https://issuer.example.test",
+        "TAGS_MCP_AUDIENCE": "replace-with-configured-audience",
+        "TAGS_MCP_SCOPE": "local:tags",
+        "TAGS_MCP_TOKEN_FILE": "/absolute/path/to/owner.jwt"
+      }
+    }
+  }
+}
+```
+
+A matriz comprovada continua sendo o cliente SDK oficial, agora lançando o
+executável compilado a partir de outro diretório. O formato de configuração é
+orientação para integração; uma sessão de Claude Desktop/ChatGPT não foi executada
+neste ambiente. O cliente deve negociar o protocolo 2025-11-25 suportado pelo piloto.
+
+## Troubleshooting do comando
+
+| Sintoma | Verificação |
+|---|---|
+| Processo sai com configuração ausente | Ler stderr e preencher as nove variáveis no processo do cliente, não somente em outro terminal. |
+| Chave/identidade inválida | Conferir PEM público RSA, kid, issuer, audience, sub, exp e permissão exata `tags:read`; não passar `Bearer` no arquivo. |
+| Banco incompatível/read-only | Confirmar arquivo existente e tabela/índice criados pelo adapter; o comando não inicializa nem migra o banco. |
+| Auditoria não provisiona | Conferir diretório gravável e arquivo separado dos dados/credenciais, inclusive aliases. |
+| Ferramenta funciona e depois retorna unauthenticated | Conferir expiração e substituição do arquivo de token; não há grant de sessão em cache. |
+| Processo parece parado no terminal | Stdio aguarda frames do cliente MCP; usar cliente compatível, não curl. |
+| Cliente reporta erro ao decodificar stdout | Iniciar o binário diretamente, sem wrapper que imprima banners/logs no stdout. |
+
+`go test -race ./cmd/tags-mcp` compila o binário real e provisiona apenas fixtures
+temporários de chave/token/banco. O teste verifica descoberta, consulta, troca de
+token em sessão, origem somente leitura, auditoria persistida, stdout reservado,
+erros de startup, EOF e interrupção. Não há credenciais de produção incluídas.
 
 ## Escopo restante
 

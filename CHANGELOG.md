@@ -18,6 +18,11 @@ the minor version instead.
 
 ### Added
 
+- Add opt-in `cmd/tags-mcp` with explicit environment/file configuration,
+  read-only existing SQLite data, separate audit and per-operation token-file
+  refresh. Test the compiled executable with an SDK client, stdout discipline,
+  startup errors and EOF/interrupt shutdown; document EN/PT client setup.
+
 - Add an optional internal MCP adapter to the standalone example using official
   Go SDK v1.8.0 and protocol 2025-11-25. Reuse authorized discovery and execution,
   bound stdio frames and verify real SDK clients over memory/stdio, denial, audit

@@ -136,3 +136,14 @@ The optional `internal/tagmcp` adapter pins official Go SDK v1.8.0 and protocol
 credential source and per-operation authorization/audit. Tests use actual SDK
 clients over memory and a stdio subprocess. `main` is unchanged; MCP HTTP/OAuth
 and remote deployment are not included. See the [MCP pilot](../../website/docs/reference/mcp-pilot.md).
+
+
+Build the opt-in executable with
+`go build -o .local/tags-mcp ./cmd/tags-mcp` (create `.local` first).
+`--help` lists nine required variables on stderr. The command takes explicit
+schema/data/audit/key/token paths and opens an existing SQLite source read-only.
+It generates no data/tokens and does not change the REST server. The
+[MCP guide](../../website/docs/reference/mcp-pilot.md) includes `mcpServers`
+configuration, troubleshooting and compatibility limits.
+`go test -race ./cmd/tags-mcp` verifies the actual binary with the SDK client and
+local fixtures.

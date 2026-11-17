@@ -191,3 +191,7 @@ segue parcial: catálogo genérico e cache por perfil permanecem abertos; ver ad
 O [adapter MCP local](mcp-pilot.md) implementa tools/list e tools/call reutilizando
 o executor, com SDK v1.8.0/protocolo 2025-11-25 e cliente SDK real em memória/stdio.
 A Fase 9 segue parcial quanto a adoção por consumidor de produção e MCP remoto.
+
+O comando opt-in `cmd/tags-mcp` agora permite iniciar o piloto por cliente stdio,
+com configuração explícita, origem SQLite somente leitura e auditoria separada.
+O executável foi validado por cliente SDK real; adoção desktop/produção segue aberta.

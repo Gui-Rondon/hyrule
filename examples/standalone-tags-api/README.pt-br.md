@@ -122,3 +122,13 @@ O adapter opcional `internal/tagmcp` usa SDK oficial Go v1.8.0 e protocolo
 local explícita, autorização e auditoria por operação. Os testes usam cliente SDK
 real em memória e subprocesso stdio. `main` não mudou; não há MCP HTTP/OAuth ou
 deploy remoto. Ver o [piloto MCP](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/mcp-pilot.md).
+
+
+O executável opt-in pode ser compilado com
+`go build -o .local/tags-mcp ./cmd/tags-mcp` (criar `.local` antes).
+`--help` lista as nove variáveis obrigatórias em stderr. O comando recebe paths
+explícitos de schema, dados, auditoria, chave e token; abre somente um banco SQLite
+existente em modo de leitura. Não gera dados/tokens nem altera o servidor REST.
+O [guia MCP](../../website/i18n/pt-BR/docusaurus-plugin-content-docs/current/reference/mcp-pilot.md)
+inclui configuração `mcpServers`, troubleshooting e limites de compatibilidade.
+`go test -race ./cmd/tags-mcp` testa o binário real com cliente SDK e fixtures locais.
