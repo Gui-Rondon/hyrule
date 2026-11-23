@@ -11,12 +11,12 @@ require (
 	github.com/prometheus/client_golang v1.25.0
 	github.com/redis/go-redis/v9 v9.23.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
-	go.mongodb.org/mongo-driver/v2 v2.10.0
+	go.mongodb.org/mongo-driver/v2 v2.10.1
 	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/crypto v0.59.0
 	golang.org/x/mod v0.43.0
 	golang.org/x/text v0.44.0
-	google.golang.org/api v0.314.0
+	google.golang.org/api v0.316.0
 	google.golang.org/grpc v1.85.0
 	modernc.org/sqlite v1.62.0
 )
